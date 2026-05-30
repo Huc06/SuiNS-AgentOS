@@ -1,0 +1,40 @@
+{
+  "name": "@agentos/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "codegen": "echo 'Run sui codegen after @mysten/codegen is configured for packages/contracts'"
+  },
+  "peerDependencies": {
+    "@mysten/dapp-kit": "^0.14.0",
+    "@mysten/seal": "^0.1.0",
+    "@mysten/sui": "^1.0.0",
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@mysten/dapp-kit": "^0.14.0",
+    "@mysten/seal": "^0.1.0",
+    "@mysten/sui": "^1.0.0",
+    "@tanstack/react-query": "^5.0.0",
+    "@types/react": "^18.3.0",
+    "react": "^18.3.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

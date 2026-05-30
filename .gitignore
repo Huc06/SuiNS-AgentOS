@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.local
+.env
+.env.*
+!.env.example
+sui/
+packages/contracts/build/
+.DS_Store
+docs/

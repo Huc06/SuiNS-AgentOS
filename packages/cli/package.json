@@ -1,0 +1,21 @@
+{
+  "name": "@agentos/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "agentos": "./dist/agentos.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentos/sdk": "workspace:*",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  }
+}
