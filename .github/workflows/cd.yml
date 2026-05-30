@@ -1,0 +1,92 @@
+name: CD
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        options:
+          - contracts-testnet
+          - frontend-build
+
+env:
+  SUI_VERSION: '1.70.1'
+  PNPM_VERSION: '10.13.1'
+
+jobs:
+  publish-contracts:
+    name: Publish contracts (testnet)
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'contracts-testnet') ||
+      (github.event_name == 'release')
+    runs-on: ubuntu-latest
+    environment: testnet
+    defaults:
+      run:
+        working-directory: packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Sui CLI
+        run: |
+          wget -q "https://github.com/MystenLabs/sui/releases/download/testnet-v${SUI_VERSION}/sui-testnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          tar xzf "sui-testnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          echo "$PWD/sui" >> "$GITHUB_PATH"
+
+      - name: Configure Sui client
+        env:
+          SUI_PRIVATE_KEY: ${{ secrets.SUI_PRIVATE_KEY }}
+          SUI_RPC_URL: ${{ secrets.SUI_RPC_URL }}
+        run: |
+          sui client new-address ed25519 --json || true
+          if [ -n "$SUI_PRIVATE_KEY" ]; then
+            sui keytool import "$SUI_PRIVATE_KEY" ed25519
+          fi
+          if [ -n "$SUI_RPC_URL" ]; then
+            sui client new-env --alias testnet --rpc "$SUI_RPC_URL" || true
+            sui client switch --env testnet
+          fi
+
+      - name: Build
+        run: sui move build
+
+      - name: Publish to testnet
+        env:
+          SUI_PRIVATE_KEY: ${{ secrets.SUI_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SUI_PRIVATE_KEY" ]; then
+            echo "SUI_PRIVATE_KEY secret is not configured — skipping publish."
+            exit 0
+          fi
+          sui client publish --gas-budget 200000000 --json
+
+  build-frontend:
+    name: Build frontend artifact
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'frontend-build') ||
+      (github.event_name == 'release')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build --filter=@agentos/frontend
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: packages/frontend/.next
+          retention-days: 14

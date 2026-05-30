@@ -2,6 +2,7 @@ node_modules/
 dist/
 .next/
 .turbo/
+*.tsbuildinfo
 *.local
 .env
 .env.*
@@ -9,4 +10,3 @@ dist/
 sui/
 packages/contracts/build/
 .DS_Store
-docs/

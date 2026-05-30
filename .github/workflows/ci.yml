@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SUI_VERSION: '1.70.1'
+  PNPM_VERSION: '10.13.1'
+
+jobs:
+  js:
+    name: JavaScript / TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint
+
+  move:
+    name: Move contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Sui CLI
+        run: |
+          wget -q "https://github.com/MystenLabs/sui/releases/download/testnet-v${SUI_VERSION}/sui-testnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          tar xzf "sui-testnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          echo "$PWD/sui" >> "$GITHUB_PATH"
+          sui --version
+
+      - name: Build
+        run: sui move build
+
+      - name: Test
+        run: sui move test
