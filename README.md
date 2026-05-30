@@ -38,6 +38,10 @@ pnpm dev            # watch mode (sdk + frontend)
 
 Configure GitHub Environment `testnet` with secrets before contract deploy.
 
+## Contributing
+
+`main` is protected — all changes must go through a **Pull Request**. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
 ## Roadmap
 
 Track implementation progress via [GitHub Issues](https://github.com/Huc06/SuiNS-AgentOS/issues).
