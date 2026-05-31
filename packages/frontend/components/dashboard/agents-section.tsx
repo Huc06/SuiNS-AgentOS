@@ -2,38 +2,9 @@
 
 import { useState } from 'react';
 
-import { AgentCard, type AgentCardData } from './agent-card';
+import { MOCK_AGENTS } from '../../lib/mock-agents';
+import { AgentCard } from './agent-card';
 import { IconFilter, IconSearch } from './icons';
-
-const MOCK_AGENTS: AgentCardData[] = [
-  {
-    slug: 'alpha',
-    displayName: '@alpha',
-    version: 'Passport v1.2.4',
-    network: 'mainnet',
-    metric: '842k resolutions',
-    trend: 'up',
-    icon: 'package',
-  },
-  {
-    slug: 'beta-agent',
-    displayName: '@beta-agent',
-    version: 'Passport v0.9.1-beta',
-    network: 'testnet',
-    metric: '120k resolutions',
-    trend: 'up',
-    icon: 'terminal',
-  },
-  {
-    slug: 'walrus-bot',
-    displayName: '@walrus-bot',
-    version: 'Passport v2.1.0',
-    network: 'mainnet',
-    metric: '358k resolutions',
-    trend: 'flat',
-    icon: 'database',
-  },
-];
 
 export function AgentsSection() {
   const [query, setQuery] = useState('');

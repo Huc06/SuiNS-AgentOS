@@ -3,6 +3,8 @@
 import { ConnectButton } from '@mysten/dapp-kit';
 import Link from 'next/link';
 
+import { SiteBreadcrumb, type BreadcrumbItem } from './site-breadcrumb';
+
 type NavItem =
   | { href: string; label: string; active?: boolean; external?: false }
   | { href: string; label: string; external: true };
@@ -15,9 +17,10 @@ const nav: NavItem[] = [
 
 type SiteHeaderProps = {
   activeHref?: string;
+  breadcrumbs?: BreadcrumbItem[];
 };
 
-export function SiteHeader({ activeHref = '/' }: SiteHeaderProps) {
+export function SiteHeader({ activeHref = '/', breadcrumbs }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b-2 border-pure-black bg-off-white">
       <div className="mx-auto flex max-w-container items-center justify-between px-margin py-4">
@@ -69,6 +72,7 @@ export function SiteHeader({ activeHref = '/' }: SiteHeaderProps) {
           </button>
         </div>
       </div>
+      <SiteBreadcrumb items={breadcrumbs} />
     </header>
   );
 }

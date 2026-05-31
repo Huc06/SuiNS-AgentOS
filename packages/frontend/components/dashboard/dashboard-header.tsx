@@ -1,8 +1,9 @@
 type DashboardHeaderProps = {
   onCreateAgent?: () => void;
+  onImportSkill?: () => void;
 };
 
-export function DashboardHeader({ onCreateAgent }: DashboardHeaderProps) {
+export function DashboardHeader({ onCreateAgent, onImportSkill }: DashboardHeaderProps) {
   return (
     <div className="mb-16">
       <div className="mb-12 flex flex-col items-end justify-between gap-6 md:flex-row">
@@ -28,7 +29,8 @@ export function DashboardHeader({ onCreateAgent }: DashboardHeaderProps) {
           </button>
           <button
             type="button"
-            className="border-2 border-pure-black bg-white px-6 py-3 font-mono text-sm font-bold text-pure-black transition-colors hover:bg-surface-container"
+            onClick={onImportSkill}
+            className="border-2 border-pure-black bg-white px-6 py-3 font-mono text-sm font-bold text-pure-black neo-shadow transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_0_#000] hover:bg-surface-container"
           >
             Import Skill
           </button>
