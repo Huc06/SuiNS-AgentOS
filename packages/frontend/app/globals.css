@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-off-white text-on-surface antialiased;
+    cursor: crosshair;
+  }
+
+  ::selection {
+    @apply bg-soft-lavender text-pure-black;
+  }
+}
+
+@layer utilities {
+  .neo-shadow {
+    box-shadow: 4px 4px 0 0 #000;
+  }
+
+  .neo-shadow-lg {
+    box-shadow: 8px 8px 0 0 #000;
+  }
+
+  .neo-hover:hover {
+    transform: translate(-4px, -4px);
+    box-shadow: 8px 8px 0 0 #000;
+  }
+}
