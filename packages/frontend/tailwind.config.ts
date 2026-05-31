@@ -15,6 +15,7 @@ const config: Config = {
         'surface-dim': '#dadada',
         'surface-container': '#eeeeee',
         'primary-container': '#6800ff',
+        error: '#ba1a1a',
       },
       fontFamily: {
         display: ['var(--font-space-grotesk)', 'system-ui', 'sans-serif'],

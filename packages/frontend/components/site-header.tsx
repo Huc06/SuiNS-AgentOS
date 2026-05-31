@@ -11,7 +11,6 @@ const nav: NavItem[] = [
   { href: '/', label: 'Explore' },
   { href: '/create', label: 'Dashboard' },
   { href: 'https://github.com/Huc06/SuiNS-AgentOS', label: 'Docs', external: true },
-  { href: 'https://github.com/Huc06/SuiNS-AgentOS/issues', label: 'Roadmap', external: true },
 ];
 
 type SiteHeaderProps = {
