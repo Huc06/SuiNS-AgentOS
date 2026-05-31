@@ -17,7 +17,7 @@ export function SiteFooter() {
             Explore
           </Link>
           <Link href="/create" className="hover:text-electric-purple">
-            Create
+            Dashboard
           </Link>
           <a
             href="https://github.com/Huc06/SuiNS-AgentOS/issues"

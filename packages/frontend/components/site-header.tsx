@@ -8,13 +8,17 @@ type NavItem =
   | { href: string; label: string; external: true };
 
 const nav: NavItem[] = [
-  { href: '/', label: 'Explore', active: true },
-  { href: '/create', label: 'Create Agent' },
+  { href: '/', label: 'Explore' },
+  { href: '/create', label: 'Dashboard' },
   { href: 'https://github.com/Huc06/SuiNS-AgentOS', label: 'Docs', external: true },
   { href: 'https://github.com/Huc06/SuiNS-AgentOS/issues', label: 'Roadmap', external: true },
 ];
 
-export function SiteHeader() {
+type SiteHeaderProps = {
+  activeHref?: string;
+};
+
+export function SiteHeader({ activeHref = '/' }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b-2 border-pure-black bg-off-white">
       <div className="mx-auto flex max-w-container items-center justify-between px-margin py-4">
@@ -42,7 +46,7 @@ export function SiteHeader() {
                   key={item.href}
                   href={item.href}
                   className={
-                    item.active
+                    activeHref === item.href
                       ? 'border-b-2 border-electric-purple pb-1 font-mono text-sm font-bold text-electric-purple'
                       : 'font-mono text-sm font-bold text-on-surface-variant transition-colors hover:text-pure-black'
                   }
