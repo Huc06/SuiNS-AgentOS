@@ -9,7 +9,8 @@
     "lint": "turbo run lint",
     "contracts:build": "cd packages/contracts && sui move build",
     "contracts:test": "cd packages/contracts && sui move test",
-    "contracts:publish": "cd packages/contracts && sui client publish"
+    "contracts:publish": "cd packages/contracts && sui client publish",
+    "agentos": "node packages/cli/dist/agentos.js"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

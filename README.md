@@ -10,8 +10,9 @@ Sui-native identity, wallet, skill discovery, and delegation layer for AI agents
 |---------|-------------|
 | `packages/contracts` | Move 2024 on-chain types — AgentPassport, SkillDescriptor, BucketPolicy |
 | `packages/sdk` | TypeScript SDK (`agentOS()` client extension for `@mysten/sui`) |
-| `packages/cli` | `agentos` CLI — agent, skill, bucket commands |
-| `packages/frontend` | Next.js app — agent explorer and creation flows |
+| `packages/cli` | `agentos` CLI — init, agent, skill, bucket, `mcp` |
+| `packages/mcp` | MCP server for Cursor / Claude Code / Codex |
+| `packages/frontend` | Next.js app — agent explorer and creation flows (MVR-style dashboard) |
 
 ## Prerequisites
 
@@ -19,11 +20,27 @@ Sui-native identity, wallet, skill discovery, and delegation layer for AI agents
 - pnpm 10
 - [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) ≥ 1.70
 
+## Distribution (after [Suiperpower](https://www.suiperpower.dev/) build)
+
+```bash
+# Once per project
+agentos init --vendor
+
+# Register agent + skill (local registry; on-chain when packageId configured)
+agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
+agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
+
+# MCP for IDE agents
+agentos mcp
+```
+
+Bridge skills live in `skills/agentos/` (copied to `.cursor/rules/agentos/` with `--vendor`).
+
 ## Development
 
 ```bash
 pnpm install
-pnpm build          # sdk → cli + frontend
+pnpm build          # sdk → mcp → cli → frontend
 pnpm test           # SDK unit tests
 pnpm contracts:test # Move unit tests
 pnpm dev            # watch mode (sdk + frontend)

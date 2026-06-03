@@ -4,6 +4,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 
 import * as contracts from './contracts/index.js';
+import {
+  descriptorFromRecord,
+  LocalRegistry,
+  passportFromRecord,
+} from './registry/index.js';
 import type {
   AgentOptions,
   AgentPassport,
@@ -16,31 +21,59 @@ import type {
 export interface AgentOSClientOptions {
   client: ClientWithCoreApi;
   harborApiKey?: string;
+  /** Local registry JSON path (CLI/MCP). Uses in-memory seed when omitted in browser. */
+  registryPath?: string;
 }
 
 export class AgentOSClient {
   #client: ClientWithCoreApi;
   #harborApiKey?: string;
+  #registry: LocalRegistry | null;
 
-  constructor({ client, harborApiKey }: AgentOSClientOptions) {
+  constructor({ client, harborApiKey, registryPath }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
+    this.#registry = registryPath ? LocalRegistry.open(registryPath) : null;
+  }
+
+  get registry(): LocalRegistry | null {
+    return this.#registry;
   }
 
   get client(): ClientWithCoreApi {
     return this.#client;
   }
 
-  async resolveAgent(_suinsName: string): Promise<AgentPassport> {
-    throw new Error('Not implemented');
+  async resolveAgent(suinsName: string): Promise<AgentPassport> {
+    if (!this.#registry) {
+      throw new Error('Not implemented: set registryPath or use LocalRegistry in Node');
+    }
+    const resolved = this.#registry.resolveAgent(suinsName);
+    if (!resolved) {
+      throw new Error(`Agent not found: ${suinsName}`);
+    }
+    return passportFromRecord(resolved.agent);
   }
 
-  async resolveSkill(_suinsName: string): Promise<SkillDescriptor> {
-    throw new Error('Not implemented');
+  async resolveSkill(skillId: string, agentName?: string): Promise<SkillDescriptor> {
+    if (!this.#registry) {
+      throw new Error('Not implemented: set registryPath');
+    }
+    const skills = agentName
+      ? this.#registry.listSkills(agentName)
+      : this.#registry.snapshot.skills;
+    const record = skills.find((s) => s.skillId === skillId || s.mvrPackage === skillId);
+    if (!record) {
+      throw new Error(`Skill not found: ${skillId}`);
+    }
+    return descriptorFromRecord(record);
   }
 
-  async listSkills(_agentName: string): Promise<SkillDescriptor[]> {
-    throw new Error('Not implemented');
+  async listSkills(agentName: string): Promise<SkillDescriptor[]> {
+    if (!this.#registry) {
+      throw new Error('Not implemented: set registryPath');
+    }
+    return this.#registry.listSkills(agentName).map(descriptorFromRecord);
   }
 
   async downloadManifest(
@@ -50,25 +83,47 @@ export class AgentOSClient {
     throw new Error('Not implemented');
   }
 
-  async createAgent(_options: {
+  async createAgent(options: {
     signer: Signer;
     name: string;
     runtimeWallet: string;
     options?: AgentOptions;
   }): Promise<AgentPassport> {
-    throw new Error('Not implemented');
+    if (!this.#registry) {
+      throw new Error('Not implemented: set registryPath');
+    }
+    const record = this.#registry.registerAgent({
+      suinsName: options.name,
+      runtimeWallet: options.runtimeWallet,
+      network: options.options?.network === 'mainnet' ? 'mainnet' : 'testnet',
+    });
+    void options.signer;
+    return passportFromRecord(record);
   }
 
   async revokeAgent(_options: { signer: Signer; passportId: string }): Promise<void> {
     throw new Error('Not implemented');
   }
 
-  async publishSkill(_options: {
+  async publishSkill(options: {
     signer: Signer;
     manifest: SkillManifest;
     bucketId: string;
+    agentName?: string;
+    walrusManifestBlob?: string;
   }): Promise<SkillDescriptor> {
-    throw new Error('Not implemented');
+    if (!this.#registry) {
+      throw new Error('Not implemented: set registryPath');
+    }
+    const agentName = options.agentName ?? options.manifest.publisher;
+    const record = this.#registry.publishSkill({
+      agentName,
+      manifest: options.manifest,
+      walrusManifestBlob: options.walrusManifestBlob,
+    });
+    void options.signer;
+    void options.bucketId;
+    return descriptorFromRecord(record);
   }
 
   async delegateSubAgent(_options: {

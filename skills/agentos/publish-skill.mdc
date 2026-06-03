@@ -1,0 +1,28 @@
+---
+description: Publish a skill manifest to AgentOS registry (Walrus + SkillDescriptor) after building with Suiperpower.
+globs:
+alwaysApply: false
+---
+
+# Publish Skill (AgentOS)
+
+## Prerequisites
+
+- Agent registered: `agentos agent resolve <name.sui>`
+- Manifest JSON at `sui-agent-skill/v1` (see `examples/skill.manifest.json`)
+
+## CLI
+
+```bash
+agentos skill publish ./skill.manifest.json --agent <name.sui> --walrus <blob-id> --json
+```
+
+Use `--dry-run` to preview `SkillDescriptor::create` transaction bytes.
+
+## MCP
+
+Tool `agentos_publish_skill` with `agentName` and `manifestJson`.
+
+## Dashboard
+
+Manage versions at `/agent/<slug>` (MVR-style list).

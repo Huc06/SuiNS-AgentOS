@@ -8,15 +8,19 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@agentos/mcp": "workspace:*",
     "@agentos/sdk": "workspace:*",
+    "@mysten/sui": "^1.0.0",
     "commander": "^12.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
   }
 }

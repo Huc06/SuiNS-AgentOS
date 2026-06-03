@@ -5,3 +5,6 @@ export type { AgentOSClientOptions } from './client.js';
 export * as contracts from './contracts/index.js';
 export * from './types.js';
 export * from './hooks/index.js';
+export { loadConfig, resolveRegistryPath } from './config.js';
+export type { AgentOSConfig } from './config.js';
+export * from './registry/index.js';
