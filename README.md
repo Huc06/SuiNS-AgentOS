@@ -20,21 +20,17 @@ Sui-native identity, wallet, skill discovery, and delegation layer for AI agents
 - pnpm 10
 - [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) ≥ 1.70
 
-## Distribution (after [Suiperpower](https://www.suiperpower.dev/) build)
+## Distribution (with [Suiperpower](https://www.suiperpower.dev/) — no extra skill pack)
+
+Build with **Suiperpower** (`/suiper:*` in Claude Code, or bare names in Cursor). Register with **AgentOS** via CLI or MCP only:
 
 ```bash
-# Once per project
-agentos init --vendor
-
-# Register agent + skill (local registry; on-chain when packageId configured)
+agentos init
 agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
 agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
-
-# MCP for IDE agents
-agentos mcp
 ```
 
-Bridge skills live in `skills/agentos/` (copied to `.cursor/rules/agentos/` with `--vendor`).
+In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet) so the same agent can invoke `agentos_register_agent` after Suiperpower deploy — see [docs/suiperpower.md](./docs/suiperpower.md).
 
 ## Development
 
