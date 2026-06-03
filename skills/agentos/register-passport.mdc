@@ -1,0 +1,29 @@
+---
+description: Register an AgentPassport on AgentOS after Suiperpower deploy-to-testnet. Use when the user wants to publish or register their agent on-chain / in the registry.
+globs:
+alwaysApply: false
+---
+
+# Register Agent Passport (AgentOS)
+
+Run **after** Suiperpower has deployed Move code and the user has a SuiNS name + wallet.
+
+## Steps
+
+1. Confirm SuiNS name (`*.sui`) and runtime wallet address.
+2. Register locally (dev) or dry-run on-chain tx:
+
+```bash
+agentos agent create <name.sui> --wallet <0x...> --json
+```
+
+3. Open dashboard: `http://localhost:3000/agent/<slug>` (or production URL from `.agentos/config.json`).
+
+## MCP alternative
+
+Call tool `agentos_register_agent` with `suinsName` and `runtimeWallet`.
+
+## Do not
+
+- Re-scaffold Move with Suiperpower — registration only.
+- Skip validate-idea / verify-against-intent if the user came from Suiperpower flow.

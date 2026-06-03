@@ -1,0 +1,21 @@
+{
+  "name": "web-search",
+  "version": "1.0.0",
+  "publisher": "@my-agent/web-search",
+  "manifestType": "sui-agent-skill/v1",
+  "mcp": {
+    "compatible": true,
+    "tools": [
+      {
+        "name": "search",
+        "description": "Search the web for agent context"
+      }
+    ]
+  },
+  "sui": {
+    "movePackage": "0xPACKAGE_ID",
+    "entry": "search",
+    "policyRequired": []
+  },
+  "dependencies": []
+}
