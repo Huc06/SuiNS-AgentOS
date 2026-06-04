@@ -24,11 +24,25 @@ export function loadConfig(cwd = process.cwd()): AgentOSConfig {
   for (const path of paths) {
     if (existsSync(path)) {
       const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<AgentOSConfig>;
-      return { ...DEFAULT_CONFIG, ...parsed };
+      return mergeConfigEnv({ ...DEFAULT_CONFIG, ...parsed });
     }
   }
 
-  return { ...DEFAULT_CONFIG };
+  return mergeConfigEnv({ ...DEFAULT_CONFIG });
+}
+
+function mergeConfigEnv(config: AgentOSConfig): AgentOSConfig {
+  const packageId = config.packageId ?? process.env.AGENTOS_PACKAGE_ID?.trim();
+  const rpcUrl = config.rpcUrl ?? process.env.SUI_RPC_URL?.trim();
+  return {
+    ...config,
+    ...(packageId ? { packageId } : {}),
+    ...(rpcUrl ? { rpcUrl } : {}),
+  };
+}
+
+export function resolvePackageId(config: AgentOSConfig): string | undefined {
+  return config.packageId?.trim() || undefined;
 }
 
 export function resolveRegistryPath(config: AgentOSConfig, cwd = process.cwd()): string {

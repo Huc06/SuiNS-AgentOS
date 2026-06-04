@@ -44,6 +44,28 @@ export function ImportSkillModal({
   const formValid =
     packageValid && versionValid && manifestValid && skillIdValid && agent.length > 0;
 
+  const handleManifestFile = useCallback(async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    try {
+      const text = await file.text();
+      const manifest = JSON.parse(text) as {
+        name?: string;
+        version?: string;
+        publisher?: string;
+        sui?: { movePackage?: string };
+      };
+      if (manifest.name) setSkillId(manifest.name);
+      if (manifest.version) setVersion(manifest.version);
+      if (manifest.publisher) setMvrPackage(manifest.publisher);
+      if (manifest.sui?.movePackage && manifest.sui.movePackage !== '0x0') {
+        setManifestRef(manifest.sui.movePackage);
+      }
+    } catch {
+      setError('Invalid manifest JSON — use sui-agent-skill/v1 format.');
+    }
+  }, []);
+
   const handleClose = useCallback(() => {
     if (submitting) return;
     setSkillId('');
@@ -164,6 +186,22 @@ export function ImportSkillModal({
             Register a skill descriptor in the workspace registry. Walrus upload and on-chain
             publish come after contracts are deployed.
           </p>
+
+          <div className="space-y-2">
+            <label htmlFor="skill-manifest-file" className="font-mono text-sm font-bold uppercase">
+              Import from file
+            </label>
+            <input
+              id="skill-manifest-file"
+              type="file"
+              accept=".json,application/json"
+              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-sm file:mr-3 file:border-0 file:bg-electric-purple file:px-3 file:py-1 file:font-bold file:text-off-white"
+              onChange={(e) => void handleManifestFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="font-mono text-xs text-on-surface-variant">
+              Loads fields from <code className="text-pure-black">examples/skill.manifest.json</code>
+            </p>
+          </div>
 
           {error && (
             <p className="border-2 border-error bg-red-50 px-3 py-2 font-mono text-xs text-error">
