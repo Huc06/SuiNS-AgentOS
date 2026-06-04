@@ -1,3 +1,4 @@
+import { FeaturedAgents } from './featured-agents';
 import { HeroSearch } from './hero-search';
 
 export function Hero() {
@@ -21,6 +22,7 @@ export function Hero() {
               agents on Sui — permissioned, composable, and resolvable by name.
             </p>
             <HeroSearch />
+            <FeaturedAgents />
           </div>
 
           <div className="relative hidden lg:col-span-4 lg:block">

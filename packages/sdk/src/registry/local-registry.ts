@@ -82,6 +82,7 @@ export class LocalRegistry {
     runtimeWallet: string;
     network?: 'mainnet' | 'testnet';
     passportVersion?: string;
+    description?: string;
   }): RegistryAgentRecord {
     const suinsName = normalizeSuinsName(input.suinsName);
     if (!suinsName.endsWith('.sui')) {
@@ -103,6 +104,7 @@ export class LocalRegistry {
       passportVersion: input.passportVersion ?? 'Passport v1.0.0',
       status: 'active',
       createdAt: new Date().toISOString(),
+      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
     };
     this.#data.agents.push(record);
     this.save();

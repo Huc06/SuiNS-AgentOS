@@ -80,7 +80,7 @@ agentCommand
   .option('--json', 'JSON output')
   .action((opts: { json?: boolean }) => {
     const ctx = createCliContext();
-    const agents = ctx.registry.snapshot.agents;
+    const agents = ctx.registry.listAgents();
     if (opts.json) {
       printJson({ agents });
     } else {

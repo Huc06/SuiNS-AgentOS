@@ -6,6 +6,7 @@ import {
   useSignTransaction,
   useSuiClient,
 } from '@mysten/dapp-kit';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { getAgentosPackageId } from '../../lib/enoki-config';
@@ -25,6 +26,7 @@ function normalizeSuinsInput(raw: string): string {
 }
 
 export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalProps) {
+  const router = useRouter();
   const titleId = useId();
   const descId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,10 +81,11 @@ export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalP
           suinsName,
           runtimeWallet: account.address,
           network: 'testnet',
+          description: description.trim() || undefined,
         }),
       });
 
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; agent?: { slug: string } };
       if (!res.ok) {
         throw new Error(data.error ?? `Register failed (${res.status})`);
       }
@@ -103,7 +106,11 @@ export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalP
       }
 
       onCreated?.();
+      const slug = data.agent?.slug;
       handleClose();
+      if (slug) {
+        router.push(`/agent/${encodeURIComponent(slug)}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create agent');
     } finally {

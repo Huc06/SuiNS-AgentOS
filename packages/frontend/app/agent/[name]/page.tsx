@@ -36,6 +36,7 @@ export default async function AgentManagePage({ params }: Props) {
           agentSlug={data.card.slug}
           displayName={data.card.displayName}
           passportVersion={data.card.version}
+          description={data.resolved.agent.description}
           initialSkills={data.skills}
         />
       </div>

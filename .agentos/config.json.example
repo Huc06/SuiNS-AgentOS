@@ -1,0 +1,7 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://fullnode.testnet.sui.io:443",
+  "packageId": "0xYOUR_PACKAGE_ID_AFTER_PUBLISH",
+  "registryPath": ".agentos/registry.json",
+  "dashboardUrl": "http://localhost:3000"
+}

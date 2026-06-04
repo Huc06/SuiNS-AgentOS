@@ -8,6 +8,7 @@ type ImportSkillModalProps = {
   open: boolean;
   onClose: () => void;
   onImported?: () => void;
+  defaultAgentSlug?: string;
 };
 
 function normalizeMvrPackage(raw: string): string {
@@ -16,7 +17,12 @@ function normalizeMvrPackage(raw: string): string {
   return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
 }
 
-export function ImportSkillModal({ open, onClose, onImported }: ImportSkillModalProps) {
+export function ImportSkillModal({
+  open,
+  onClose,
+  onImported,
+  defaultAgentSlug = '',
+}: ImportSkillModalProps) {
   const titleId = useId();
   const descId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -59,11 +65,15 @@ export function ImportSkillModal({ open, onClose, onImported }: ImportSkillModal
           label: a.displayName,
         }));
         setAgentOptions(options);
-        setAgent((prev) => prev || options[0]?.value || '');
+        const preferred =
+          defaultAgentSlug && options.some((o) => o.value === defaultAgentSlug)
+            ? defaultAgentSlug
+            : options[0]?.value || '';
+        setAgent((prev) => prev || preferred);
       })
       .catch(() => setAgentOptions([]))
       .finally(() => setLoadingAgents(false));
-  }, [open]);
+  }, [open, defaultAgentSlug]);
 
   useEffect(() => {
     if (!open) return;
