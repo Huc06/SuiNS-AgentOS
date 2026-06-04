@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { getSkillsForAgent, type AgentSkillRow } from '../../lib/mock-agents';
+import type { AgentSkillRow } from '../../lib/agent-types';
 import { IconFilter } from '../dashboard/icons';
 import { IconAdd } from './icons';
 import { SkillListItem } from './skill-list-item';
@@ -11,14 +11,15 @@ type AgentManageContentProps = {
   agentSlug: string;
   displayName: string;
   passportVersion: string;
+  initialSkills: AgentSkillRow[];
 };
 
 export function AgentManageContent({
-  agentSlug,
   displayName,
   passportVersion,
+  initialSkills,
 }: AgentManageContentProps) {
-  const skills = getSkillsForAgent(agentSlug);
+  const [skills] = useState(initialSkills);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
 
@@ -50,7 +51,7 @@ export function AgentManageContent({
         <div>
           <h1 className="mb-2 font-display text-3xl font-bold md:text-4xl">Manage Skills</h1>
           <p className="font-mono text-base text-on-surface-variant">
-            {displayName} · {passportVersion} — oversee skill descriptors and Walrus manifests.
+            {displayName} · {passportVersion} — skill descriptors from workspace registry.
           </p>
         </div>
         <button
@@ -95,17 +96,10 @@ export function AgentManageContent({
           filtered.map((skill) => <SkillListItem key={skill.id} skill={skill} />)
         ) : (
           <p className="border-2 border-dashed border-pure-black py-12 text-center font-mono text-sm text-on-surface-variant">
-            No skills match your filters.
+            {skills.length === 0
+              ? 'No skills registered yet. Import a skill from the dashboard.'
+              : 'No skills match your filters.'}
           </p>
-        )}
-
-        {filtered.length > 0 && (
-          <button
-            type="button"
-            className="w-full border-2 border-dashed border-pure-black py-6 font-mono text-sm font-bold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-pure-black"
-          >
-            Load more skills…
-          </button>
         )}
       </div>
     </div>

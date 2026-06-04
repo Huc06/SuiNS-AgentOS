@@ -73,6 +73,10 @@ export class LocalRegistry {
     return resolved?.skills ?? [];
   }
 
+  listAgents(): RegistryAgentRecord[] {
+    return this.#data.agents.filter((a) => a.status === 'active');
+  }
+
   registerAgent(input: {
     suinsName: string;
     runtimeWallet: string;
