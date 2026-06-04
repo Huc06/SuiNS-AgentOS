@@ -22,6 +22,7 @@ export function isEnokiConfigured(): boolean {
   return Boolean(getPublicEnokiApiKey());
 }
 
-export function isSponsoredMintAvailable(): boolean {
-  return Boolean(getAgentosPackageId() && process.env.ENOKI_SECRET_KEY?.trim());
+/** Client flag: attempt Enoki sponsor flow (server still needs ENOKI_SECRET_KEY). */
+export function isEnokiSponsorEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ENOKI_SPONSOR === 'true' && isEnokiConfigured();
 }

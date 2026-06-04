@@ -58,7 +58,8 @@ pnpm --filter @agentos/frontend dev                     # http://localhost:3000
 | CLI | `agentos agent create`, `agentos skill publish`, `agentos agent list` |
 | API | `GET/POST /api/agents`, `GET /api/resolve`, `POST /api/skills` |
 
-Enoki sponsored mint is optional — set keys in `packages/frontend/.env.local` only when needed.
+On-chain mint uses **wallet gas** when `packageId` is set (see [docs/publish-testnet.md](./docs/publish-testnet.md)).  
+Enoki sponsor is opt-in (`NEXT_PUBLIC_ENOKI_SPONSOR=true`).
 
 ## CI / CD
 

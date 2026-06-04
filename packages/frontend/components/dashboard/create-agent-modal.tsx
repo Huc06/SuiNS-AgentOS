@@ -3,13 +3,15 @@
 import {
   useCurrentAccount,
   useCurrentWallet,
+  useSignAndExecuteTransaction,
   useSignTransaction,
   useSuiClient,
 } from '@mysten/dapp-kit';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { getAgentosPackageId } from '../../lib/enoki-config';
+import { getAgentosPackageId, isEnokiSponsorEnabled } from '../../lib/enoki-config';
+import { buildCreatePassportTx } from '../../lib/passport-tx';
 import { sponsorCreatePassport } from '../../lib/sponsor-passport';
 
 type CreateAgentModalProps = {
@@ -33,6 +35,7 @@ export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalP
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
   const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const { mutateAsync: signTransaction } = useSignTransaction();
 
   const [name, setName] = useState('');
@@ -92,16 +95,27 @@ export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalP
 
       if (packageId) {
         try {
-          await sponsorCreatePassport({
-            suiClient,
-            packageId,
-            suinsName,
-            runtimeWallet: account.address,
-            wallet: currentWallet ?? null,
-            signTransaction,
-          });
+          if (isEnokiSponsorEnabled()) {
+            await sponsorCreatePassport({
+              suiClient: suiClient as never,
+              packageId,
+              suinsName,
+              runtimeWallet: account.address,
+              wallet: currentWallet ?? null,
+              signTransaction,
+            });
+          } else {
+            const result = await signAndExecute({
+              transaction: buildCreatePassportTx({
+                packageId,
+                suinsName,
+                runtimeWallet: account.address,
+              }) as never,
+            });
+            void result.digest;
+          }
         } catch {
-          // Registry saved; on-chain mint optional until sponsor + allowlist are ready.
+          // Registry saved; on-chain mint optional until packageId + wallet gas are ready.
         }
       }
 
