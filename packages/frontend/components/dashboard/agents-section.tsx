@@ -1,14 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { MOCK_AGENTS } from '../../lib/mock-agents';
+import type { AgentCardData } from './agent-card';
 import { AgentCard } from './agent-card';
 import { IconFilter, IconSearch } from './icons';
 
-export function AgentsSection() {
+type AgentsSectionProps = {
+  refreshKey?: number;
+};
+
+export function AgentsSection({ refreshKey = 0 }: AgentsSectionProps) {
   const [query, setQuery] = useState('');
-  const filtered = MOCK_AGENTS.filter(
+  const [agents, setAgents] = useState<AgentCardData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadAgents = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch('/api/agents', { cache: 'no-store' });
+      const data = (await res.json()) as { agents?: AgentCardData[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Failed (${res.status})`);
+      setAgents(data.agents ?? []);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load agents');
+      setAgents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAgents();
+  }, [loadAgents, refreshKey]);
+
+  const filtered = agents.filter(
     (a) =>
       a.displayName.toLowerCase().includes(query.toLowerCase()) ||
       a.slug.toLowerCase().includes(query.toLowerCase()),
@@ -40,15 +68,25 @@ export function AgentsSection() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 lg:grid-cols-3">
-        {filtered.length > 0 ? (
-          filtered.map((agent) => <AgentCard key={agent.slug} agent={agent} />)
-        ) : (
-          <p className="col-span-full font-mono text-sm text-on-surface-variant">
-            No agents match your search.
-          </p>
-        )}
-      </div>
+      {loadError && (
+        <p className="font-mono text-sm text-error">{loadError}</p>
+      )}
+
+      {loading ? (
+        <p className="font-mono text-sm text-on-surface-variant">Loading agents…</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 lg:grid-cols-3">
+          {filtered.length > 0 ? (
+            filtered.map((agent) => <AgentCard key={agent.slug} agent={agent} />)
+          ) : (
+            <p className="col-span-full font-mono text-sm text-on-surface-variant">
+              {agents.length === 0
+                ? 'No agents yet. Create one with New Agent.'
+                : 'No agents match your search.'}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

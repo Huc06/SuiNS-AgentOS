@@ -10,6 +10,7 @@ import { ImportSkillModal } from './import-skill-modal';
 export function CreateDashboard() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [agentsRefreshKey, setAgentsRefreshKey] = useState(0);
 
   return (
     <>
@@ -17,9 +18,17 @@ export function CreateDashboard() {
         onCreateAgent={() => setCreateOpen(true)}
         onImportSkill={() => setImportOpen(true)}
       />
-      <AgentsSection />
-      <CreateAgentModal open={createOpen} onClose={() => setCreateOpen(false)} />
-      <ImportSkillModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <AgentsSection refreshKey={agentsRefreshKey} />
+      <CreateAgentModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => setAgentsRefreshKey((k) => k + 1)}
+      />
+      <ImportSkillModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => setAgentsRefreshKey((k) => k + 1)}
+      />
     </>
   );
 }

@@ -26,8 +26,8 @@ function SearchIcon() {
   );
 }
 
-function normalizeAgentName(input: string): string {
-  const trimmed = input.trim().toLowerCase();
+function normalizeAgentQuery(input: string): string {
+  const trimmed = input.trim().toLowerCase().replace(/^@/, '');
   if (!trimmed) return '';
   return trimmed.endsWith('.sui') ? trimmed.slice(0, -4) : trimmed;
 }
@@ -35,11 +35,31 @@ function normalizeAgentName(input: string): string {
 export function HeroSearch() {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const name = normalizeAgentName(query);
-    if (name) router.push(`/agent/${encodeURIComponent(name)}`);
+    const slug = normalizeAgentQuery(query);
+    if (!slug) return;
+
+    setResolving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/resolve?name=${encodeURIComponent(slug)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        setError(`No agent found for "${slug}". Create one from the dashboard.`);
+        return;
+      }
+      const data = (await res.json()) as { agent: { slug: string } };
+      router.push(`/agent/${encodeURIComponent(data.agent.slug)}`);
+    } catch {
+      setError('Could not resolve agent. Try again.');
+    } finally {
+      setResolving(false);
+    }
   }
 
   return (
@@ -55,7 +75,10 @@ export function HeroSearch() {
           </div>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (error) setError(null);
+            }}
             className="min-w-0 flex-grow border-none px-6 py-5 font-mono text-base font-bold placeholder:text-surface-dim focus:ring-0"
             placeholder="Search by SuiNS name (e.g. alpha, research-bot)..."
             type="text"
@@ -64,12 +87,19 @@ export function HeroSearch() {
           />
           <button
             type="submit"
-            className="shrink-0 border-l-2 border-pure-black bg-electric-purple px-8 py-5 font-display text-lg font-bold uppercase text-off-white transition-colors hover:bg-pure-black"
+            disabled={resolving}
+            className="shrink-0 border-l-2 border-pure-black bg-electric-purple px-8 py-5 font-display text-lg font-bold uppercase text-off-white transition-colors hover:bg-pure-black disabled:opacity-60"
           >
-            Resolve
+            {resolving ? '…' : 'Resolve'}
           </button>
         </div>
       </form>
+
+      {error && (
+        <p className="mt-3 font-mono text-sm font-bold text-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <p className="mt-4 font-mono text-sm text-on-surface-variant">
         Or{' '}
@@ -79,7 +109,7 @@ export function HeroSearch() {
         >
           create a new agent
         </Link>{' '}
-        — connect wallet, mint passport, bind SuiNS (coming soon).
+        — register in workspace, mint on-chain when contracts are live.
       </p>
     </div>
   );

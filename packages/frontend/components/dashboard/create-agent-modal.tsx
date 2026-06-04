@@ -1,10 +1,20 @@
 'use client';
 
+import {
+  useCurrentAccount,
+  useCurrentWallet,
+  useSignTransaction,
+  useSuiClient,
+} from '@mysten/dapp-kit';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+
+import { getAgentosPackageId } from '../../lib/enoki-config';
+import { sponsorCreatePassport } from '../../lib/sponsor-passport';
 
 type CreateAgentModalProps = {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 };
 
 function normalizeSuinsInput(raw: string): string {
@@ -14,21 +24,29 @@ function normalizeSuinsInput(raw: string): string {
   return `${trimmed.replace(/^@/, '')}.sui`;
 }
 
-export function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
+export function CreateAgentModal({ open, onClose, onCreated }: CreateAgentModalProps) {
   const titleId = useId();
   const descId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const account = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signTransaction } = useSignTransaction();
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const suinsName = normalizeSuinsInput(name);
   const nameValid = suinsName.length > 4 && suinsName.endsWith('.sui');
+  const packageId = getAgentosPackageId();
 
   const handleClose = useCallback(() => {
     if (submitting) return;
     setName('');
     setDescription('');
+    setError(null);
     onClose();
   }, [onClose, submitting]);
 
@@ -48,12 +66,46 @@ export function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nameValid) return;
+    if (!nameValid || !account?.address) return;
+
     setSubmitting(true);
+    setError(null);
+
     try {
-      // TODO(epic #1): wire AgentOSClient.tx.mintPassport + wallet sign
-      await new Promise((r) => setTimeout(r, 600));
+      const res = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          suinsName,
+          runtimeWallet: account.address,
+          network: 'testnet',
+        }),
+      });
+
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? `Register failed (${res.status})`);
+      }
+
+      if (packageId) {
+        try {
+          await sponsorCreatePassport({
+            suiClient,
+            packageId,
+            suinsName,
+            runtimeWallet: account.address,
+            wallet: currentWallet ?? null,
+            signTransaction,
+          });
+        } catch {
+          // Registry saved; on-chain mint optional until sponsor + allowlist are ready.
+        }
+      }
+
+      onCreated?.();
       handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create agent');
     } finally {
       setSubmitting(false);
     }
@@ -101,10 +153,21 @@ export function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-6 p-6">
           <p id={descId} className="font-mono text-sm text-on-surface-variant">
-            Register a SuiNS name and mint an AgentPassport. Your runtime wallet defaults to the
-            connected address.
+            Connect a wallet (or Enoki Google wallet when configured), register the agent in your
+            workspace, and optionally mint on testnet when package + sponsor keys are set.
           </p>
 
+          {!account?.address && (
+            <p className="border-2 border-error bg-red-50 px-3 py-2 font-mono text-xs text-error">
+              Connect a wallet before minting a passport.
+            </p>
+          )}
+
+          {error && (
+            <p className="border-2 border-error bg-red-50 px-3 py-2 font-mono text-xs text-error">
+              {error}
+            </p>
+          )}
           <div className="space-y-2">
             <label htmlFor="agent-suins" className="font-mono text-sm font-bold uppercase">
               SuiNS name
@@ -150,9 +213,13 @@ export function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
           <div className="border-2 border-pure-black bg-surface-container p-4 font-mono text-xs">
             <div className="mb-2 font-bold uppercase text-electric-purple">On submit</div>
             <ul className="list-inside list-disc space-y-1 text-on-surface-variant">
-              <li>Mint AgentPassport on testnet</li>
-              <li>Bind SuiNS record to passport object</li>
-              <li>Initialize empty skill & policy roots</li>
+              <li>Save agent to workspace registry (API)</li>
+              <li>
+                {packageId
+                  ? 'Attempt sponsored AgentPassport mint on testnet'
+                  : 'On-chain mint when package ID is configured'}
+              </li>
+              <li>SuiNS binding — planned after contracts + SuiNS flow</li>
             </ul>
           </div>
 
@@ -167,7 +234,7 @@ export function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
             </button>
             <button
               type="submit"
-              disabled={!nameValid || submitting}
+              disabled={!nameValid || !account?.address || submitting}
               className="border-2 border-pure-black bg-electric-purple px-6 py-3 font-mono text-sm font-bold text-off-white neo-shadow transition-all active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
               {submitting ? 'Signing…' : 'Mint Passport'}

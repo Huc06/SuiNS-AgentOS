@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { join } from 'node:path';
 
-import { loadConfig, LocalRegistry, resolveRegistryPath } from '@agentos/sdk/node';
+import { getRegistry } from '../../../lib/registry-server';
 
 export const dynamic = 'force-dynamic';
-
-function getRegistry(): LocalRegistry {
-  const cwd = process.cwd();
-  const config = loadConfig(cwd);
-  const repoRoot = join(cwd, '../..');
-  const registryPath =
-    process.env.AGENTOS_REGISTRY_PATH ?? resolveRegistryPath(config, repoRoot);
-  return LocalRegistry.open(registryPath);
-}
 
 export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get('name');
