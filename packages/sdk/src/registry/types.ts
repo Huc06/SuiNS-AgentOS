@@ -7,6 +7,8 @@ export interface RegistryAgentRecord {
   passportVersion: string;
   status: 'active' | 'revoked';
   createdAt: string;
+  /** Optional human-readable summary (registry-only until on-chain metadata). */
+  description?: string;
 }
 
 export interface RegistrySkillRecord {

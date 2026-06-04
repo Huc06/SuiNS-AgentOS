@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { registryAgentToCard } from '../../../lib/agent-card-mapper';
+import { registryAgentToCard } from '../../../lib/registry-mappers';
 import { getRegistry } from '../../../lib/registry-server';
 
 export const dynamic = 'force-dynamic';
@@ -22,14 +22,19 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { suinsName?: string; runtimeWallet?: string; network?: 'mainnet' | 'testnet' };
+  let body: {
+    suinsName?: string;
+    runtimeWallet?: string;
+    network?: 'mainnet' | 'testnet';
+    description?: string;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { suinsName, runtimeWallet, network } = body;
+  const { suinsName, runtimeWallet, network, description } = body;
   if (!suinsName?.trim() || !runtimeWallet?.trim()) {
     return NextResponse.json(
       { error: 'suinsName and runtimeWallet are required' },
@@ -43,6 +48,7 @@ export async function POST(request: NextRequest) {
       suinsName: suinsName.trim(),
       runtimeWallet: runtimeWallet.trim(),
       network: network ?? 'testnet',
+      description: description?.trim(),
     });
     const skills = registry.listSkills(agent.suinsName);
     return NextResponse.json({

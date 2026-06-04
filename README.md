@@ -42,6 +42,24 @@ pnpm contracts:test # Move unit tests
 pnpm dev            # watch mode (sdk + frontend)
 ```
 
+### Workspace registry (local core)
+
+CLI, MCP, and the Next.js app share **`.agentos/registry.json`** at the repo root (see `.agentos/config.json.example`).
+
+```bash
+cp .agentos/config.json.example .agentos/config.json   # optional
+pnpm --filter @agentos/frontend dev                     # http://localhost:3000
+```
+
+| Surface | Flow |
+|---------|------|
+| Dashboard `/create` | New Agent / Import Skill → writes registry |
+| Explorer `/` | Resolve → `/agent/[slug]` |
+| CLI | `agentos agent create`, `agentos skill publish`, `agentos agent list` |
+| API | `GET/POST /api/agents`, `GET /api/resolve`, `POST /api/skills` |
+
+Enoki sponsored mint is optional — set keys in `packages/frontend/.env.local` only when needed.
+
 ## CI / CD
 
 - **CI** (`ci.yml`) — runs on every push/PR to `main`: `pnpm build`, `pnpm test`, `pnpm lint`, `sui move test`

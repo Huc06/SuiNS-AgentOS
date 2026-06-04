@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { SkillManifest } from '@agentos/sdk';
 
 import { getRegistry } from '../../../lib/registry-server';
-import { registrySkillToRow } from '../../../lib/registry-resolve';
+import { registrySkillToRow } from '../../../lib/registry-mappers';
 
 export const dynamic = 'force-dynamic';
 
