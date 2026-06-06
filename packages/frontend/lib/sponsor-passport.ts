@@ -21,6 +21,7 @@ export async function sponsorCreatePassport(options: {
     packageId: options.packageId,
     suinsName: options.suinsName,
     runtimeWallet: options.runtimeWallet,
+    recipient: options.runtimeWallet,
   });
 
   const transactionBlockKindBytes = await tx.build({

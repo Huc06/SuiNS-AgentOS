@@ -152,11 +152,18 @@ export class AgentOSClient {
   }
 
   tx = {
-    createAgent: (options: { suinsName: string; runtimeWallet: string }) => {
+    createAgent: (options: {
+      suinsName: string;
+      runtimeWallet: string;
+      recipient?: string;
+    }) => {
       const transaction = new Transaction();
+      const recipient = options.recipient ?? options.runtimeWallet;
+      transaction.setSender(recipient);
       const passport = transaction.add(
         contracts.agentPassport.create({ ...options, packageId: this.#packageId }),
       );
+      transaction.transferObjects([passport], recipient);
       return { transaction, passport };
     },
 

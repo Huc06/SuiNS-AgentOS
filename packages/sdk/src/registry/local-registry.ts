@@ -111,6 +111,19 @@ export class LocalRegistry {
     return record;
   }
 
+  /** Remove agent and its skills from the local registry (does not revoke on-chain passport). */
+  removeAgent(name: string): RegistryAgentRecord {
+    const resolved = this.resolveAgent(name);
+    if (!resolved) {
+      throw new Error(`Agent not found: ${name}`);
+    }
+    const { agent } = resolved;
+    this.#data.agents = this.#data.agents.filter((a) => a.slug !== agent.slug);
+    this.#data.skills = this.#data.skills.filter((s) => s.agentSlug !== agent.slug);
+    this.save();
+    return agent;
+  }
+
   publishSkill(input: {
     agentName: string;
     manifest: SkillManifest;

@@ -7,10 +7,12 @@ import type { AgentSkillRow } from '../../lib/agent-types';
 import { fetchAgentSkills } from '../../lib/fetch-resolve';
 import { IconFilter } from '../dashboard/icons';
 import { IconAdd } from './icons';
+import { DeleteAgentPanel } from './delete-agent-panel';
 import { SkillListItem } from './skill-list-item';
 
 type AgentManageContentProps = {
   agentSlug: string;
+  suinsName: string;
   displayName: string;
   passportVersion: string;
   description?: string;
@@ -19,6 +21,7 @@ type AgentManageContentProps = {
 
 export function AgentManageContent({
   agentSlug,
+  suinsName,
   displayName,
   passportVersion,
   description,
@@ -134,6 +137,8 @@ export function AgentManageContent({
           </p>
         )}
       </div>
+
+      <DeleteAgentPanel agentSlug={agentSlug} suinsName={suinsName} />
     </div>
   );
 }

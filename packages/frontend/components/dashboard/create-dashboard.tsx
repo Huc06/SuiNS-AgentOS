@@ -15,13 +15,18 @@ export function CreateDashboard() {
   const [agentsRefreshKey, setAgentsRefreshKey] = useState(0);
   const [defaultImportAgent, setDefaultImportAgent] = useState('');
 
+  const bindSuins = searchParams.get('bind') === 'suins';
+
   useEffect(() => {
     if (searchParams.get('import') === 'skill') {
       setImportOpen(true);
       const agent = searchParams.get('agent');
       if (agent) setDefaultImportAgent(agent);
     }
-  }, [searchParams]);
+    if (bindSuins) {
+      setCreateOpen(true);
+    }
+  }, [searchParams, bindSuins]);
 
   return (
     <>
@@ -34,6 +39,9 @@ export function CreateDashboard() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => setAgentsRefreshKey((k) => k + 1)}
+        initialPath={bindSuins ? 'own' : 'own'}
+        initialRuntimeWallet={bindSuins ? (searchParams.get('runtime') ?? '') : ''}
+        initialName={bindSuins ? (searchParams.get('name') ?? '') : ''}
       />
       <ImportSkillModal
         open={importOpen}

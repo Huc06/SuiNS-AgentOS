@@ -77,4 +77,29 @@ describe('LocalRegistry', () => {
     expect(registry.listAgents()[0].slug).toBe('live');
     rmSync(dir, { recursive: true });
   });
+
+  it('removeAgent deletes agent and skills', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agentos-'));
+    const path = join(dir, 'registry.json');
+    const registry = new LocalRegistry(path, { version: 1, agents: [], skills: [] });
+
+    registry.registerAgent({ suinsName: 'gone.sui', runtimeWallet: '0x1' });
+    const manifest: SkillManifest = {
+      name: 'skill-a',
+      version: '1.0.0',
+      publisher: '@gone/skill-a',
+      manifestType: 'sui-agent-skill/v1',
+      mcp: { compatible: true, tools: [] },
+      sui: { movePackage: '0x0', entry: 'run', policyRequired: [] },
+      dependencies: [],
+    };
+    registry.publishSkill({ agentName: 'gone.sui', manifest });
+
+    const removed = registry.removeAgent('gone.sui');
+    expect(removed.slug).toBe('gone');
+    expect(registry.resolveAgent('gone.sui')).toBeNull();
+    expect(registry.listSkills('gone.sui')).toHaveLength(0);
+
+    rmSync(dir, { recursive: true });
+  });
 });

@@ -34,6 +34,7 @@ export default async function AgentManagePage({ params }: Props) {
         <AgentManageSidebar agentSlug={data.card.slug} />
         <AgentManageContent
           agentSlug={data.card.slug}
+          suinsName={data.resolved.agent.suinsName}
           displayName={data.card.displayName}
           passportVersion={data.card.version}
           description={data.resolved.agent.description}

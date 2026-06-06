@@ -130,3 +130,22 @@ agentCommand
       }
     }
   });
+
+agentCommand
+  .command('delete <name>')
+  .description('Remove an agent and its skills from the local registry')
+  .option('--json', 'JSON output')
+  .action((name: string, opts: { json?: boolean }) => {
+    const ctx = createCliContext();
+    try {
+      const removed = ctx.registry.removeAgent(name);
+      if (opts.json) {
+        printJson({ removed });
+      } else {
+        console.log(`Removed ${removed.suinsName} from ${ctx.registryPath}`);
+        console.log('  On-chain passport and SuiNS name are unchanged.');
+      }
+    } catch (e) {
+      printError(e instanceof Error ? e.message : String(e));
+    }
+  });
