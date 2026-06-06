@@ -30,7 +30,9 @@ agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
 agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
 ```
 
-In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet) so the same agent can invoke `agentos_register_agent` after Suiperpower deploy — see [docs/suiperpower.md](./docs/suiperpower.md).
+In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet). After Suiperpower deploy, open the dashboard to bind SuiNS — see [docs/create-agent-ux.md](./docs/create-agent-ux.md) and [docs/suiperpower.md](./docs/suiperpower.md).
+
+**Docs:** [docs/README.md](./docs/README.md)
 
 ## Development
 

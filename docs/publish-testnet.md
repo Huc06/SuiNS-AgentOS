@@ -11,9 +11,16 @@ Core on-chain flows need a published Move package id in config.
 ## Local publish
 
 ```bash
+sui client switch --env testnet
+sui client gas
+
 cd packages/contracts
-sui client publish --gas-budget 200000000 --json | tee publish.json
+sui client publish --gas-budget 200000000 --json | tee publish-testnet.json
 ```
+
+Chạy từng dòng — **không** copy comment `# ...` trên cùng dòng lệnh.
+
+`publish-testnet.json` / `publish.json` là artifact local — không commit (xem `.gitignore`).
 
 Record `packageId` from the JSON output, then:
 

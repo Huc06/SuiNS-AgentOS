@@ -1,6 +1,6 @@
 # Setup: env, Enoki, auth, deploy
 
-**Trạng thái repo:** Frontend đã wire Enoki wallets + API sponsor + đăng ký agent qua registry (`/create`, issue #11). Cần env keys + `packageId` để mint on-chain thật; Google origins vẫn do leader cấu hình khi deploy.
+**Trạng thái repo:** Frontend wire Enoki + sponsor API + registry `/create`. Cần env keys + `packageId` cho mint on-chain. UX SuiNS (hai nhánh, bind trên web): [create-agent-ux.md](./create-agent-ux.md).
 
 ---
 
@@ -31,16 +31,16 @@ Tạo project tại [Enoki Portal](https://portal.enoki.mystenlabs.com) (Mysten)
 
 Trong project → **Sponsored Transactions**, allowlist:
 
-- **Move call targets** (ví dụ sau publish contracts):
-  - `@agentos/contracts::agent_passport::create`
-  - (thay `@agentos/contracts` bằng `0x...` package ID thật)
+- **Move call targets** (sau publish testnet):
+  - `0xYOUR_PACKAGE_ID::agent_passport::create`
+  - (hex package id từ [publish-testnet.md](./publish-testnet.md))
 - **Addresses** (tuỳ chính sách): địa chỉ sponsor hoặc để trống theo doc Enoki.
 
-### Auth flow (dự kiến #11)
+### Auth flow
 
-1. User **Sign in with Google** (Enoki zkLogin qua dapp-kit).
-2. Backend (hoặc route Next.js) gọi Enoki **sponsor** `createAgent` tx.
-3. Bind SuiNS — có thể bước riêng / user-paid (out of scope #11).
+1. User **Sign in with Google** (Enoki zkLogin / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` override).
+2. (Optional) Enoki **sponsor** mint `agent_passport::create`.
+3. **SuiNS bind** trên `/create` — ví browser ký; xem [create-agent-ux.md](./create-agent-ux.md). Phí mua name trên suins.io do user trả, không sponsor được.
 
 Tham khảo: [Enoki sponsored transactions](https://docs.enoki.mystenlabs.com/ts-sdk/sponsored-transactions), [example app](https://github.com/sui-foundation/enoki-example-app).
 
@@ -124,4 +124,4 @@ Cho workflow `cd.yml` → publish contracts:
 
 - Mainnet Enoki billing
 - Production sponsor budget / rate limits ops
-- SuiNS registration payment flow
+- In-app SuiNS pricing (v1 redirect suins.io — [create-agent-ux.md](./create-agent-ux.md))

@@ -1,33 +1,48 @@
 # Suiperpower + AgentOS
 
-**Suiperpower** owns the build lane ([suiperpower.dev](https://www.suiperpower.dev/) — `/suiper:validate-idea`, `build-with-move`, `deploy-to-testnet`, `verify-against-intent`).
+**Suiperpower** — build lane ([suiperpower.dev](https://www.suiperpower.dev/)): `build-with-move`, `deploy-to-testnet`, `verify-against-intent`.
 
-**AgentOS** owns register + discover — **no separate Cursor skill pack**. Reuse Suiperpower in the IDE; bind on-chain identity via CLI or MCP.
+**AgentOS** — register + discover. Không skill pack riêng trong repo; dùng CLI hoặc MCP.
 
-## Flow
+Docs: [README](./README.md) · UX tạo agent: [create-agent-ux.md](./create-agent-ux.md) · Pipeline: [post-suiperpower-flow.md](./post-suiperpower-flow.md).
+
+---
+
+## Flow tổng quát
 
 ```
-Suiperpower (skills)  →  deploy / verify
+Suiperpower (terminal)     →  Move deploy, skill manifest
         ↓
-agentos init          →  .agentos/registry.json
+agentos init               →  .agentos/config.json + registry
         ↓
-agentos agent create / skill publish   OR   MCP tools (agentos_register_agent, …)
+Web /create (browser)      →  SuiNS bind + mint passport + registry
         ↓
-Dashboard /api/resolve  →  MVR-style viewer
+agentos skill publish      →  registry (+ Walrus / on-chain sau)
+        ↓
+Dashboard /api/resolve     →  discover
 ```
 
-## CLI (terminal or agent tool shell)
+**SuiNS không làm trong terminal** — Claude Code / MCP in link web:  
+`{dashboardUrl}/create?bind=suins&runtime=0x…` — chi tiết [create-agent-ux.md](./create-agent-ux.md).
+
+---
+
+## CLI
 
 ```bash
 agentos init
-# … after Suiperpower deploy …
-agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
+# Sau Suiperpower deploy + cấu hình packageId:
 agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
+agentos agent resolve my-agent.sui
 ```
 
-## MCP (same session as Suiperpower)
+Tạo agent + gắn SuiNS: **web** `/create`. CLI `agent create` dùng cho script/dev khi đã có name + wallet.
 
-Add to `.cursor/mcp.json`:
+---
+
+## MCP
+
+`.cursor/mcp.json`:
 
 ```json
 {
@@ -41,6 +56,11 @@ Add to `.cursor/mcp.json`:
 }
 ```
 
-Tools: `agentos_resolve`, `agentos_register_agent`, `agentos_publish_skill`, `agentos_list_skills`, `agentos_dashboard_url`.
+| Tool | Khi nào |
+|------|---------|
+| `agentos_resolve` | Sau user bind trên web |
+| `agentos_dashboard_url` | Link `/agent/{slug}` |
+| `agentos_publish_skill` | Sau build skill |
+| `agentos_register_agent` | Dev/metadata — **không** thay SuiNS bind trên web |
 
-The coding agent continues using **Suiperpower** for Move; when the user asks to register the agent, it calls **AgentOS MCP** or suggests the CLI commands above — no `skills/agentos/` rules required.
+Agent dùng **Suiperpower** cho Move; khi cần identity, mở **dashboard** (không chỉ `register_agent` trong terminal).
