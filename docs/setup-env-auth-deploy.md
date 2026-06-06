@@ -1,99 +1,99 @@
 # Setup: env, Enoki, auth, deploy
 
-**Trạng thái repo:** Frontend wire Enoki + sponsor API + registry `/create`. Cần env keys + `packageId` cho mint on-chain. UX SuiNS (hai nhánh, bind trên web): [create-agent-ux.md](./create-agent-ux.md).
+**Repo status:** Frontend wires Enoki + sponsor API + registry `/create`. Needs env keys + `packageId` for on-chain mint. SuiNS UX (two paths, bind on web): [create-agent-ux.md](./create-agent-ux.md).
 
 ---
 
-## 1. Cần setup env chưa?
+## 1. Do you need env setup yet?
 
-| Môi trường | Bắt buộc hôm nay? | Ghi chú |
-|------------|-------------------|---------|
-| Local `pnpm dev` | Không | Wallet Connect + mock registry đủ demo |
-| GitHub Actions CI | Không thêm secret | CI chỉ build/test |
-| GitHub `testnet` env | Có (khi publish Move) | `SUI_PRIVATE_KEY`, `SUI_RPC_URL` |
-| Enoki + auth | Có (khi làm #11) | 2 API key Enoki + biến frontend |
-| Cloudflare Pages | Có (khi deploy UI) | Env + domain |
+| Environment | Required today? | Notes |
+|-------------|-----------------|-------|
+| Local `pnpm dev` | No | Wallet Connect + mock registry is enough for demo |
+| GitHub Actions CI | No extra secrets | CI only builds/tests |
+| GitHub `testnet` env | Yes (when publishing Move) | `SUI_PRIVATE_KEY`, `SUI_RPC_URL` |
+| Enoki + auth | Yes (for zkLogin) | 2 Enoki API keys + frontend vars |
+| Cloudflare Pages | Yes (when deploying UI) | Env + domain |
 
 ---
 
 ## 2. Enoki + auth (Passkey / zkLogin + sponsor gas)
 
-Tạo project tại [Enoki Portal](https://portal.enoki.mystenlabs.com) (Mysten).
+Create a project at [Enoki Portal](https://portal.enoki.mystenlabs.com) (Mysten).
 
-### Hai loại API key (bắt buộc tách)
+### Two API key types (must be separate)
 
-| Key | Loại | Feature | Dùng ở đâu |
+| Key | Type | Feature | Used where |
 |-----|------|---------|------------|
 | **Public** | Public | zkLogin, network **Testnet** | Frontend `NEXT_PUBLIC_ENOKI_API_KEY` |
-| **Private** | Private | Sponsored transactions, Testnet | Backend / API route `ENOKI_SECRET_KEY` — **không** đưa vào browser |
+| **Private** | Private | Sponsored transactions, Testnet | Backend / API route `ENOKI_SECRET_KEY` — **never** in browser |
 
-### Enoki Portal — Sponsored transactions (sau khi có `packageId`)
+### Enoki Portal — Sponsored transactions (after `packageId`)
 
-Trong project → **Sponsored Transactions**, allowlist:
+In project → **Sponsored Transactions**, allowlist:
 
-- **Move call targets** (sau publish testnet):
+- **Move call targets** (after testnet publish):
   - `0xYOUR_PACKAGE_ID::agent_passport::create`
-  - (hex package id từ [publish-testnet.md](./publish-testnet.md))
-- **Addresses** (tuỳ chính sách): địa chỉ sponsor hoặc để trống theo doc Enoki.
+  - (hex package id from [post-suiperpower-flow.md](./post-suiperpower-flow.md) §2)
+- **Addresses** (per policy): sponsor address or leave empty per Enoki docs.
 
 ### Auth flow
 
 1. User **Sign in with Google** (Enoki zkLogin / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` override).
-2. (Optional) Enoki **sponsor** mint `agent_passport::create`.
-3. **SuiNS bind** trên `/create` — ví browser ký; xem [create-agent-ux.md](./create-agent-ux.md). Phí mua name trên suins.io do user trả, không sponsor được.
+2. (Optional) Enoki **sponsors** mint `agent_passport::create`.
+3. **SuiNS bind** on `/create` — browser wallet signs; see [create-agent-ux.md](./create-agent-ux.md). SuiNS name purchase on suins.io is paid by user, not sponsorable.
 
-Tham khảo: [Enoki sponsored transactions](https://docs.enoki.mystenlabs.com/ts-sdk/sponsored-transactions), [example app](https://github.com/sui-foundation/enoki-example-app).
+References: [Enoki sponsored transactions](https://docs.enoki.mystenlabs.com/ts-sdk/sponsored-transactions), [example app](https://github.com/sui-foundation/enoki-example-app).
 
 ---
 
-## 3. Google — gửi anh gì để add Console?
+## 3. Google OAuth — what to send your admin
 
-**Trường hợp A — Enoki quản lý OAuth (thường gặp):**
+**Case A — Enoki manages OAuth (common):**
 
-1. Em tạo app trên **Enoki Portal**, bật provider **Google**.
-2. Portal hiện **Redirect URI** / hướng dẫn — copy URI đó.
-3. Gửi anh (admin Google Cloud):
-   - **Authorized redirect URIs** = URI từ Enoki (từng môi trường: local + staging + production).
-   - **Authorized JavaScript origins** (nếu Console yêu cầu):
+1. Create app in **Enoki Portal**, enable **Google** provider.
+2. Portal shows **Redirect URI** / instructions — copy that URI.
+3. Send to Google Cloud admin:
+   - **Authorized redirect URIs** = URI from Enoki (per environment: local + staging + production).
+   - **Authorized JavaScript origins** (if Console requires):
      - `http://localhost:3000`
-     - `https://<domain-production>.pages.dev` hoặc custom domain
-4. Sau khi anh tạo **OAuth 2.0 Client ID (Web application)**:
-   - Anh gửi lại em: **Client ID** (và **Client secret** nếu Enoki Portal yêu cầu nhập tay).
-   - Em paste vào **Enoki Portal** (mục Google provider), **không** commit secret vào git.
+     - `https://<production-domain>.pages.dev` or custom domain
+4. After admin creates **OAuth 2.0 Client ID (Web application)**:
+   - Admin sends back **Client ID** (and **Client secret** if Enoki Portal requires manual entry).
+   - Paste into **Enoki Portal** (Google provider section); **do not** commit secrets to git.
 
-**Trường hợp B — Chỉ dùng `@mysten/dapp-kit` zkLogin không qua Enoki:** cần OAuth client riêng theo [Sui zkLogin doc](https://docs.sui.io/concepts/cryptography/zklogin-integration) — team nên thống nhất **một** hướng (khuyến nghị Enoki cho sponsor + login).
+**Case B — `@mysten/dapp-kit` zkLogin without Enoki:** needs a separate OAuth client per [Sui zkLogin doc](https://docs.sui.io/concepts/cryptography/zklogin-integration) — team should pick **one** approach (Enoki recommended for sponsor + login).
 
-**Email gửi anh (mẫu):**
+**Email template for admin:**
 
-> Anh add giúp OAuth Web client cho AgentOS zkLogin.  
-> Redirect URIs: `<paste từ Enoki Portal>`  
+> Please add an OAuth Web client for AgentOS zkLogin.  
+> Redirect URIs: `<paste from Enoki Portal>`  
 > Origins: `http://localhost:3000`, `https://<staging-domain>`  
-> Sau khi tạo xong gửi em Client ID (Web) để em nhập Enoki Portal.
+> After creation, send me the Client ID (Web) to enter in Enoki Portal.
 
 ---
 
-## 4. Cloudflare — email em gửi anh
+## 4. Cloudflare — invite and deploy
 
-Anh (owner Cloudflare) **invite member** → em login deploy Pages.
+Cloudflare owner **invites member** → you deploy Pages.
 
-**Em gửi anh:**
+**Send the owner:**
 
-- Email đăng nhập Cloudflare (email công ty / email em dùng nhận invite).
-- GitHub account em dùng (nếu connect repo qua GitHub).
+- Your Cloudflare login email.
+- Your GitHub account (if connecting repo via GitHub).
 
-**Quyền đề xuất:** *Cloudflare Pages* — **Edit** (đủ deploy preview + production; không cần Super Admin).
+**Suggested role:** *Cloudflare Pages* — **Edit** (enough for preview + production deploy; Super Admin not required).
 
-**Sau khi được add — env trên Cloudflare Pages (Production + Preview):**
+**After access — Cloudflare Pages env (Production + Preview):**
 
-| Variable | Secret? | Ghi chú |
-|----------|---------|---------|
+| Variable | Secret? | Notes |
+|----------|---------|-------|
 | `NEXT_PUBLIC_ENOKI_API_KEY` | No (public key) | Enoki public |
 | `ENOKI_SECRET_KEY` | **Yes** | Enoki private |
 | `NEXT_PUBLIC_SUI_NETWORK` | No | `testnet` |
-| `AGENTOS_PACKAGE_ID` | No | Sau publish #6 |
-| `AGENTOS_REGISTRY_PATH` | No | Tuỳ chọn nếu server đọc registry |
+| `AGENTOS_PACKAGE_ID` | No | After publish (see pipeline doc §2) |
+| `AGENTOS_REGISTRY_PATH` | No | Optional if server reads registry |
 
-Build command (gợi ý): `cd ../.. && pnpm install && pnpm build --filter=@agentos/frontend`  
+Suggested build command: `cd ../.. && pnpm install && pnpm build --filter=@agentos/frontend`  
 Root directory: `packages/frontend`  
 Framework preset: Next.js
 
@@ -101,27 +101,28 @@ Framework preset: Next.js
 
 ## 5. GitHub Secrets (environment `testnet`)
 
-Cho workflow `cd.yml` → publish contracts:
+For `cd.yml` workflow → publish contracts:
 
-| Secret | Mô tả |
-|--------|--------|
-| `SUI_PRIVATE_KEY` | `suiprivkey1...` — ví deploy testnet |
-| `SUI_RPC_URL` | `https://fullnode.testnet.sui.io:443` (hoặc RPC riêng) |
+| Secret | Description |
+|--------|-------------|
+| `SUI_PRIVATE_KEY` | `suiprivkey1...` — testnet deploy wallet |
+| `SUI_RPC_URL` | `https://fullnode.testnet.sui.io:443` (or custom RPC) |
 
 ---
 
-## 6. Thứ tự làm việc đề xuất
+## 6. Suggested order of work
 
-1. Anh add em vào **Cloudflare** + connect repo `SuiNS-AgentOS`.
-2. Team publish contracts → lấy `packageId` → Enoki allowlist move targets.
+1. Publish contracts testnet → `packageId` ([post-suiperpower-flow.md](./post-suiperpower-flow.md) §2).
+2. Enoki allowlist `0x…::agent_passport::create`.
 3. Enoki Portal: public + private keys → Cloudflare env.
-4. Google OAuth (nếu Enoki yêu cầu) — redirect URIs ↔ Client ID.
-5. Implement #11 trên frontend `/create` + API sponsor route.
+4. Google OAuth (if Enoki requires) — redirect URIs ↔ Client ID.
+5. Cloudflare invite + connect repo.
+6. Enable `NEXT_PUBLIC_ENOKI_API_KEY` (zkLogin); sponsor optional.
 
 ---
 
-## 7. Chưa cần ngay
+## 7. Not needed yet
 
 - Mainnet Enoki billing
 - Production sponsor budget / rate limits ops
-- In-app SuiNS pricing (v1 redirect suins.io — [create-agent-ux.md](./create-agent-ux.md))
+- In-app SuiNS pricing (v1 redirects to suins.io — [create-agent-ux.md](./create-agent-ux.md))

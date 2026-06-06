@@ -30,7 +30,7 @@ agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
 agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
 ```
 
-In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet). After Suiperpower deploy, open the dashboard to bind SuiNS — see [docs/create-agent-ux.md](./docs/create-agent-ux.md) and [docs/suiperpower.md](./docs/suiperpower.md).
+In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet). After Suiperpower deploy, open the dashboard to bind SuiNS — see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) and [docs/create-agent-ux.md](./docs/create-agent-ux.md).
 
 **Docs:** [docs/README.md](./docs/README.md)
 
@@ -60,7 +60,7 @@ pnpm --filter @agentos/frontend dev                     # http://localhost:3000
 | CLI | `agentos agent create`, `agentos skill publish`, `agentos agent list` |
 | API | `GET/POST /api/agents`, `GET /api/resolve`, `POST /api/skills` |
 
-On-chain mint uses **wallet gas** when `packageId` is set (see [docs/publish-testnet.md](./docs/publish-testnet.md)).  
+On-chain mint uses **wallet gas** when `packageId` is set (see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) §2).  
 Enoki sponsor is opt-in (`NEXT_PUBLIC_ENOKI_SPONSOR=true`).
 
 ## CI / CD
