@@ -1,14 +1,14 @@
-import type { ClientWithCoreApi } from '@mysten/sui/experimental';
-import type { Signer } from '@mysten/sui/cryptography';
-import { Transaction } from '@mysten/sui/transactions';
-import type { TransactionObjectArgument } from '@mysten/sui/transactions';
+import type { ClientWithCoreApi } from "@mysten/sui/experimental";
+import type { Signer } from "@mysten/sui/cryptography";
+import { Transaction } from "@mysten/sui/transactions";
+import type { TransactionObjectArgument } from "@mysten/sui/transactions";
 
-import * as contracts from './contracts/index.js';
+import * as contracts from "./contracts/index.js";
 import {
   descriptorFromRecord,
   LocalRegistry,
   passportFromRecord,
-} from './registry/index.js';
+} from "./registry/index.js";
 import type {
   AgentOptions,
   AgentPassport,
@@ -16,7 +16,7 @@ import type {
   SkillDescriptor,
   SkillManifest,
   SubAgentConfig,
-} from './types.js';
+} from "./types.js";
 
 export interface AgentOSClientOptions {
   client: ClientWithCoreApi;
@@ -33,7 +33,12 @@ export class AgentOSClient {
   #packageId?: string;
   #registry: LocalRegistry | null;
 
-  constructor({ client, harborApiKey, packageId, registryPath }: AgentOSClientOptions) {
+  constructor({
+    client,
+    harborApiKey,
+    packageId,
+    registryPath,
+  }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
     this.#packageId = packageId;
@@ -50,7 +55,9 @@ export class AgentOSClient {
 
   async resolveAgent(suinsName: string): Promise<AgentPassport> {
     if (!this.#registry) {
-      throw new Error('Not implemented: set registryPath or use LocalRegistry in Node');
+      throw new Error(
+        "Not implemented: set registryPath or use LocalRegistry in Node",
+      );
     }
     const resolved = this.#registry.resolveAgent(suinsName);
     if (!resolved) {
@@ -59,14 +66,19 @@ export class AgentOSClient {
     return passportFromRecord(resolved.agent);
   }
 
-  async resolveSkill(skillId: string, agentName?: string): Promise<SkillDescriptor> {
+  async resolveSkill(
+    skillId: string,
+    agentName?: string,
+  ): Promise<SkillDescriptor> {
     if (!this.#registry) {
-      throw new Error('Not implemented: set registryPath');
+      throw new Error("Not implemented: set registryPath");
     }
     const skills = agentName
       ? this.#registry.listSkills(agentName)
       : this.#registry.snapshot.skills;
-    const record = skills.find((s) => s.skillId === skillId || s.mvrPackage === skillId);
+    const record = skills.find(
+      (s) => s.skillId === skillId || s.mvrPackage === skillId,
+    );
     if (!record) {
       throw new Error(`Skill not found: ${skillId}`);
     }
@@ -75,7 +87,7 @@ export class AgentOSClient {
 
   async listSkills(agentName: string): Promise<SkillDescriptor[]> {
     if (!this.#registry) {
-      throw new Error('Not implemented: set registryPath');
+      throw new Error("Not implemented: set registryPath");
     }
     return this.#registry.listSkills(agentName).map(descriptorFromRecord);
   }
@@ -84,7 +96,7 @@ export class AgentOSClient {
     _blobId: string,
     _sealPolicyId: string,
   ): Promise<SkillManifest> {
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
 
   async createAgent(options: {
@@ -94,19 +106,22 @@ export class AgentOSClient {
     options?: AgentOptions;
   }): Promise<AgentPassport> {
     if (!this.#registry) {
-      throw new Error('Not implemented: set registryPath');
+      throw new Error("Not implemented: set registryPath");
     }
     const record = this.#registry.registerAgent({
       suinsName: options.name,
       runtimeWallet: options.runtimeWallet,
-      network: options.options?.network === 'mainnet' ? 'mainnet' : 'testnet',
+      network: options.options?.network === "mainnet" ? "mainnet" : "testnet",
     });
     void options.signer;
     return passportFromRecord(record);
   }
 
-  async revokeAgent(_options: { signer: Signer; passportId: string }): Promise<void> {
-    throw new Error('Not implemented');
+  async revokeAgent(_options: {
+    signer: Signer;
+    passportId: string;
+  }): Promise<void> {
+    throw new Error("Not implemented");
   }
 
   async publishSkill(options: {
@@ -117,7 +132,7 @@ export class AgentOSClient {
     walrusManifestBlob?: string;
   }): Promise<SkillDescriptor> {
     if (!this.#registry) {
-      throw new Error('Not implemented: set registryPath');
+      throw new Error("Not implemented: set registryPath");
     }
     const agentName = options.agentName ?? options.manifest.publisher;
     const record = this.#registry.publishSkill({
@@ -135,20 +150,20 @@ export class AgentOSClient {
     parent: string;
     child: SubAgentConfig;
   }): Promise<AgentPassport> {
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
 
   async createSkillBucket(_apiKey?: string): Promise<Bucket> {
     void this.#harborApiKey;
     void _apiKey;
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
 
   async uploadManifest(
     _bucketId: string,
     _manifest: SkillManifest,
   ): Promise<string> {
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
 
   tx = {
@@ -161,7 +176,10 @@ export class AgentOSClient {
       const recipient = options.recipient ?? options.runtimeWallet;
       transaction.setSender(recipient);
       const passport = transaction.add(
-        contracts.agentPassport.create({ ...options, packageId: this.#packageId }),
+        contracts.agentPassport.create({
+          ...options,
+          packageId: this.#packageId,
+        }),
       );
       transaction.transferObjects([passport], recipient);
       return { transaction, passport };
@@ -169,7 +187,12 @@ export class AgentOSClient {
 
     revokeAgent: (options: { passport: TransactionObjectArgument }) => {
       const transaction = new Transaction();
-      transaction.add(contracts.agentPassport.revoke({ ...options, packageId: this.#packageId }));
+      transaction.add(
+        contracts.agentPassport.revoke({
+          ...options,
+          packageId: this.#packageId,
+        }),
+      );
       return transaction;
     },
 
@@ -182,15 +205,37 @@ export class AgentOSClient {
     }) => {
       const transaction = new Transaction();
       const descriptor = transaction.add(
-        contracts.skillDescriptor.create({ ...options, packageId: this.#packageId }),
+        contracts.skillDescriptor.create({
+          ...options,
+          packageId: this.#packageId,
+        }),
       );
       return { transaction, descriptor };
+    },
+
+    updateSkillDescriptor: (options: {
+      descriptor: TransactionObjectArgument;
+      walrusManifestBlob: string;
+      manifestHash: string;
+      version: string;
+    }) => {
+      const transaction = new Transaction();
+      transaction.add(
+        contracts.skillDescriptor.update({
+          ...options,
+          packageId: this.#packageId,
+        }),
+      );
+      return { transaction };
     },
 
     createBucketPolicy: (options: { sealPolicyId: string }) => {
       const transaction = new Transaction();
       const policy = transaction.add(
-        contracts.bucketPolicy.create({ ...options, packageId: this.#packageId }),
+        contracts.bucketPolicy.create({
+          ...options,
+          packageId: this.#packageId,
+        }),
       );
       return { transaction, policy };
     },
@@ -200,13 +245,16 @@ export class AgentOSClient {
     createAgent: contracts.agentPassport.create,
     revokeAgent: contracts.agentPassport.revoke,
     createSkillDescriptor: contracts.skillDescriptor.create,
+    updateSkillDescriptor: contracts.skillDescriptor.update,
+    setSealPolicy: contracts.skillDescriptor.setSealPolicy,
+    setDependencies: contracts.skillDescriptor.setDependencies,
     createBucketPolicy: contracts.bucketPolicy.create,
     sealApprove: contracts.bucketPolicy.sealApprove,
   };
 
   view = {
     isAgentActive: async (_passportId: string): Promise<boolean> => {
-      throw new Error('Not implemented');
+      throw new Error("Not implemented");
     },
   };
 }

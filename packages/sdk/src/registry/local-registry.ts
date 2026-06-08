@@ -1,16 +1,16 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
+import { createHash, randomBytes } from "node:crypto";
 
-import type { SkillManifest } from '../types.js';
-import { normalizeSuinsName, slugFromSuins } from './normalize.js';
-import { SEED_REGISTRY } from './seed.js';
+import type { SkillManifest } from "../types.js";
+import { normalizeSuinsName, slugFromSuins } from "./normalize.js";
+import { SEED_REGISTRY } from "./seed.js";
 import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
   ResolveAgentResponse,
-} from './types.js';
+} from "./types.js";
 
 export class LocalRegistry {
   #filePath: string;
@@ -25,9 +25,11 @@ export class LocalRegistry {
     if (!existsSync(filePath)) {
       return structuredClone(SEED_REGISTRY);
     }
-    const raw = JSON.parse(readFileSync(filePath, 'utf8')) as RegistryFile;
+    const raw = JSON.parse(readFileSync(filePath, "utf8")) as RegistryFile;
     if (raw.version !== 1) {
-      throw new Error(`Unsupported registry version: ${String((raw as { version?: unknown }).version)}`);
+      throw new Error(
+        `Unsupported registry version: ${String((raw as { version?: unknown }).version)}`,
+      );
     }
     return raw;
   }
@@ -46,13 +48,19 @@ export class LocalRegistry {
 
   save(): void {
     mkdirSync(dirname(this.#filePath), { recursive: true });
-    writeFileSync(this.#filePath, `${JSON.stringify(this.#data, null, 2)}\n`, 'utf8');
+    writeFileSync(
+      this.#filePath,
+      `${JSON.stringify(this.#data, null, 2)}\n`,
+      "utf8",
+    );
   }
 
   findAgentBySuins(suinsName: string): RegistryAgentRecord | undefined {
     const normalized = normalizeSuinsName(suinsName);
     return this.#data.agents.find(
-      (a) => a.suinsName === normalized || a.slug === normalized.replace(/\.sui$/, ''),
+      (a) =>
+        a.suinsName === normalized ||
+        a.slug === normalized.replace(/\.sui$/, ""),
     );
   }
 
@@ -62,7 +70,8 @@ export class LocalRegistry {
 
   resolveAgent(name: string): ResolveAgentResponse | null {
     const agent =
-      this.findAgentBySuins(name) ?? this.findAgentBySlug(name.replace(/^@/, ''));
+      this.findAgentBySuins(name) ??
+      this.findAgentBySlug(name.replace(/^@/, ""));
     if (!agent) return null;
     const skills = this.#data.skills.filter((s) => s.agentSlug === agent.slug);
     return { agent, skills };
@@ -74,19 +83,19 @@ export class LocalRegistry {
   }
 
   listAgents(): RegistryAgentRecord[] {
-    return this.#data.agents.filter((a) => a.status === 'active');
+    return this.#data.agents.filter((a) => a.status === "active");
   }
 
   registerAgent(input: {
     suinsName: string;
     runtimeWallet: string;
-    network?: 'mainnet' | 'testnet';
+    network?: "mainnet" | "testnet";
     passportVersion?: string;
     description?: string;
   }): RegistryAgentRecord {
     const suinsName = normalizeSuinsName(input.suinsName);
-    if (!suinsName.endsWith('.sui')) {
-      throw new Error('Invalid SuiNS name — must end with .sui');
+    if (!suinsName.endsWith(".sui")) {
+      throw new Error("Invalid SuiNS name — must end with .sui");
     }
     const existing = this.findAgentBySuins(suinsName);
     if (existing) {
@@ -94,17 +103,19 @@ export class LocalRegistry {
     }
 
     const slug = slugFromSuins(suinsName);
-    const passportId = `0x${randomBytes(20).toString('hex')}`;
+    const passportId = `0x${randomBytes(20).toString("hex")}`;
     const record: RegistryAgentRecord = {
       slug,
       suinsName,
       passportId,
       runtimeWallet: input.runtimeWallet,
-      network: input.network ?? 'testnet',
-      passportVersion: input.passportVersion ?? 'Passport v1.0.0',
-      status: 'active',
+      network: input.network ?? "testnet",
+      passportVersion: input.passportVersion ?? "Passport v1.0.0",
+      status: "active",
       createdAt: new Date().toISOString(),
-      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+      ...(input.description?.trim()
+        ? { description: input.description.trim() }
+        : {}),
     };
     this.#data.agents.push(record);
     this.save();
@@ -119,7 +130,9 @@ export class LocalRegistry {
     }
     const { agent } = resolved;
     this.#data.agents = this.#data.agents.filter((a) => a.slug !== agent.slug);
-    this.#data.skills = this.#data.skills.filter((s) => s.agentSlug !== agent.slug);
+    this.#data.skills = this.#data.skills.filter(
+      (s) => s.agentSlug !== agent.slug,
+    );
     this.save();
     return agent;
   }
@@ -128,7 +141,15 @@ export class LocalRegistry {
     agentName: string;
     manifest: SkillManifest;
     walrusManifestBlob?: string;
-    network?: 'mainnet' | 'testnet';
+    /** Real SHA-256 manifest hash (hex) from the upload pipeline. */
+    manifestHash?: string;
+    /** On-chain SkillDescriptor object id. */
+    objectId?: string;
+    /** Full qualified SuiNS subname (e.g. `trade.alpha.sui`). */
+    suinsName?: string;
+    /** Seal policy id for private skills (empty/undefined for public). */
+    sealPolicyId?: string;
+    network?: "mainnet" | "testnet";
   }): RegistrySkillRecord {
     const resolved = this.resolveAgent(input.agentName);
     if (!resolved) {
@@ -136,10 +157,13 @@ export class LocalRegistry {
     }
 
     const manifestJson = JSON.stringify(input.manifest);
-    const manifestHash = `0x${createHash('sha256').update(manifestJson).digest('hex').slice(0, 16)}`;
+    const manifestHash =
+      input.manifestHash ??
+      `0x${createHash("sha256").update(manifestJson).digest("hex").slice(0, 16)}`;
     const walrusManifestBlob =
-      input.walrusManifestBlob ?? `walrus://blob/${input.manifest.name}-${input.manifest.version}`;
-    const mvrPackage = input.manifest.publisher.startsWith('@')
+      input.walrusManifestBlob ??
+      `walrus://blob/${input.manifest.name}-${input.manifest.version}`;
+    const mvrPackage = input.manifest.publisher.startsWith("@")
       ? input.manifest.publisher
       : `@${resolved.agent.slug}/${input.manifest.name}`;
 
@@ -151,12 +175,14 @@ export class LocalRegistry {
       version: `v${input.manifest.version}`,
       walrusManifestBlob,
       manifestHash,
-      objectId: `0x${randomBytes(20).toString('hex')}`,
+      objectId: input.objectId ?? `0x${randomBytes(20).toString("hex")}`,
       network: input.network ?? resolved.agent.network,
-      status: 'active',
-      resolutions: '0',
-      lastUpdated: 'just now',
-      icon: 'token',
+      status: "active",
+      resolutions: "0",
+      lastUpdated: "just now",
+      icon: "token",
+      ...(input.suinsName ? { suinsName: input.suinsName } : {}),
+      ...(input.sealPolicyId ? { sealPolicyId: input.sealPolicyId } : {}),
     };
 
     const dup = this.#data.skills.find(
@@ -178,10 +204,10 @@ export function passportFromRecord(record: RegistryAgentRecord) {
     owner: record.runtimeWallet,
     suinsName: record.suinsName,
     runtimeWallet: record.runtimeWallet,
-    policyRoot: '0x0',
-    skillRoot: '0x0',
-    memoryNamespace: '',
-    activityLogPointer: '',
+    policyRoot: "0x0",
+    skillRoot: "0x0",
+    memoryNamespace: "",
+    activityLogPointer: "",
     status: record.status,
   } as const;
 }
@@ -195,5 +221,6 @@ export function descriptorFromRecord(record: RegistrySkillRecord) {
     version: record.version,
     requiredCapabilities: [],
     dependencies: [],
+    ...(record.sealPolicyId ? { sealPolicyId: record.sealPolicyId } : {}),
   };
 }

@@ -3,9 +3,9 @@ export interface RegistryAgentRecord {
   suinsName: string;
   passportId: string;
   runtimeWallet: string;
-  network: 'mainnet' | 'testnet';
+  network: "mainnet" | "testnet";
   passportVersion: string;
-  status: 'active' | 'revoked';
+  status: "active" | "revoked";
   createdAt: string;
   /** Optional human-readable summary (registry-only until on-chain metadata). */
   description?: string;
@@ -20,11 +20,13 @@ export interface RegistrySkillRecord {
   walrusManifestBlob: string;
   manifestHash: string;
   objectId: string;
-  network: 'mainnet' | 'testnet';
-  status: 'active' | 'archived';
+  suinsName?: string;
+  sealPolicyId?: string;
+  network: "mainnet" | "testnet";
+  status: "active" | "archived";
   resolutions: string;
   lastUpdated: string;
-  icon: 'token' | 'wallet' | 'swap';
+  icon: "token" | "wallet" | "swap";
 }
 
 export interface RegistryFile {
