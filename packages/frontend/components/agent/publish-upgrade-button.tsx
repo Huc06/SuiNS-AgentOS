@@ -4,7 +4,7 @@ import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
-import { contracts, type SkillManifest } from "@agentos/sdk";
+import type { SkillManifest } from "@agentos/sdk";
 import { Transaction } from "@mysten/sui/transactions";
 import { useRef, useState } from "react";
 
@@ -92,18 +92,23 @@ export function PublishUpgradeButton({ skill }: { skill: AgentSkillRow }) {
     }
 
     // 2. Build the on-chain update transaction and sign it with the wallet.
+    // The `skill_descriptor::update` move call is inlined here (rather than
+    // imported from the `@agentos/sdk` barrel) to keep the browser bundle free
+    // of the SDK's Node-only modules (config/registry use `node:fs`).
     setState({ kind: "signing" });
     try {
       const tx = new Transaction();
-      tx.add(
-        contracts.skillDescriptor.update({
-          descriptor: tx.object(skill.objectIdFull),
-          walrusManifestBlob: upload.blobId,
-          manifestHash: upload.manifestHash,
-          version: manifest.version ?? skill.version,
-          packageId,
-        }),
-      );
+      const encode = (value: string) =>
+        Array.from(new TextEncoder().encode(value));
+      tx.moveCall({
+        target: `${packageId}::skill_descriptor::update`,
+        arguments: [
+          tx.object(skill.objectIdFull),
+          tx.pure.vector("u8", encode(upload.blobId)),
+          tx.pure.vector("u8", encode(upload.manifestHash)),
+          tx.pure.vector("u8", encode(manifest.version ?? skill.version)),
+        ],
+      });
       const result = await signAndExecute({ transaction: tx as never });
       setState({ kind: "success", digest: result.digest });
     } catch (err) {

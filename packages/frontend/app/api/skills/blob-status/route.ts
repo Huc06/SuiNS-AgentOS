@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { HarborClient } from "@agentos/sdk";
+import { HarborClient } from "@agentos/sdk/node";
 
 export const dynamic = "force-dynamic";
 
