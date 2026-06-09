@@ -1,4 +1,4 @@
-export type AgentStatus = 'active' | 'revoked';
+export type AgentStatus = "active" | "revoked";
 
 export interface AgentPassport {
   id: string;
@@ -20,6 +20,13 @@ export interface SkillDescriptor {
   version: string;
   requiredCapabilities: string[];
   dependencies: string[];
+  sealPolicyId?: string;
+  /**
+   * True when the skill's manifest is Seal-encrypted (i.e. `sealPolicyId` is
+   * present and non-empty). Callers must supply a sui-groups membership proof
+   * to `downloadManifest` in order to decrypt the manifest.
+   */
+  decryptionRequired?: boolean;
 }
 
 export interface SkillManifestTool {
@@ -31,7 +38,7 @@ export interface SkillManifest {
   name: string;
   version: string;
   publisher: string;
-  manifestType: 'sui-agent-skill/v1';
+  manifestType: "sui-agent-skill/v1";
   mcp: {
     compatible: boolean;
     tools: SkillManifestTool[];
@@ -52,11 +59,11 @@ export interface SubAgentConfig {
 }
 
 export interface AgentOptions {
-  network: 'mainnet' | 'testnet' | 'devnet';
+  network: "mainnet" | "testnet" | "devnet";
 }
 
 export interface Bucket {
   bucketId: string;
   sealPolicyId: string;
-  state: 'pending_policy' | 'active';
+  state: "pending_policy" | "active";
 }
