@@ -84,7 +84,7 @@ const mockPrintError = vi.fn((msg: string) => {
 
 vi.mock("../lib/output.js", () => ({
   printJson: (...args: unknown[]) => mockPrintJson(...args),
-  printError: (...args: unknown[]) => mockPrintError(...args),
+  printError: (msg: string) => mockPrintError(msg),
 }));
 
 const mockFormatDryRun = vi.fn().mockResolvedValue({
