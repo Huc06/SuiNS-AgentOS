@@ -27,6 +27,14 @@ export interface RegistrySkillRecord {
   resolutions: string;
   lastUpdated: string;
   icon: "token" | "wallet" | "swap";
+  /** SuiNS subnames of skills this skill depends on. Empty/undefined when none. */
+  dependencies?: string[];
+  /**
+   * Where the skill originated. `custom` = authored locally / uploaded manifest,
+   * `sui-skills` = imported from the Sui Agent Skills catalog, `suiperpower` =
+   * produced by a Suiperpower build. Absent records are treated as `custom`.
+   */
+  source?: "custom" | "sui-skills" | "suiperpower";
 }
 
 export interface RegistryFile {

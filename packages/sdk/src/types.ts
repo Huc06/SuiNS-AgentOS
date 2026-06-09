@@ -21,6 +21,12 @@ export interface SkillDescriptor {
   requiredCapabilities: string[];
   dependencies: string[];
   sealPolicyId?: string;
+  /**
+   * True when the skill's manifest is Seal-encrypted (i.e. `sealPolicyId` is
+   * present and non-empty). Callers must supply a sui-groups membership proof
+   * to `downloadManifest` in order to decrypt the manifest.
+   */
+  decryptionRequired?: boolean;
 }
 
 export interface SkillManifestTool {

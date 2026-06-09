@@ -150,6 +150,8 @@ export class LocalRegistry {
     /** Seal policy id for private skills (empty/undefined for public). */
     sealPolicyId?: string;
     network?: "mainnet" | "testnet";
+    /** Origin of the skill. Defaults to `custom` when not provided. */
+    source?: "custom" | "sui-skills" | "suiperpower";
   }): RegistrySkillRecord {
     const resolved = this.resolveAgent(input.agentName);
     if (!resolved) {
@@ -181,6 +183,10 @@ export class LocalRegistry {
       resolutions: "0",
       lastUpdated: "just now",
       icon: "token",
+      source: input.source ?? "custom",
+      ...(input.manifest.dependencies && input.manifest.dependencies.length > 0
+        ? { dependencies: input.manifest.dependencies }
+        : {}),
       ...(input.suinsName ? { suinsName: input.suinsName } : {}),
       ...(input.sealPolicyId ? { sealPolicyId: input.sealPolicyId } : {}),
     };
@@ -220,7 +226,9 @@ export function descriptorFromRecord(record: RegistrySkillRecord) {
     mvrPackageName: record.mvrPackage,
     version: record.version,
     requiredCapabilities: [],
-    dependencies: [],
-    ...(record.sealPolicyId ? { sealPolicyId: record.sealPolicyId } : {}),
+    dependencies: record.dependencies ?? [],
+    ...(record.sealPolicyId
+      ? { sealPolicyId: record.sealPolicyId, decryptionRequired: true }
+      : {}),
   };
 }
