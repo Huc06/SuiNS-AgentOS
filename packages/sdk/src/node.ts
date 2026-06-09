@@ -2,6 +2,17 @@
 export { loadConfig, resolvePackageId, resolveRegistryPath } from "./config.js";
 export type { AgentOSConfig } from "./config.js";
 export * from "./registry/index.js";
+export { HarborClient } from "./harbor.js";
+export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
+export {
+  serializeManifest,
+  deserializeManifest,
+  computeManifestHash,
+  validateManifest,
+} from "./manifest.js";
+export { parseSkillMd, convertToAgentOSManifest } from "./skill-md-parser.js";
+export type { SkillMdMetadata } from "./skill-md-parser.js";
+export type { SkillManifest } from "./types.js";
 export { scanSkillsDirectory } from "./skill-md-scanner.js";
 export {
   parseSuiperpowerOutput,
