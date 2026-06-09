@@ -1,11 +1,26 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { loadConfig, LocalRegistry, resolveRegistryPath } from '@agentos/sdk/node';
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import {
+  loadConfig,
+  LocalRegistry,
+  resolveRegistryPath,
+  scanSkillsDirectory,
+} from "@agentos/sdk/node";
+import {
+  AgentOSClient,
+  convertToAgentOSManifest,
+  formatSkillSubname,
+  parseSkillMd,
+} from "@agentos/sdk";
 
 function openRegistry(): LocalRegistry {
   const cwd = process.cwd();
@@ -15,67 +30,188 @@ function openRegistry(): LocalRegistry {
   return LocalRegistry.open(path);
 }
 
+/**
+ * Create an AgentOSClient instance for MCP operations that need Walrus/on-chain access.
+ * Returns null if the Sui client cannot be created (missing dependencies).
+ */
+function createAgentOSClient(registryPath: string): AgentOSClient | null {
+  try {
+    const config = loadConfig();
+    const harborApiKey =
+      config.harborApiKey ?? process.env.HARBOR_API_KEY?.trim();
+    const packageId =
+      config.packageId ?? process.env.AGENTOS_PACKAGE_ID?.trim();
+    const rpcUrl = config.rpcUrl ?? process.env.SUI_RPC_URL?.trim();
+    const spaceId = process.env.HARBOR_SPACE_ID?.trim();
+
+    // We need a SuiClient-like object; dynamically import to avoid hard dep
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { SuiClient, getFullnodeUrl } = require("@mysten/sui/client");
+    const network = config.network ?? "testnet";
+    const url = rpcUrl ?? getFullnodeUrl(network);
+    const suiClient = new SuiClient({ url });
+
+    return new AgentOSClient({
+      client: suiClient,
+      harborApiKey,
+      packageId,
+      registryPath,
+      spaceId,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get signer from environment (SUI_PRIVATE_KEY or AGENTOS_PRIVATE_KEY).
+ */
+function getSigner(): unknown | null {
+  const secret = process.env.SUI_PRIVATE_KEY ?? process.env.AGENTOS_PRIVATE_KEY;
+  if (!secret) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Ed25519Keypair } = require("@mysten/sui/keypairs/ed25519");
+    return Ed25519Keypair.fromSecretKey(secret);
+  } catch {
+    return null;
+  }
+}
+
 export async function startMcpServer(): Promise<void> {
-  const registry = openRegistry();
+  const cwd = process.cwd();
+  const config = loadConfig(cwd);
+  const registryPath =
+    process.env.AGENTOS_REGISTRY_PATH ?? resolveRegistryPath(config, cwd);
+  const registry = LocalRegistry.open(registryPath);
 
   const server = new Server(
-    { name: 'agentos', version: '0.0.1' },
+    { name: "agentos", version: "0.0.1" },
     { capabilities: { tools: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       {
-        name: 'agentos_resolve',
-        description: 'Resolve a SuiNS agent name to passport and registered skills',
+        name: "agentos_resolve",
+        description:
+          "Resolve a SuiNS agent name to passport and registered skills",
         inputSchema: {
-          type: 'object',
-          properties: { name: { type: 'string', description: 'SuiNS name e.g. alpha.sui' } },
-          required: ['name'],
-        },
-      },
-      {
-        name: 'agentos_register_agent',
-        description: 'Register a new agent in the local registry (after Suiperpower deploy)',
-        inputSchema: {
-          type: 'object',
+          type: "object",
           properties: {
-            suinsName: { type: 'string' },
-            runtimeWallet: { type: 'string' },
-            network: { type: 'string', enum: ['testnet', 'mainnet'] },
+            name: { type: "string", description: "SuiNS name e.g. alpha.sui" },
           },
-          required: ['suinsName', 'runtimeWallet'],
+          required: ["name"],
         },
       },
       {
-        name: 'agentos_publish_skill',
-        description: 'Publish a skill manifest JSON string for an agent',
+        name: "agentos_register_agent",
+        description:
+          "Register a new agent in the local registry (after Suiperpower deploy)",
         inputSchema: {
-          type: 'object',
+          type: "object",
           properties: {
-            agentName: { type: 'string' },
-            manifestJson: { type: 'string', description: 'Full sui-agent-skill/v1 JSON' },
-            walrusBlob: { type: 'string' },
+            suinsName: { type: "string" },
+            runtimeWallet: { type: "string" },
+            network: { type: "string", enum: ["testnet", "mainnet"] },
           },
-          required: ['agentName', 'manifestJson'],
+          required: ["suinsName", "runtimeWallet"],
         },
       },
       {
-        name: 'agentos_list_skills',
-        description: 'List skills for an agent',
+        name: "agentos_publish_skill",
+        description:
+          "Publish a skill manifest to Walrus and register on-chain (or local-only if no Harbor key)",
         inputSchema: {
-          type: 'object',
-          properties: { agentName: { type: 'string' } },
-          required: ['agentName'],
+          type: "object",
+          properties: {
+            agentName: { type: "string" },
+            manifestJson: {
+              type: "string",
+              description: "Full sui-agent-skill/v1 JSON",
+            },
+            walrusBlob: {
+              type: "string",
+              description: "Pre-uploaded Walrus blobId (skips upload)",
+            },
+          },
+          required: ["agentName", "manifestJson"],
         },
       },
       {
-        name: 'agentos_dashboard_url',
-        description: 'Get dashboard URL for an agent slug',
+        name: "agentos_execute_skill",
+        description:
+          "Execute a skill by resolving its SuiNS name, downloading manifest, and executing on-chain",
         inputSchema: {
-          type: 'object',
-          properties: { agentName: { type: 'string' } },
-          required: ['agentName'],
+          type: "object",
+          properties: {
+            suinsName: {
+              type: "string",
+              description: "SuiNS skill subname e.g. trade.alpha.sui",
+            },
+            params: {
+              type: "string",
+              description: "Optional JSON string of entry function parameters",
+            },
+          },
+          required: ["suinsName"],
+        },
+      },
+      {
+        name: "agentos_resolve_manifest",
+        description:
+          "Resolve a skill descriptor and download its manifest from Walrus",
+        inputSchema: {
+          type: "object",
+          properties: {
+            suinsName: {
+              type: "string",
+              description: "SuiNS skill subname e.g. trade.alpha.sui",
+            },
+          },
+          required: ["suinsName"],
+        },
+      },
+      {
+        name: "agentos_list_skills",
+        description: "List skills for an agent",
+        inputSchema: {
+          type: "object",
+          properties: { agentName: { type: "string" } },
+          required: ["agentName"],
+        },
+      },
+      {
+        name: "agentos_dashboard_url",
+        description: "Get dashboard URL for an agent slug",
+        inputSchema: {
+          type: "object",
+          properties: { agentName: { type: "string" } },
+          required: ["agentName"],
+        },
+      },
+      {
+        name: "agentos_import_skill",
+        description:
+          "Import a Sui Agent Skill (SKILL.md) from the sui-skills catalog or a local path, convert it to a sui-agent-skill/v1 manifest, and publish it",
+        inputSchema: {
+          type: "object",
+          properties: {
+            skillName: {
+              type: "string",
+              description: "Skill name (for sui-skills download) or identifier",
+            },
+            agentName: {
+              type: "string",
+              description: "Target agent SuiNS name",
+            },
+            source: { type: "string", enum: ["sui-skills", "local"] },
+            path: {
+              type: "string",
+              description: "Path to SKILL.md (required for source=local)",
+            },
+          },
+          required: ["skillName", "agentName", "source"],
         },
       },
     ],
@@ -85,7 +221,7 @@ export async function startMcpServer(): Promise<void> {
     const { name, arguments: args } = request.params;
 
     try {
-      if (name === 'agentos_resolve') {
+      if (name === "agentos_resolve") {
         const { name: agentName } = z.object({ name: z.string() }).parse(args);
         const resolved = registry.resolveAgent(agentName);
         if (!resolved) {
@@ -94,12 +230,12 @@ export async function startMcpServer(): Promise<void> {
         return textResult(resolved);
       }
 
-      if (name === 'agentos_register_agent') {
+      if (name === "agentos_register_agent") {
         const input = z
           .object({
             suinsName: z.string(),
             runtimeWallet: z.string(),
-            network: z.enum(['testnet', 'mainnet']).optional(),
+            network: z.enum(["testnet", "mainnet"]).optional(),
           })
           .parse(args);
         const record = registry.registerAgent({
@@ -107,49 +243,38 @@ export async function startMcpServer(): Promise<void> {
           runtimeWallet: input.runtimeWallet,
           network: input.network,
         });
-        const config = loadConfig();
-        const url = `${config.dashboardUrl ?? 'http://localhost:3000'}/agent/${record.slug}`;
+        const url = `${config.dashboardUrl ?? "http://localhost:3000"}/agent/${record.slug}`;
         return textResult({ agent: record, dashboardUrl: url });
       }
 
-      if (name === 'agentos_publish_skill') {
-        const input = z
-          .object({
-            agentName: z.string(),
-            manifestJson: z.string(),
-            walrusBlob: z.string().optional(),
-          })
-          .parse(args);
-        const manifest = JSON.parse(input.manifestJson) as {
-          name: string;
-          version: string;
-          publisher: string;
-          manifestType: string;
-        };
-        if (manifest.manifestType !== 'sui-agent-skill/v1') {
-          throw new Error('manifestType must be sui-agent-skill/v1');
-        }
-        const record = registry.publishSkill({
-          agentName: input.agentName,
-          manifest: manifest as import('@agentos/sdk').SkillManifest,
-          walrusManifestBlob: input.walrusBlob,
-        });
-        return textResult({ skill: record });
+      if (name === "agentos_publish_skill") {
+        return await handlePublishSkill(args, registry, registryPath);
       }
 
-      if (name === 'agentos_list_skills') {
+      if (name === "agentos_execute_skill") {
+        return await handleExecuteSkill(args, registryPath);
+      }
+
+      if (name === "agentos_resolve_manifest") {
+        return await handleResolveManifest(args, registryPath);
+      }
+
+      if (name === "agentos_import_skill") {
+        return await handleImportSkill(args, registry, registryPath);
+      }
+
+      if (name === "agentos_list_skills") {
         const { agentName } = z.object({ agentName: z.string() }).parse(args);
         return textResult({ skills: registry.listSkills(agentName) });
       }
 
-      if (name === 'agentos_dashboard_url') {
+      if (name === "agentos_dashboard_url") {
         const { agentName } = z.object({ agentName: z.string() }).parse(args);
         const resolved = registry.resolveAgent(agentName);
         if (!resolved) {
           return textResult({ error: `Agent not found: ${agentName}` });
         }
-        const config = loadConfig();
-        const base = config.dashboardUrl ?? 'http://localhost:3000';
+        const base = config.dashboardUrl ?? "http://localhost:3000";
         return textResult({ url: `${base}/agent/${resolved.agent.slug}` });
       }
 
@@ -165,8 +290,382 @@ export async function startMcpServer(): Promise<void> {
   await server.connect(transport);
 }
 
+/**
+ * Handle agentos_publish_skill tool call.
+ * If Harbor API key is configured and signer is available, publishes to Walrus + on-chain.
+ * Otherwise falls back to local-only registry publish.
+ */
+async function handlePublishSkill(
+  args: unknown,
+  registry: LocalRegistry,
+  registryPath: string,
+) {
+  const input = z
+    .object({
+      agentName: z.string(),
+      manifestJson: z.string(),
+      walrusBlob: z.string().optional(),
+    })
+    .parse(args);
+
+  // Parse and validate the manifest
+  let manifest: {
+    name: string;
+    version: string;
+    publisher: string;
+    manifestType: string;
+    mcp: { compatible: boolean; tools: unknown[] };
+    sui: { movePackage: string; entry: string; policyRequired: string[] };
+    dependencies: string[];
+  };
+  try {
+    manifest = JSON.parse(input.manifestJson);
+  } catch {
+    return textResult({ error: "Invalid JSON in manifestJson" });
+  }
+
+  if (manifest.manifestType !== "sui-agent-skill/v1") {
+    return textResult({
+      error: `Invalid manifestType: ${manifest.manifestType}. Expected sui-agent-skill/v1`,
+    });
+  }
+
+  // Check if Harbor API key is configured
+  const harborApiKey =
+    loadConfig().harborApiKey ?? process.env.HARBOR_API_KEY?.trim();
+  const signer = getSigner();
+
+  // A pre-uploaded Walrus blob skips the upload step, so the Harbor API key is
+  // only required when we actually need to upload the manifest (no walrusBlob).
+  const hasPreUploadedBlob = Boolean(input.walrusBlob);
+
+  if (signer && (harborApiKey || hasPreUploadedBlob)) {
+    // On-chain publish via AgentOSClient. Uploads to Walrus when no blob was
+    // supplied; otherwise registers the provided blob directly on-chain.
+    const client = createAgentOSClient(registryPath);
+    if (!client) {
+      return textResult({ error: "Failed to initialize AgentOS client" });
+    }
+
+    try {
+      const bucketId = process.env.HARBOR_BUCKET_ID?.trim() ?? "default";
+      const descriptor = await client.publishSkill({
+        signer: signer as never,
+        manifest: manifest as import("@agentos/sdk").SkillManifest,
+        bucketId,
+        agentName: input.agentName,
+        walrusManifestBlob: input.walrusBlob,
+      });
+
+      // The SkillDescriptor returned by the SDK does not carry the on-chain
+      // object id. publishSkill persists the real objectId and qualified
+      // suinsName to the local registry, so re-read the record from disk to
+      // surface them in the tool result.
+      const suinsName = formatSkillSubname(descriptor.skillId, input.agentName);
+      const persisted = LocalRegistry.open(registryPath)
+        .listSkills(input.agentName)
+        .find((s) => s.skillId === descriptor.skillId);
+
+      return textResult({
+        blobId: descriptor.walrusManifestBlob,
+        objectId: persisted?.objectId,
+        suinsName: persisted?.suinsName ?? suinsName,
+        manifestHash: descriptor.manifestHash,
+      });
+    } catch (e) {
+      return textResult({
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  if (!harborApiKey) {
+    return textResult({ error: "Harbor API key not configured" });
+  }
+
+  // Fallback: local-only publish (no signer available)
+  const record = registry.publishSkill({
+    agentName: input.agentName,
+    manifest: manifest as import("@agentos/sdk").SkillManifest,
+    walrusManifestBlob: input.walrusBlob,
+  });
+  return textResult({ skill: record });
+}
+
+/**
+ * Handle agentos_execute_skill tool call.
+ * Resolves skill by SuiNS name, downloads manifest, builds PTB, and executes.
+ */
+async function handleExecuteSkill(args: unknown, registryPath: string) {
+  const input = z
+    .object({
+      suinsName: z.string(),
+      params: z.string().optional(),
+    })
+    .parse(args);
+
+  const signer = getSigner();
+  if (!signer) {
+    return textResult({
+      error: "No signer available. Set SUI_PRIVATE_KEY or AGENTOS_PRIVATE_KEY",
+    });
+  }
+
+  const client = createAgentOSClient(registryPath);
+  if (!client) {
+    return textResult({ error: "Failed to initialize AgentOS client" });
+  }
+
+  // Parse params if provided
+  let params: Record<string, unknown> | undefined;
+  if (input.params) {
+    try {
+      params = JSON.parse(input.params);
+    } catch {
+      return textResult({ error: "Invalid JSON in params" });
+    }
+  }
+
+  try {
+    const result = await client.executeSkill({
+      signer: signer as never,
+      suinsName: input.suinsName,
+      params,
+    });
+    return textResult({ digest: result.digest, effects: result.effects });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return textResult({ error: message });
+  }
+}
+
+/**
+ * Handle agentos_resolve_manifest tool call.
+ * Resolves a skill descriptor and downloads the manifest from Walrus.
+ */
+async function handleResolveManifest(args: unknown, registryPath: string) {
+  const input = z
+    .object({
+      suinsName: z.string(),
+    })
+    .parse(args);
+
+  const client = createAgentOSClient(registryPath);
+  if (!client) {
+    return textResult({ error: "Failed to initialize AgentOS client" });
+  }
+
+  try {
+    // Resolve the skill descriptor
+    const descriptor = await client.resolveSkill(input.suinsName);
+
+    // Download the manifest from Walrus
+    const manifest = await client.downloadManifest(
+      descriptor.walrusManifestBlob,
+      descriptor.manifestHash,
+    );
+
+    return textResult({ descriptor, manifest });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return textResult({ error: message });
+  }
+}
+
+/**
+ * Resolve the raw SKILL.md content for an import.
+ *
+ * - `source: 'local'`: `path` is required and points to a SKILL.md file or a
+ *   directory containing one.
+ * - `source: 'sui-skills'`: `skillName` is treated as a skill NAME and
+ *   downloaded via `npx skills add mystenlabs/skills --skill <name>`. The skill
+ *   name is passed as an args ARRAY (never interpolated into a shell string) to
+ *   avoid command injection. After download we locate the SKILL.md in the
+ *   conventional locations and fall back to scanning `.agents/skills` by name.
+ *
+ * Returns the SKILL.md content on success, or an `{ error }` string on failure.
+ */
+function resolveImportSkillMd(
+  input: {
+    skillName: string;
+    source: "sui-skills" | "local";
+    path?: string;
+  },
+  cwd: string,
+): { content: string } | { error: string } {
+  if (input.source === "local") {
+    if (!input.path) {
+      return { error: "path is required for source=local" };
+    }
+    try {
+      if (!existsSync(input.path)) {
+        return { error: `SKILL.md not found: ${input.path}` };
+      }
+      let filePath = input.path;
+      if (statSync(input.path).isDirectory()) {
+        const inDir = [
+          join(input.path, "SKILL.md"),
+          join(input.path, "skill.md"),
+        ];
+        const found = inDir.find((p) => existsSync(p));
+        if (!found) {
+          return { error: `No SKILL.md found in directory: ${input.path}` };
+        }
+        filePath = found;
+      }
+      return { content: readFileSync(filePath, "utf8") };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  // source === "sui-skills": download via npx, then locate the SKILL.md.
+  try {
+    // SECURITY: pass arguments as an array (no shell), so `skillName`
+    // cannot inject additional commands.
+    execFileSync(
+      "npx",
+      ["skills", "add", "mystenlabs/skills", "--skill", input.skillName],
+      { cwd, stdio: "inherit" },
+    );
+  } catch (e) {
+    return {
+      error: `Failed to download skill "${input.skillName}" from mystenlabs/skills: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    };
+  }
+
+  // Likely locations the `skills add` tool writes to.
+  const candidates = [
+    join(cwd, ".agents", "skills", input.skillName, "SKILL.md"),
+    join(cwd, ".agents", "skills", input.skillName, "skill.md"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      try {
+        return { content: readFileSync(candidate, "utf8") };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+  }
+
+  // Fall back to scanning `.agents/skills` for a matching skill name.
+  try {
+    const scanned = scanSkillsDirectory(join(cwd, ".agents", "skills"));
+    const match = scanned.find((s) => s.name === input.skillName);
+    if (match?.sourcePath && existsSync(match.sourcePath)) {
+      return { content: readFileSync(match.sourcePath, "utf8") };
+    }
+  } catch {
+    // Scan is best-effort; fall through to the not-found error below.
+  }
+
+  return {
+    error: `Downloaded skill "${input.skillName}" but could not locate its SKILL.md in .agents/skills/${input.skillName}/`,
+  };
+}
+
+/**
+ * Handle agentos_import_skill tool call.
+ *
+ * Resolves a SKILL.md (from the sui-skills catalog or a local path), converts
+ * it to a `sui-agent-skill/v1` manifest, and publishes it (Walrus + on-chain
+ * when a signer + Harbor key are available, otherwise local-only registry).
+ *
+ * Returns `{ manifest, blobId, objectId, suinsName }` on success, or
+ * `{ error }` on any failure. Never throws.
+ */
+async function handleImportSkill(
+  args: unknown,
+  registry: LocalRegistry,
+  registryPath: string,
+) {
+  const input = z
+    .object({
+      skillName: z.string(),
+      agentName: z.string(),
+      source: z.enum(["sui-skills", "local"]),
+      path: z.string().optional(),
+    })
+    .parse(args);
+
+  // 1. Resolve SKILL.md content (download or read from disk).
+  const resolved = resolveImportSkillMd(input, process.cwd());
+  if ("error" in resolved) {
+    return textResult({ error: resolved.error });
+  }
+
+  // 2. Parse + convert to an AgentOS manifest (26.5: error on parse/convert).
+  let manifest: import("@agentos/sdk").SkillManifest;
+  try {
+    const metadata = parseSkillMd(resolved.content);
+    manifest = convertToAgentOSManifest(metadata, {
+      publisher: input.agentName,
+    });
+  } catch (e) {
+    return textResult({ error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // 3. Publish — mirror handlePublishSkill: Walrus + on-chain when a signer
+  // and Harbor key are configured, otherwise local-only registry publish.
+  const harborApiKey =
+    loadConfig().harborApiKey ?? process.env.HARBOR_API_KEY?.trim();
+  const signer = getSigner();
+  const fallbackSuins = formatSkillSubname(manifest.name, input.agentName);
+
+  if (signer && harborApiKey) {
+    const client = createAgentOSClient(registryPath);
+    if (!client) {
+      return textResult({ error: "Failed to initialize AgentOS client" });
+    }
+
+    try {
+      const bucketId = process.env.HARBOR_BUCKET_ID?.trim() ?? "default";
+      const descriptor = await client.publishSkill({
+        signer: signer as never,
+        manifest,
+        bucketId,
+        agentName: input.agentName,
+      });
+
+      // publishSkill persists the real objectId and qualified suinsName to the
+      // local registry; re-read the record from disk to surface them.
+      const persisted = LocalRegistry.open(registryPath)
+        .listSkills(input.agentName)
+        .find((s) => s.skillId === descriptor.skillId);
+
+      return textResult({
+        manifest,
+        blobId: descriptor.walrusManifestBlob,
+        objectId: persisted?.objectId,
+        suinsName: persisted?.suinsName ?? fallbackSuins,
+      });
+    } catch (e) {
+      return textResult({ error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Local-only publish (no signer or no Harbor key).
+  try {
+    const record = registry.publishSkill({
+      agentName: input.agentName,
+      manifest,
+    });
+    return textResult({
+      manifest,
+      blobId: record.walrusManifestBlob,
+      objectId: record.objectId,
+      suinsName: record.suinsName ?? fallbackSuins,
+    });
+  } catch (e) {
+    return textResult({ error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
 function textResult(data: unknown) {
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
+    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };
 }
