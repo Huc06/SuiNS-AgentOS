@@ -73,11 +73,16 @@ export class LocalRegistry {
     return resolved?.skills ?? [];
   }
 
+  listAgents(): RegistryAgentRecord[] {
+    return this.#data.agents.filter((a) => a.status === 'active');
+  }
+
   registerAgent(input: {
     suinsName: string;
     runtimeWallet: string;
     network?: 'mainnet' | 'testnet';
     passportVersion?: string;
+    description?: string;
   }): RegistryAgentRecord {
     const suinsName = normalizeSuinsName(input.suinsName);
     if (!suinsName.endsWith('.sui')) {
@@ -99,10 +104,24 @@ export class LocalRegistry {
       passportVersion: input.passportVersion ?? 'Passport v1.0.0',
       status: 'active',
       createdAt: new Date().toISOString(),
+      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
     };
     this.#data.agents.push(record);
     this.save();
     return record;
+  }
+
+  /** Remove agent and its skills from the local registry (does not revoke on-chain passport). */
+  removeAgent(name: string): RegistryAgentRecord {
+    const resolved = this.resolveAgent(name);
+    if (!resolved) {
+      throw new Error(`Agent not found: ${name}`);
+    }
+    const { agent } = resolved;
+    this.#data.agents = this.#data.agents.filter((a) => a.slug !== agent.slug);
+    this.#data.skills = this.#data.skills.filter((s) => s.agentSlug !== agent.slug);
+    this.save();
+    return agent;
   }
 
   publishSkill(input: {

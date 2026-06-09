@@ -2,7 +2,7 @@ import type { ClientWithCoreApi } from '@mysten/sui/experimental';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { agentOS, type AgentOSClient } from '@agentos/sdk';
-import { loadConfig, LocalRegistry, resolveRegistryPath } from '@agentos/sdk/node';
+import { loadConfig, LocalRegistry, resolvePackageId, resolveRegistryPath } from '@agentos/sdk/node';
 
 export function createCliContext(cwd = process.cwd()) {
   const config = loadConfig(cwd);
@@ -11,7 +11,9 @@ export function createCliContext(cwd = process.cwd()) {
   const network = config.network ?? 'testnet';
   const rpcUrl = config.rpcUrl ?? getFullnodeUrl(network);
   const suiClient = new SuiClient({ url: rpcUrl });
-  const agentos = agentOS().register(suiClient as unknown as ClientWithCoreApi);
+  const agentos = agentOS({ packageId: resolvePackageId(config) }).register(
+    suiClient as unknown as ClientWithCoreApi,
+  );
 
   return {
     config,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import type { AgentSkillRow } from '../../lib/mock-agents';
+import type { AgentSkillRow } from '../../lib/agent-types';
 import { IconCopy, IconEdit, IconPublish, IconSwap, IconToken, IconWallet } from './icons';
 
 const iconMap = {

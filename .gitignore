@@ -9,4 +9,6 @@ dist/
 !.env.example
 sui/
 packages/contracts/build/
+packages/contracts/publish.json
+packages/contracts/publish-testnet.json
 .DS_Store

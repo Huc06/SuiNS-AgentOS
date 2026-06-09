@@ -21,6 +21,8 @@ import type {
 export interface AgentOSClientOptions {
   client: ClientWithCoreApi;
   harborApiKey?: string;
+  /** Published Move package id (0x…). Falls back to AGENTOS_PACKAGE_ID env. */
+  packageId?: string;
   /** Local registry JSON path (CLI/MCP). Uses in-memory seed when omitted in browser. */
   registryPath?: string;
 }
@@ -28,11 +30,13 @@ export interface AgentOSClientOptions {
 export class AgentOSClient {
   #client: ClientWithCoreApi;
   #harborApiKey?: string;
+  #packageId?: string;
   #registry: LocalRegistry | null;
 
-  constructor({ client, harborApiKey, registryPath }: AgentOSClientOptions) {
+  constructor({ client, harborApiKey, packageId, registryPath }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
+    this.#packageId = packageId;
     this.#registry = registryPath ? LocalRegistry.open(registryPath) : null;
   }
 
@@ -148,15 +152,24 @@ export class AgentOSClient {
   }
 
   tx = {
-    createAgent: (options: { suinsName: string; runtimeWallet: string }) => {
+    createAgent: (options: {
+      suinsName: string;
+      runtimeWallet: string;
+      recipient?: string;
+    }) => {
       const transaction = new Transaction();
-      const passport = transaction.add(contracts.agentPassport.create(options));
+      const recipient = options.recipient ?? options.runtimeWallet;
+      transaction.setSender(recipient);
+      const passport = transaction.add(
+        contracts.agentPassport.create({ ...options, packageId: this.#packageId }),
+      );
+      transaction.transferObjects([passport], recipient);
       return { transaction, passport };
     },
 
     revokeAgent: (options: { passport: TransactionObjectArgument }) => {
       const transaction = new Transaction();
-      transaction.add(contracts.agentPassport.revoke(options));
+      transaction.add(contracts.agentPassport.revoke({ ...options, packageId: this.#packageId }));
       return transaction;
     },
 
@@ -168,13 +181,17 @@ export class AgentOSClient {
       version: string;
     }) => {
       const transaction = new Transaction();
-      const descriptor = transaction.add(contracts.skillDescriptor.create(options));
+      const descriptor = transaction.add(
+        contracts.skillDescriptor.create({ ...options, packageId: this.#packageId }),
+      );
       return { transaction, descriptor };
     },
 
     createBucketPolicy: (options: { sealPolicyId: string }) => {
       const transaction = new Transaction();
-      const policy = transaction.add(contracts.bucketPolicy.create(options));
+      const policy = transaction.add(
+        contracts.bucketPolicy.create({ ...options, packageId: this.#packageId }),
+      );
       return { transaction, policy };
     },
   };

@@ -1,26 +1,56 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getSkillsForAgent, type AgentSkillRow } from '../../lib/mock-agents';
+import type { AgentSkillRow } from '../../lib/agent-types';
+import { fetchAgentSkills } from '../../lib/fetch-resolve';
 import { IconFilter } from '../dashboard/icons';
 import { IconAdd } from './icons';
+import { DeleteAgentPanel } from './delete-agent-panel';
 import { SkillListItem } from './skill-list-item';
 
 type AgentManageContentProps = {
   agentSlug: string;
+  suinsName: string;
   displayName: string;
   passportVersion: string;
+  description?: string;
+  initialSkills: AgentSkillRow[];
 };
 
 export function AgentManageContent({
   agentSlug,
+  suinsName,
   displayName,
   passportVersion,
+  description,
+  initialSkills,
 }: AgentManageContentProps) {
-  const skills = getSkillsForAgent(agentSlug);
+  const [skills, setSkills] = useState(initialSkills);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshSkills = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const next = await fetchAgentSkills(agentSlug);
+      if (next) setSkills(next);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [agentSlug]);
+
+  useEffect(() => {
+    setSkills(initialSkills);
+  }, [initialSkills]);
+
+  useEffect(() => {
+    const onFocus = () => void refreshSkills();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshSkills]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,16 +80,28 @@ export function AgentManageContent({
         <div>
           <h1 className="mb-2 font-display text-3xl font-bold md:text-4xl">Manage Skills</h1>
           <p className="font-mono text-base text-on-surface-variant">
-            {displayName} · {passportVersion} — oversee skill descriptors and Walrus manifests.
+            {displayName} · {passportVersion}
+            {description ? ` — ${description}` : ''}
+            {refreshing ? ' (updating…)' : ''}
           </p>
         </div>
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-2 border-2 border-pure-black bg-vibrant-blue px-6 py-3 font-display text-base font-semibold text-off-white neo-shadow transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_0_#000] sm:w-auto sm:px-8 sm:py-4 sm:text-lg"
-        >
-          <IconAdd />
-          Publish New Version
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void refreshSkills()}
+            disabled={refreshing}
+            className="border-2 border-pure-black bg-white px-4 py-3 font-mono text-sm font-bold transition-colors hover:bg-surface-container disabled:opacity-50"
+          >
+            Refresh
+          </button>
+          <Link
+            href={`/create?import=skill&agent=${encodeURIComponent(agentSlug)}`}
+            className="flex items-center justify-center gap-2 border-2 border-pure-black bg-vibrant-blue px-6 py-3 font-display text-base font-semibold text-off-white neo-shadow transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_0_#000] sm:px-8 sm:py-4 sm:text-lg"
+          >
+            <IconAdd />
+            Import Skill
+          </Link>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-col gap-3 border-2 border-pure-black bg-surface-container p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
@@ -81,12 +123,6 @@ export function AgentManageContent({
           >
             Status: {statusLabel}
           </button>
-          <button
-            type="button"
-            className="min-w-0 flex-1 border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs font-bold transition-colors hover:bg-soft-lavender sm:flex-none sm:px-4 sm:text-sm"
-          >
-            Sort: Latest
-          </button>
         </div>
       </div>
 
@@ -95,19 +131,14 @@ export function AgentManageContent({
           filtered.map((skill) => <SkillListItem key={skill.id} skill={skill} />)
         ) : (
           <p className="border-2 border-dashed border-pure-black py-12 text-center font-mono text-sm text-on-surface-variant">
-            No skills match your filters.
+            {skills.length === 0
+              ? 'No skills registered yet. Import a skill from the dashboard.'
+              : 'No skills match your filters.'}
           </p>
         )}
-
-        {filtered.length > 0 && (
-          <button
-            type="button"
-            className="w-full border-2 border-dashed border-pure-black py-6 font-mono text-sm font-bold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-pure-black"
-          >
-            Load more skills…
-          </button>
-        )}
       </div>
+
+      <DeleteAgentPanel agentSlug={agentSlug} suinsName={suinsName} />
     </div>
   );
 }

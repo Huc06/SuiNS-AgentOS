@@ -25,6 +25,17 @@
 - `chore/` — tooling, CI, docs
 - `refactor/` — code changes without behavior change
 
+## Git hooks (strip Cursor co-author)
+
+One-time setup in this repo:
+
+```bash
+chmod +x .githooks/prepare-commit-msg
+git config core.hooksPath .githooks
+```
+
+Also disable in **Cursor → Settings → Agents → Attribution** (Commit + PR attribution off).
+
 ## Local checks before opening a PR
 
 ```bash

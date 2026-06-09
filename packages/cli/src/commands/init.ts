@@ -1,26 +1,13 @@
 import { Command } from 'commander';
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { SEED_REGISTRY } from '@agentos/sdk/node';
 
-function findBridgeSkillsDir(start = process.cwd()): string | null {
-  let dir = start;
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, 'skills', 'agentos');
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
 export const initCommand = new Command('init')
-  .description('Initialize AgentOS in the current project (config, registry, bridge skills, MCP hint)')
-  .option('--vendor', 'Copy bridge skills into .cursor/rules/agentos/')
+  .description('Initialize AgentOS registry + config (use alongside Suiperpower — no separate skill pack)')
   .option('--no-seed', 'Start with an empty registry instead of demo data')
-  .action((opts: { vendor?: boolean; noSeed?: boolean }) => {
+  .action((opts: { noSeed?: boolean }) => {
     const cwd = process.cwd();
     const agentosDir = join(cwd, '.agentos');
     mkdirSync(agentosDir, { recursive: true });
@@ -49,14 +36,6 @@ export const initCommand = new Command('init')
       writeFileSync(registryPath, `${JSON.stringify(data, null, 2)}\n`);
     }
 
-    const skillsSrc = findBridgeSkillsDir(cwd);
-    if (opts.vendor && skillsSrc) {
-      const dest = join(cwd, '.cursor', 'rules', 'agentos');
-      mkdirSync(dest, { recursive: true });
-      cpSync(skillsSrc, dest, { recursive: true });
-      console.log(`Copied bridge skills → ${dest}`);
-    }
-
     const mcpSnippet = {
       mcpServers: {
         agentos: {
@@ -72,10 +51,11 @@ export const initCommand = new Command('init')
     console.log('\nAgentOS initialized.\n');
     console.log(`  Config:    ${configPath}`);
     console.log(`  Registry:  ${registryPath}`);
-    console.log('\nAdd to Cursor MCP settings (~/.cursor/mcp.json or project .cursor/mcp.json):\n');
+    console.log('\nBuild with Suiperpower (/suiper:* skills). Register with AgentOS:');
+    console.log('  CLI:  agentos agent create <name.sui> --wallet <0x...>');
+    console.log('        agentos skill publish ./manifest.json --agent <name.sui>');
+    console.log('  MCP:  add agentos server (below) — agent invokes tools after Suiperpower deploy');
+    console.log('\n~/.cursor/mcp.json or .cursor/mcp.json:\n');
     console.log(JSON.stringify(mcpSnippet, null, 2));
-    console.log('\nAfter Suiperpower deploy:');
-    console.log('  agentos agent create my-agent.sui --wallet <address>');
-    console.log('  agentos skill publish ./skill.json --agent my-agent.sui');
-    console.log('\nStart MCP: agentos mcp\n');
+    console.log('\n  agentos mcp   # stdio server\n');
   });

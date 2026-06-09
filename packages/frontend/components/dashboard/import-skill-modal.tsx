@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { MOCK_AGENTS } from '../../lib/mock-agents';
+import type { AgentCardData } from './agent-card';
 
 type ImportSkillModalProps = {
   open: boolean;
   onClose: () => void;
+  onImported?: () => void;
+  defaultAgentSlug?: string;
 };
 
 function normalizeMvrPackage(raw: string): string {
@@ -15,35 +17,85 @@ function normalizeMvrPackage(raw: string): string {
   return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
 }
 
-const AGENT_OPTIONS = MOCK_AGENTS.map((a) => ({ value: a.slug, label: a.displayName }));
-
-export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
+export function ImportSkillModal({
+  open,
+  onClose,
+  onImported,
+  defaultAgentSlug = '',
+}: ImportSkillModalProps) {
   const titleId = useId();
   const descId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [agent, setAgent] = useState(AGENT_OPTIONS[0]?.value ?? '');
+  const [agentOptions, setAgentOptions] = useState<{ value: string; label: string }[]>([]);
+  const [agent, setAgent] = useState('');
   const [skillId, setSkillId] = useState('');
   const [mvrPackage, setMvrPackage] = useState('');
   const [version, setVersion] = useState('');
   const [manifestRef, setManifestRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingAgents, setLoadingAgents] = useState(false);
 
   const packageName = normalizeMvrPackage(mvrPackage);
   const packageValid = packageName.length > 2 && packageName.includes('/');
   const versionValid = /^\d+\.\d+/.test(version.trim());
   const manifestValid = manifestRef.trim().length >= 8;
   const skillIdValid = /^[a-z0-9][a-z0-9-]*$/i.test(skillId.trim());
-  const formValid = packageValid && versionValid && manifestValid && skillIdValid && agent.length > 0;
+  const formValid =
+    packageValid && versionValid && manifestValid && skillIdValid && agent.length > 0;
+
+  const handleManifestFile = useCallback(async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    try {
+      const text = await file.text();
+      const manifest = JSON.parse(text) as {
+        name?: string;
+        version?: string;
+        publisher?: string;
+        sui?: { movePackage?: string };
+      };
+      if (manifest.name) setSkillId(manifest.name);
+      if (manifest.version) setVersion(manifest.version);
+      if (manifest.publisher) setMvrPackage(manifest.publisher);
+      if (manifest.sui?.movePackage && manifest.sui.movePackage !== '0x0') {
+        setManifestRef(manifest.sui.movePackage);
+      }
+    } catch {
+      setError('Invalid manifest JSON — use sui-agent-skill/v1 format.');
+    }
+  }, []);
 
   const handleClose = useCallback(() => {
     if (submitting) return;
-    setAgent(AGENT_OPTIONS[0]?.value ?? '');
     setSkillId('');
     setMvrPackage('');
     setVersion('');
     setManifestRef('');
+    setError(null);
     onClose();
   }, [onClose, submitting]);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoadingAgents(true);
+    fetch('/api/agents', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data: { agents?: AgentCardData[] }) => {
+        const options = (data.agents ?? []).map((a) => ({
+          value: a.slug,
+          label: a.displayName,
+        }));
+        setAgentOptions(options);
+        const preferred =
+          defaultAgentSlug && options.some((o) => o.value === defaultAgentSlug)
+            ? defaultAgentSlug
+            : options[0]?.value || '';
+        setAgent((prev) => prev || preferred);
+      })
+      .catch(() => setAgentOptions([]))
+      .finally(() => setLoadingAgents(false));
+  }, [open, defaultAgentSlug]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,10 +115,27 @@ export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
     e.preventDefault();
     if (!formValid) return;
     setSubmitting(true);
+    setError(null);
     try {
-      // TODO(epic #2): upload manifest → Walrus, register SkillDescriptor on-chain
-      await new Promise((r) => setTimeout(r, 600));
+      const res = await fetch('/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: agent,
+          skillId: skillId.trim(),
+          mvrPackage: packageName,
+          version: version.trim(),
+          walrusManifestBlob: manifestRef.trim(),
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? `Register failed (${res.status})`);
+      }
+      onImported?.();
       handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not register skill');
     } finally {
       setSubmitting(false);
     }
@@ -114,9 +183,31 @@ export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
 
         <form onSubmit={handleSubmit} className="max-h-[min(70vh,640px)] space-y-5 overflow-y-auto p-6">
           <p id={descId} className="font-mono text-sm text-on-surface-variant">
-            Publish a skill manifest to Walrus and register a SkillDescriptor on the selected
-            agent&apos;s passport.
+            Register a skill descriptor in the workspace registry. Walrus upload and on-chain
+            publish come after contracts are deployed.
           </p>
+
+          <div className="space-y-2">
+            <label htmlFor="skill-manifest-file" className="font-mono text-sm font-bold uppercase">
+              Import from file
+            </label>
+            <input
+              id="skill-manifest-file"
+              type="file"
+              accept=".json,application/json"
+              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-sm file:mr-3 file:border-0 file:bg-electric-purple file:px-3 file:py-1 file:font-bold file:text-off-white"
+              onChange={(e) => void handleManifestFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="font-mono text-xs text-on-surface-variant">
+              Loads fields from <code className="text-pure-black">examples/skill.manifest.json</code>
+            </p>
+          </div>
+
+          {error && (
+            <p className="border-2 border-error bg-red-50 px-3 py-2 font-mono text-xs text-error">
+              {error}
+            </p>
+          )}
 
           <div className="space-y-2">
             <label htmlFor="skill-agent" className="font-mono text-sm font-bold uppercase">
@@ -126,13 +217,18 @@ export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
               id="skill-agent"
               value={agent}
               onChange={(e) => setAgent(e.target.value)}
-              className="w-full border-2 border-pure-black bg-white px-3 py-3 font-mono text-sm neo-shadow outline-none focus:neo-shadow-lg"
+              disabled={loadingAgents || agentOptions.length === 0}
+              className="w-full border-2 border-pure-black bg-white px-3 py-3 font-mono text-sm neo-shadow outline-none focus:neo-shadow-lg disabled:opacity-50"
             >
-              {AGENT_OPTIONS.map((a) => (
-                <option key={a.value} value={a.value}>
-                  {a.label}
-                </option>
-              ))}
+              {agentOptions.length === 0 ? (
+                <option value="">No agents — create one first</option>
+              ) : (
+                agentOptions.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -199,7 +295,7 @@ export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
                 type="text"
                 value={manifestRef}
                 onChange={(e) => setManifestRef(e.target.value)}
-                placeholder="blobId or https://…"
+                placeholder="walrus://blob/… or blob id"
                 className="w-full border-2 border-pure-black bg-white px-3 py-3 font-mono text-sm outline-none neo-shadow placeholder:text-on-surface-variant/60 focus:neo-shadow-lg"
               />
             </div>
@@ -208,9 +304,9 @@ export function ImportSkillModal({ open, onClose }: ImportSkillModalProps) {
           <div className="border-2 border-pure-black bg-surface-container p-4 font-mono text-xs">
             <div className="mb-2 font-bold uppercase text-vibrant-blue">On submit</div>
             <ul className="list-inside list-disc space-y-1 text-on-surface-variant">
-              <li>Verify manifest hash against Walrus blob</li>
-              <li>Register SkillDescriptor on testnet</li>
-              <li>Link skill to agent passport skill root</li>
+              <li>Save skill to workspace registry (same file as CLI)</li>
+              <li>Verify manifest on Walrus — later</li>
+              <li>On-chain SkillDescriptor — after testnet publish</li>
             </ul>
           </div>
 

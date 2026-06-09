@@ -20,21 +20,19 @@ Sui-native identity, wallet, skill discovery, and delegation layer for AI agents
 - pnpm 10
 - [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) ≥ 1.70
 
-## Distribution (after [Suiperpower](https://www.suiperpower.dev/) build)
+## Distribution (with [Suiperpower](https://www.suiperpower.dev/) — no extra skill pack)
+
+Build with **Suiperpower** (`/suiper:*` in Claude Code, or bare names in Cursor). Register with **AgentOS** via CLI or MCP only:
 
 ```bash
-# Once per project
-agentos init --vendor
-
-# Register agent + skill (local registry; on-chain when packageId configured)
+agentos init
 agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
 agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
-
-# MCP for IDE agents
-agentos mcp
 ```
 
-Bridge skills live in `skills/agentos/` (copied to `.cursor/rules/agentos/` with `--vendor`).
+In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet). After Suiperpower deploy, open the dashboard to bind SuiNS — see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) and [docs/create-agent-ux.md](./docs/create-agent-ux.md).
+
+**Docs:** [docs/README.md](./docs/README.md)
 
 ## Development
 
@@ -45,6 +43,25 @@ pnpm test           # SDK unit tests
 pnpm contracts:test # Move unit tests
 pnpm dev            # watch mode (sdk + frontend)
 ```
+
+### Workspace registry (local core)
+
+CLI, MCP, and the Next.js app share **`.agentos/registry.json`** at the repo root (see `.agentos/config.json.example`).
+
+```bash
+cp .agentos/config.json.example .agentos/config.json   # optional
+pnpm --filter @agentos/frontend dev                     # http://localhost:3000
+```
+
+| Surface | Flow |
+|---------|------|
+| Dashboard `/create` | New Agent / Import Skill → writes registry |
+| Explorer `/` | Resolve → `/agent/[slug]` |
+| CLI | `agentos agent create`, `agentos skill publish`, `agentos agent list` |
+| API | `GET/POST /api/agents`, `GET /api/resolve`, `POST /api/skills` |
+
+On-chain mint uses **wallet gas** when `packageId` is set (see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) §2).  
+Enoki sponsor is opt-in (`NEXT_PUBLIC_ENOKI_SPONSOR=true`).
 
 ## CI / CD
 
