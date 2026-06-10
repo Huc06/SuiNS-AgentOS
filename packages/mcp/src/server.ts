@@ -8,6 +8,8 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { z } from "zod";
 import {
   loadConfig,
@@ -44,12 +46,19 @@ function createAgentOSClient(registryPath: string): AgentOSClient | null {
     const rpcUrl = config.rpcUrl ?? process.env.SUI_RPC_URL?.trim();
     const spaceId = process.env.HARBOR_SPACE_ID?.trim();
 
-    // We need a SuiClient-like object; dynamically import to avoid hard dep
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { SuiClient, getFullnodeUrl } = require("@mysten/sui/client");
+    // We need a SuiClient-like object created from the configured RPC.
     const network = config.network ?? "testnet";
     const url = rpcUrl ?? getFullnodeUrl(network);
     const suiClient = new SuiClient({ url });
+
+    // Storage backend: default to Walrus (skills are stored on the public
+    // Walrus publisher/aggregator). Only use Harbor when explicitly opted in
+    // via AGENTOS_STORAGE_BACKEND=harbor, since passing a harborApiKey alone
+    // would otherwise flip the SDK default to Harbor and break Walrus reads.
+    const storageBackend =
+      process.env.AGENTOS_STORAGE_BACKEND?.trim() === "harbor"
+        ? ("harbor" as const)
+        : ("walrus" as const);
 
     return new AgentOSClient({
       client: suiClient,
@@ -57,6 +66,7 @@ function createAgentOSClient(registryPath: string): AgentOSClient | null {
       packageId,
       registryPath,
       spaceId,
+      storageBackend,
     });
   } catch {
     return null;
@@ -70,8 +80,6 @@ function getSigner(): unknown | null {
   const secret = process.env.SUI_PRIVATE_KEY ?? process.env.AGENTOS_PRIVATE_KEY;
   if (!secret) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Ed25519Keypair } = require("@mysten/sui/keypairs/ed25519");
     return Ed25519Keypair.fromSecretKey(secret);
   } catch {
     return null;
