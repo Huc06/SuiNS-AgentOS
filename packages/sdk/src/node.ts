@@ -4,6 +4,8 @@ export type { AgentOSConfig } from "./config.js";
 export * from "./registry/index.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
+export { WalrusClient } from "./walrus.js";
+export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
 export {
   serializeManifest,
   deserializeManifest,

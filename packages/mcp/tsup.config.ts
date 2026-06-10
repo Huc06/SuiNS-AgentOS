@@ -1,10 +1,11 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/server.ts'],
-  format: ['esm'],
+  entry: ["src/index.ts", "src/server.ts"],
+  format: ["esm"],
   dts: true,
   sourcemap: true,
   clean: true,
-  banner: { js: '#!/usr/bin/env node' },
+  // Note: src/index.ts already starts with a `#!/usr/bin/env node` shebang,
+  // so we must NOT add another via `banner` or the duplicate breaks `node`.
 });

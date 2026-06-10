@@ -319,7 +319,8 @@ describe("skill publish command", () => {
     );
   });
 
-  it("publishes locally when no Harbor API key is configured", async () => {
+  it("publishes locally when no signer is available", async () => {
+    mockGetSigner.mockReturnValueOnce(null);
     mockPublishSkill.mockReturnValue({
       objectId: "0xLOCAL",
       walrusManifestBlob: undefined,
@@ -348,6 +349,7 @@ describe("skill publish command", () => {
   });
 
   it("--json outputs structured result on local publish", async () => {
+    mockGetSigner.mockReturnValueOnce(null);
     mockPublishSkill.mockReturnValue({
       objectId: "0xOBJ",
       walrusManifestBlob: undefined,

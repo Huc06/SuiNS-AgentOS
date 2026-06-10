@@ -18,6 +18,8 @@ export {
 } from "./manifest.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
+export { WalrusClient } from "./walrus.js";
+export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
 export * from "./types.js";
 export * from "./hooks/index.js";
 export { loadConfig, resolveRegistryPath } from "./config.js";
