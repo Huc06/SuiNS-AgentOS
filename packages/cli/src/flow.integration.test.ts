@@ -13,10 +13,17 @@ const MANIFEST = join(
 );
 
 function runAgentos(args: string[], cwd: string): string {
+  // Strip signer/storage env so the flow stays deterministic and offline
+  // (local-only publish path — no real Walrus upload or on-chain tx).
+  const { SUI_PRIVATE_KEY, AGENTOS_PRIVATE_KEY, HARBOR_API_KEY, ...rest } =
+    process.env;
+  void SUI_PRIVATE_KEY;
+  void AGENTOS_PRIVATE_KEY;
+  void HARBOR_API_KEY;
   return execFileSync(process.execPath, [CLI, ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1" },
+    env: { ...rest, NO_COLOR: "1" },
   });
 }
 
@@ -48,7 +55,8 @@ describe("agentos CLI distribution flow", () => {
         dir,
       ),
     );
-    // Local-only publish (no Harbor key) returns the flat skill record fields.
+    // Local-only publish (no signer) returns the flat skill record fields with
+    // a placeholder walrus blob id derived from the skill name + version.
     expect(publishOut.objectId).toBeTruthy();
     expect(publishOut.blobId).toContain("web-search");
 

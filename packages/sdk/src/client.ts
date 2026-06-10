@@ -7,6 +7,7 @@ import * as contracts from "./contracts/index.js";
 import { DependencyResolver } from "./dependency-resolver.js";
 import { HarborClient } from "./harbor.js";
 import type { HarborUploadResult } from "./harbor.js";
+import { WalrusClient } from "./walrus.js";
 import {
   computeManifestHash,
   deserializeManifest,
@@ -37,6 +38,20 @@ export interface AgentOSClientOptions {
   registryPath?: string;
   /** Harbor space ID for blob uploads. Defaults to HARBOR_SPACE_ID env. */
   spaceId?: string;
+  /**
+   * Blob storage backend for manifest upload/download.
+   * - `"walrus"` (default): public Walrus publisher/aggregator HTTP API. No
+   *   API key, Seal handshake, or bucket required.
+   * - `"harbor"`: Seal-encrypted Harbor gateway (requires harborApiKey +
+   *   spaceId + bucket). Kept for compatibility; opt-in.
+   * Defaults to `"harbor"` only when a harborApiKey is supplied, otherwise
+   * `"walrus"`.
+   */
+  storageBackend?: "walrus" | "harbor";
+  /** Walrus publisher base URL (write). Defaults to the testnet publisher. */
+  walrusPublisherUrl?: string;
+  /** Walrus aggregator base URL (read). Defaults to the testnet aggregator. */
+  walrusAggregatorUrl?: string;
 }
 
 export interface UploadManifestOptions {
@@ -81,6 +96,9 @@ export class AgentOSClient {
   #packageId?: string;
   #registry: LocalRegistry | null;
   #spaceId?: string;
+  #storageBackend: "walrus" | "harbor";
+  #walrusPublisherUrl?: string;
+  #walrusAggregatorUrl?: string;
 
   constructor({
     client,
@@ -88,12 +106,21 @@ export class AgentOSClient {
     packageId,
     registryPath,
     spaceId,
+    storageBackend,
+    walrusPublisherUrl,
+    walrusAggregatorUrl,
   }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
     this.#packageId = packageId;
     this.#registry = registryPath ? LocalRegistry.open(registryPath) : null;
     this.#spaceId = spaceId ?? process.env.HARBOR_SPACE_ID?.trim();
+    // Default to Walrus unless the caller explicitly opts into Harbor (or only
+    // supplied a Harbor key, which implies Harbor intent).
+    this.#storageBackend =
+      storageBackend ?? (harborApiKey ? "harbor" : "walrus");
+    this.#walrusPublisherUrl = walrusPublisherUrl;
+    this.#walrusAggregatorUrl = walrusAggregatorUrl;
   }
 
   get registry(): LocalRegistry | null {
@@ -251,10 +278,19 @@ export class AgentOSClient {
     expectedHash: string,
     options?: DownloadManifestOptions,
   ): Promise<SkillManifest> {
-    // 1. Resolve API key and download blob from Walrus via Harbor
-    const apiKey = this.#harborApiKey ?? HarborClient.getApiKey();
-    const harbor = new HarborClient({ apiKey });
-    let content = await harbor.downloadBlob(blobId);
+    // 1. Download blob from the configured storage backend.
+    let content: Uint8Array;
+    if (this.#storageBackend === "harbor") {
+      const apiKey = this.#harborApiKey ?? HarborClient.getApiKey();
+      const harbor = new HarborClient({ apiKey });
+      content = await harbor.downloadBlob(blobId);
+    } else {
+      const walrus = new WalrusClient({
+        publisherUrl: this.#walrusPublisherUrl,
+        aggregatorUrl: this.#walrusAggregatorUrl,
+      });
+      content = await walrus.downloadBlob(blobId);
+    }
 
     // 2. Optionally Seal-decrypt for private skills
     if (options?.sealPolicyId) {
@@ -678,22 +714,34 @@ export class AgentOSClient {
       content = await sealEncrypt(content, options.sealPolicyId);
     }
 
-    // 5. Resolve API key and upload via HarborClient
-    const apiKey = this.#harborApiKey ?? HarborClient.getApiKey();
-    const spaceId = this.#spaceId;
-    if (!spaceId) {
-      throw new Error(
-        "Harbor space ID not configured. Set HARBOR_SPACE_ID or pass spaceId in client options.",
+    // 5. Upload via the configured storage backend.
+    let blobId: string;
+    if (this.#storageBackend === "harbor") {
+      // Harbor (Seal-encrypted gateway) — opt-in. Requires API key + space.
+      const apiKey = this.#harborApiKey ?? HarborClient.getApiKey();
+      const spaceId = this.#spaceId;
+      if (!spaceId) {
+        throw new Error(
+          "Harbor space ID not configured. Set HARBOR_SPACE_ID or pass spaceId in client options.",
+        );
+      }
+      const harbor = new HarborClient({ apiKey });
+      const uploaded = await harbor.uploadBlob(
+        spaceId,
+        bucketId,
+        content,
+        `${manifest.name}-${manifest.version}.json`,
       );
+      blobId = uploaded.blobId;
+    } else {
+      // Walrus public publisher (default) — no API key / bucket / Seal needed.
+      const walrus = new WalrusClient({
+        publisherUrl: this.#walrusPublisherUrl,
+        aggregatorUrl: this.#walrusAggregatorUrl,
+      });
+      const uploaded = await walrus.uploadBlob(content);
+      blobId = uploaded.blobId;
     }
-
-    const harbor = new HarborClient({ apiKey });
-    const { blobId } = await harbor.uploadBlob(
-      spaceId,
-      bucketId,
-      content,
-      `${manifest.name}-${manifest.version}.json`,
-    );
 
     // 6. Return blobId + hash
     return { blobId, manifestHash };

@@ -195,14 +195,11 @@ skillCommand
       }
 
       // ─── WALRUS + ON-CHAIN PUBLISH ────────────────────────────────────────
-      if (harborApiKey) {
-        const signer = ctx.getSigner();
-        if (!signer) {
-          printError(
-            "A signer is required for Walrus publish. Set SUI_PRIVATE_KEY or AGENTOS_PRIVATE_KEY environment variable.",
-          );
-        }
-
+      // With Walrus as the default storage backend, publishing on-chain only
+      // needs a signer — no Harbor API key required. (Harbor remains opt-in via
+      // its own env/config and the SDK storageBackend option.)
+      const signer = ctx.getSigner();
+      if (signer) {
         try {
           const { formatSkillSubname } = await import("@agentos/sdk");
           if (suiperpowerActive && !opts.json) {
