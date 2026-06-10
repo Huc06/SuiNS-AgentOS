@@ -4,7 +4,7 @@ import {
   WalrusClient,
   DEFAULT_WALRUS_PUBLISHER,
   DEFAULT_WALRUS_AGGREGATOR,
-} from "./walrus.js";
+} from "../src/walrus.js";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);

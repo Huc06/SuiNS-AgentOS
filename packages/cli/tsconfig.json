@@ -4,5 +4,11 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "bin"]
+  "include": [
+    "src",
+    "bin",
+    "tests/flow.integration.test.ts",
+    "tests/commands/skill.test.ts",
+    "tests"
+  ]
 }

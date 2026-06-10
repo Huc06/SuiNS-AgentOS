@@ -8,8 +8,8 @@ import {
   convertToAgentOSManifest,
   parseSkillMd,
   type SkillMdMetadata,
-} from "./skill-md-parser.js";
-import { scanSkillsDirectory } from "./skill-md-scanner.js";
+} from "../src/skill-md-parser.js";
+import { scanSkillsDirectory } from "../src/skill-md-scanner.js";
 
 const VALID_SKILL_MD = `---
 name: web-search

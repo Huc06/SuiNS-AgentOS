@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentOSClient } from "./client.js";
-import type { SkillManifest } from "./types.js";
+import { AgentOSClient } from "../src/client.js";
+import type { SkillManifest } from "../src/types.js";
 
 // Mock global fetch for Harbor client calls
 const mockFetch = vi.fn();

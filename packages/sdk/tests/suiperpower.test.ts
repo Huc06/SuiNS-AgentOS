@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { validateManifest } from "./manifest.js";
+import { validateManifest } from "../src/manifest.js";
 import {
   buildManifestFromSuperpowerOutput,
   detectSuperpowerProject,
   parseSuiperpowerOutput,
   type SuiperpowerBuildResult,
-} from "./suiperpower.js";
+} from "../src/suiperpower.js";
 
 const PACKAGE_ID =
   "0x6568deb11f5fa2f69b370ab797fbf1ee3db67a6151bd4a48b9f6233874c70c6a";

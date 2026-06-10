@@ -6,8 +6,8 @@ import {
   deserializeManifest,
   serializeManifest,
   validateManifest,
-} from "./manifest.js";
-import type { SkillManifest, SkillManifestTool } from "./types.js";
+} from "../src/manifest.js";
+import type { SkillManifest, SkillManifestTool } from "../src/types.js";
 
 /**
  * Arbitrary generator for valid SkillManifestTool objects.
