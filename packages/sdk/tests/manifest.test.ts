@@ -5,8 +5,8 @@ import {
   deserializeManifest,
   serializeManifest,
   validateManifest,
-} from "./manifest.js";
-import type { SkillManifest } from "./types.js";
+} from "../src/manifest.js";
+import type { SkillManifest } from "../src/types.js";
 
 function validManifest(): SkillManifest {
   return {

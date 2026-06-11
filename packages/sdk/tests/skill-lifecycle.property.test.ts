@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as fc from "fast-check";
 
-import { computeManifestHash, serializeManifest } from "./manifest.js";
-import { formatSkillSubname } from "./suins-utils.js";
-import type { SkillManifest, SkillManifestTool } from "./types.js";
+import { computeManifestHash, serializeManifest } from "../src/manifest.js";
+import { formatSkillSubname } from "../src/suins-utils.js";
+import type { SkillManifest, SkillManifestTool } from "../src/types.js";
 
 /**
  * Arbitrary generator for valid SkillManifestTool objects.

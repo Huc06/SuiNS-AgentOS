@@ -6,7 +6,7 @@ import {
   sealDecrypt,
   deriveGroupId,
   deriveMembershipProof,
-} from "./seal.js";
+} from "../src/seal.js";
 
 const POLICY = "0xpolicy123";
 
