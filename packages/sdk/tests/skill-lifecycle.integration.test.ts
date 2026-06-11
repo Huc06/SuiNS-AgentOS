@@ -5,11 +5,11 @@ import { randomBytes } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentOSClient } from "./client.js";
-import { DependencyResolver } from "./dependency-resolver.js";
-import { computeManifestHash, serializeManifest } from "./manifest.js";
-import { deriveGroupId, deriveMembershipProof } from "./seal.js";
-import type { SkillManifest } from "./types.js";
+import { AgentOSClient } from "../src/client.js";
+import { DependencyResolver } from "../src/dependency-resolver.js";
+import { computeManifestHash, serializeManifest } from "../src/manifest.js";
+import { deriveGroupId, deriveMembershipProof } from "../src/seal.js";
+import type { SkillManifest } from "../src/types.js";
 
 /**
  * Integration tests for the full skill lifecycle:

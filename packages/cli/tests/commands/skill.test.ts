@@ -52,11 +52,11 @@ const mockContext = {
   getSigner: mockGetSigner,
 };
 
-vi.mock("../lib/context.js", () => ({
+vi.mock("../../src/lib/context.js", () => ({
   createCliContext: () => mockContext,
 }));
 
-vi.mock("../lib/manifest.js", () => ({
+vi.mock("../../src/lib/manifest.js", () => ({
   readManifestFile: (file: string) => {
     if (file === "bad-manifest.json") {
       throw new Error("Invalid manifestType: expected sui-agent-skill/v1");
@@ -82,7 +82,7 @@ const mockPrintError = vi.fn((msg: string) => {
   throw new Error(msg);
 });
 
-vi.mock("../lib/output.js", () => ({
+vi.mock("../../src/lib/output.js", () => ({
   printJson: (...args: unknown[]) => mockPrintJson(...args),
   printError: (msg: string) => mockPrintError(msg),
 }));
@@ -94,7 +94,7 @@ const mockFormatDryRun = vi.fn().mockResolvedValue({
   note: "Serialized with configured packageId",
 });
 
-vi.mock("../lib/dry-run.js", () => ({
+vi.mock("../../src/lib/dry-run.js", () => ({
   formatDryRun: (...args: unknown[]) => mockFormatDryRun(...args),
 }));
 
@@ -167,7 +167,7 @@ vi.mock("@mysten/sui/transactions", () => ({
   },
 }));
 
-import { skillCommand } from "./skill.js";
+import { skillCommand } from "../../src/commands/skill.js";
 
 /**
  * Reset Commander.js internal option state on all subcommands.

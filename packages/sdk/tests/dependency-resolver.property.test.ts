@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as fc from "fast-check";
 
-import { DependencyResolver } from "./dependency-resolver.js";
+import { DependencyResolver } from "../src/dependency-resolver.js";
 
 /**
  * Helper: create a DependencyResolver with a dummy resolver (only needed for detect/sort).

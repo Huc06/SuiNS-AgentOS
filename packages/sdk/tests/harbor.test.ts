@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HarborClient } from "./harbor.js";
+import { HarborClient } from "../src/harbor.js";
 
 // Mock global fetch
 const mockFetch = vi.fn();

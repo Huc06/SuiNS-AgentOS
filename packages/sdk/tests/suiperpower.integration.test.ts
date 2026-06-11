@@ -4,14 +4,14 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentOSClient } from "./client.js";
-import { computeManifestHash, serializeManifest } from "./manifest.js";
+import { AgentOSClient } from "../src/client.js";
+import { computeManifestHash, serializeManifest } from "../src/manifest.js";
 import {
   buildManifestFromSuperpowerOutput,
   detectSuperpowerProject,
   parseSuiperpowerOutput,
-} from "./suiperpower.js";
-import type { SkillManifest } from "./types.js";
+} from "../src/suiperpower.js";
+import type { SkillManifest } from "../src/types.js";
 
 /**
  * Integration test for the Suiperpower bridge wired into the full skill

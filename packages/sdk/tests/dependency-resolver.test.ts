@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { DependencyResolver } from "./dependency-resolver.js";
-import type { SkillResolver } from "./dependency-resolver.js";
-import type { SkillDescriptor, SkillManifest } from "./types.js";
+import { DependencyResolver } from "../src/dependency-resolver.js";
+import type { SkillResolver } from "../src/dependency-resolver.js";
+import type { SkillDescriptor, SkillManifest } from "../src/types.js";
 
 function makeDescriptor(skillId: string, deps: string[] = []): SkillDescriptor {
   return {
