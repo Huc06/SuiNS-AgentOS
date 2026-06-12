@@ -115,7 +115,7 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_register_agent",
         description:
-          "Register a new agent locally and get a dashboard URL for on-chain setup. After calling this, instruct the user to open the returned dashboardUrl in their browser to complete SuiNS binding and mint their Agent Passport (requires browser wallet signature). The runtime wallet address is the local agent key; the browser wallet owns the SuiNS NFT.",
+          "Register a new agent locally (dev/headless mode only). For a full on-chain setup with SuiNS binding and Agent Passport minting, guide the user to open the dashboard /create page in their browser instead — they need to connect a browser wallet to sign the on-chain transactions. Use agentos_dashboard_url to get the link, or construct: {dashboardUrl}/create?name={suinsName}. Only call this tool directly for quick dev/testing without on-chain identity.",
         inputSchema: {
           type: "object",
           properties: {
