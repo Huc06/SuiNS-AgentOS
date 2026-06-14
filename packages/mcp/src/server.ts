@@ -103,7 +103,7 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_resolve",
         description:
-          "Resolve a SuiNS agent name to passport and registered skills",
+          "Resolve a SuiNS agent name to its passport and registered skills. Use this to look up any agent's identity and capabilities by their .sui name.",
         inputSchema: {
           type: "object",
           properties: {
@@ -115,12 +115,18 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_register_agent",
         description:
-          "Register a new agent in the local registry (after Suiperpower deploy)",
+          "Register a new agent locally (dev/headless mode only). For a full on-chain setup with SuiNS binding and Agent Passport minting, guide the user to open the dashboard /create page in their browser instead — they need to connect a browser wallet to sign the on-chain transactions. Use agentos_dashboard_url to get the link, or construct: {dashboardUrl}/create?name={suinsName}. Only call this tool directly for quick dev/testing without on-chain identity.",
         inputSchema: {
           type: "object",
           properties: {
-            suinsName: { type: "string" },
-            runtimeWallet: { type: "string" },
+            suinsName: {
+              type: "string",
+              description: "SuiNS name for the agent e.g. alpha-fund.sui",
+            },
+            runtimeWallet: {
+              type: "string",
+              description: "Sui address of the local agent runtime key (0x...)",
+            },
             network: { type: "string", enum: ["testnet", "mainnet"] },
           },
           required: ["suinsName", "runtimeWallet"],
@@ -129,18 +135,22 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_publish_skill",
         description:
-          "Publish a skill manifest to Walrus and register on-chain (or local-only if no Harbor key)",
+          "Publish a skill manifest: uploads to Walrus (decentralized storage), creates a SkillDescriptor on-chain, and binds a SuiNS subname (e.g. skill-name.agent.sui). Returns blobId, manifestHash, objectId, and suinsName. Other agents can then discover and use this skill by its SuiNS name.",
         inputSchema: {
           type: "object",
           properties: {
-            agentName: { type: "string" },
+            agentName: {
+              type: "string",
+              description: "Agent SuiNS name that owns this skill",
+            },
             manifestJson: {
               type: "string",
-              description: "Full sui-agent-skill/v1 JSON",
+              description: "Full sui-agent-skill/v1 manifest as JSON string",
             },
             walrusBlob: {
               type: "string",
-              description: "Pre-uploaded Walrus blobId (skips upload)",
+              description:
+                "Pre-uploaded Walrus blobId (skips upload if provided)",
             },
           },
           required: ["agentName", "manifestJson"],
@@ -149,17 +159,19 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_execute_skill",
         description:
-          "Execute a skill by resolving its SuiNS name, downloading manifest, and executing on-chain",
+          "Execute a skill on-chain: resolves the SuiNS skill name, downloads the manifest from Walrus, verifies integrity, resolves dependencies, builds a PTB targeting the skill's Move entry function, and executes it. Returns transaction digest and effects.",
         inputSchema: {
           type: "object",
           properties: {
             suinsName: {
               type: "string",
-              description: "SuiNS skill subname e.g. trade.alpha.sui",
+              description:
+                "SuiNS skill subname e.g. defi-rebalancer.alpha-fund.sui",
             },
             params: {
               type: "string",
-              description: "Optional JSON string of entry function parameters",
+              description:
+                "Optional JSON string of parameters for the skill's Move entry function",
             },
           },
           required: ["suinsName"],
@@ -168,13 +180,14 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "agentos_resolve_manifest",
         description:
-          "Resolve a skill descriptor and download its manifest from Walrus",
+          "Discover a skill by its SuiNS name: resolves the on-chain SkillDescriptor, downloads the manifest from Walrus, and verifies its SHA-256 hash. Returns both the descriptor (version, dependencies, capabilities) and the full manifest (Move package, entry function, MCP tool definition). Use this to inspect what a skill does before executing it.",
         inputSchema: {
           type: "object",
           properties: {
             suinsName: {
               type: "string",
-              description: "SuiNS skill subname e.g. trade.alpha.sui",
+              description:
+                "SuiNS skill subname e.g. defi-rebalancer.alpha-fund.sui",
             },
           },
           required: ["suinsName"],
@@ -182,26 +195,38 @@ export async function startMcpServer(): Promise<void> {
       },
       {
         name: "agentos_list_skills",
-        description: "List skills for an agent",
+        description:
+          "List all skills registered under an agent. Returns skill records with name, version, blobId, objectId, status, and source.",
         inputSchema: {
           type: "object",
-          properties: { agentName: { type: "string" } },
+          properties: {
+            agentName: {
+              type: "string",
+              description: "Agent SuiNS name or slug",
+            },
+          },
           required: ["agentName"],
         },
       },
       {
         name: "agentos_dashboard_url",
-        description: "Get dashboard URL for an agent slug",
+        description:
+          "Get the web dashboard URL for an agent. The dashboard shows skill cards, dependency graphs, and provides visual management (upgrade, import). Open this URL in a browser.",
         inputSchema: {
           type: "object",
-          properties: { agentName: { type: "string" } },
+          properties: {
+            agentName: {
+              type: "string",
+              description: "Agent SuiNS name or slug",
+            },
+          },
           required: ["agentName"],
         },
       },
       {
         name: "agentos_import_skill",
         description:
-          "Import a Sui Agent Skill (SKILL.md) from the sui-skills catalog or a local path, convert it to a sui-agent-skill/v1 manifest, and publish it",
+          "Import a skill from the Sui Agent Skills catalog or a local SKILL.md file, convert it to a sui-agent-skill/v1 manifest, and publish it to Walrus + on-chain. Returns the manifest, blobId, objectId, and suinsName.",
         inputSchema: {
           type: "object",
           properties: {
