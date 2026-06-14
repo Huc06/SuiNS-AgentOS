@@ -363,18 +363,11 @@ async function handlePublishSkill(
     });
   }
 
-  // Check if Harbor API key is configured
-  const harborApiKey =
-    loadConfig().harborApiKey ?? process.env.HARBOR_API_KEY?.trim();
+  // Publish: use AgentOSClient (defaults to Walrus backend) when a signer is
+  // available. No Harbor API key required — Walrus public publisher handles it.
   const signer = getSigner();
 
-  // A pre-uploaded Walrus blob skips the upload step, so the Harbor API key is
-  // only required when we actually need to upload the manifest (no walrusBlob).
-  const hasPreUploadedBlob = Boolean(input.walrusBlob);
-
-  if (signer && (harborApiKey || hasPreUploadedBlob)) {
-    // On-chain publish via AgentOSClient. Uploads to Walrus when no blob was
-    // supplied; otherwise registers the provided blob directly on-chain.
+  if (signer) {
     const client = createAgentOSClient(registryPath);
     if (!client) {
       return textResult({ error: "Failed to initialize AgentOS client" });
@@ -390,10 +383,6 @@ async function handlePublishSkill(
         walrusManifestBlob: input.walrusBlob,
       });
 
-      // The SkillDescriptor returned by the SDK does not carry the on-chain
-      // object id. publishSkill persists the real objectId and qualified
-      // suinsName to the local registry, so re-read the record from disk to
-      // surface them in the tool result.
       const suinsName = formatSkillSubname(descriptor.skillId, input.agentName);
       const persisted = LocalRegistry.open(registryPath)
         .listSkills(input.agentName)
@@ -410,10 +399,6 @@ async function handlePublishSkill(
         error: e instanceof Error ? e.message : String(e),
       });
     }
-  }
-
-  if (!harborApiKey) {
-    return textResult({ error: "Harbor API key not configured" });
   }
 
   // Fallback: local-only publish (no signer available)
