@@ -65,10 +65,10 @@ export function SkillListItem({ skill }: { skill: AgentSkillRow }) {
   };
 
   // Check whether the Walrus manifest blob is reachable. Skip when there is no
-  // blob (the row already shows "not uploaded"). While checking we leave
-  // `blobAvailable` as null so no warning flickers in before we have an answer.
+  // blob, or when the blobId is a local placeholder (walrus:// prefix = not
+  // uploaded to Walrus yet, so no point checking the aggregator).
   useEffect(() => {
-    if (!skill.blobId) {
+    if (!skill.blobId || skill.blobId.startsWith("walrus://")) {
       setBlobAvailable(null);
       return;
     }
