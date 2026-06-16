@@ -1,0 +1,21 @@
+{
+  "name": "defi-rebalancer",
+  "version": "1.0.0",
+  "publisher": "@my-first-agent/defi-rebalancer",
+  "manifestType": "sui-agent-skill/v1",
+  "mcp": {
+    "compatible": true,
+    "tools": [
+      {
+        "name": "rebalance",
+        "description": "Auto-rebalance DeFi portfolio to target allocation on Sui DEXs"
+      }
+    ]
+  },
+  "sui": {
+    "movePackage": "0x0",
+    "entry": "trading_agent::propose_trade",
+    "policyRequired": []
+  },
+  "dependencies": []
+}
