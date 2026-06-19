@@ -137,6 +137,76 @@ export class LocalRegistry {
     return agent;
   }
 
+  /** Add a delegation record to the local registry for an agent. */
+  addDelegation(
+    agentName: string,
+    delegation: {
+      childAgent: string;
+      childName: string;
+      allowedSkills: string[];
+      allowedCapabilities: string[];
+      spendLimit: string;
+      spent: string;
+      expiryMs: string;
+      revoked: boolean;
+      capId?: string;
+      createdAt: string;
+    },
+  ): void {
+    const resolved = this.resolveAgent(agentName);
+    if (!resolved) {
+      throw new Error(`Agent not found: ${agentName}`);
+    }
+    const agent = resolved.agent;
+    // Store delegations as a sub-array on the agent record
+    if (!agent.delegations) {
+      agent.delegations = [];
+    }
+    agent.delegations.push(delegation);
+    this.save();
+  }
+
+  /** List delegations for an agent from the registry. */
+  listDelegations(agentName: string): Array<{
+    childAgent: string;
+    childName: string;
+    allowedSkills: string[];
+    allowedCapabilities: string[];
+    spendLimit: string;
+    spent: string;
+    expiryMs: string;
+    revoked: boolean;
+    capId?: string;
+    createdAt: string;
+  }> {
+    const resolved = this.resolveAgent(agentName);
+    if (!resolved) return [];
+    return resolved.agent.delegations ?? [];
+  }
+
+  /** Search agents by fuzzy matching on slug + suinsName. */
+  searchAgents(query: string, limit = 6): RegistryAgentRecord[] {
+    const q = query.toLowerCase().trim();
+    if (!q) return [];
+    const active = this.listAgents();
+
+    // Score: prefix > substring > subsequence
+    const scored = active
+      .map((agent) => {
+        const name = agent.suinsName.toLowerCase();
+        const slug = agent.slug.toLowerCase();
+        let score = 0;
+        if (slug.startsWith(q) || name.startsWith(q)) score = 3;
+        else if (slug.includes(q) || name.includes(q)) score = 2;
+        else if (isSubsequence(q, slug) || isSubsequence(q, name)) score = 1;
+        return { agent, score };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, limit).map((s) => s.agent);
+  }
+
   publishSkill(input: {
     agentName: string;
     manifest: SkillManifest;
@@ -231,4 +301,12 @@ export function descriptorFromRecord(record: RegistrySkillRecord) {
       ? { sealPolicyId: record.sealPolicyId, decryptionRequired: true }
       : {}),
   };
+}
+
+function isSubsequence(sub: string, str: string): boolean {
+  let si = 0;
+  for (let i = 0; i < str.length && si < sub.length; i++) {
+    if (str[i] === sub[si]) si++;
+  }
+  return si === sub.length;
 }

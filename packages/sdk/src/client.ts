@@ -132,10 +132,18 @@ export class AgentOSClient {
   }
 
   async resolveAgent(suinsName: string): Promise<AgentPassport> {
+    // Try on-chain SuiNS resolution first (works in browser without registryPath)
+    try {
+      const { resolveAgentByName } = await import("./suins-resolve.js");
+      const passport = await resolveAgentByName(this.#client, suinsName);
+      if (passport) return passport;
+    } catch {
+      // Fall through to registry
+    }
+
+    // Fallback: local registry
     if (!this.#registry) {
-      throw new Error(
-        "Not implemented: set registryPath or use LocalRegistry in Node",
-      );
+      throw new Error(`Agent not found: ${suinsName}`);
     }
     const resolved = this.#registry.resolveAgent(suinsName);
     if (!resolved) {
@@ -551,6 +559,111 @@ export class AgentOSClient {
     };
   }
 
+  /**
+   * Build an unsigned Transaction for skill execution (browser-safe).
+   * Does NOT require a Signer — returns the transaction for dapp-kit to sign.
+   *
+   * Steps: resolve skill → download manifest → verify hash → check capabilities → build PTB.
+   */
+  async buildExecuteSkillTx(options: {
+    suinsName: string;
+    params?: Record<string, unknown>;
+    agentCapabilities?: string[];
+  }): Promise<{
+    descriptor: SkillDescriptor;
+    manifest: SkillManifest;
+    transaction: Transaction;
+    manifestHash: string;
+    verified: boolean;
+  }> {
+    const { suinsName, params, agentCapabilities } = options;
+
+    // 1. Resolve skill by SuiNS name
+    const descriptor = await this.resolveSkill(suinsName);
+
+    // 2. Download manifest from Walrus
+    let manifest: SkillManifest;
+    let verified = true;
+    try {
+      manifest = await this.downloadManifest(
+        descriptor.walrusManifestBlob,
+        descriptor.manifestHash,
+        descriptor.sealPolicyId
+          ? { sealPolicyId: descriptor.sealPolicyId }
+          : undefined,
+      );
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message.includes("integrity check failed")
+      ) {
+        verified = false;
+        throw err;
+      }
+      throw err;
+    }
+
+    // 3. Resolve dependencies (if any)
+    if (manifest.dependencies && manifest.dependencies.length > 0) {
+      const depResolver = new DependencyResolver(this);
+      await depResolver.resolve(manifest);
+    }
+
+    // 4. Verify agent has required capabilities
+    const requiredPolicies = manifest.sui.policyRequired ?? [];
+    if (requiredPolicies.length > 0) {
+      const capabilities = agentCapabilities ?? [];
+      for (const required of requiredPolicies) {
+        if (!capabilities.includes(required)) {
+          throw new Error(`Missing required capability: ${required}`);
+        }
+      }
+    }
+
+    // 5. Build PTB from manifest's sui.movePackage + sui.entry
+    const transaction = new Transaction();
+    const [packageAddr, module, func] = this.#parseEntry(
+      manifest.sui.movePackage,
+      manifest.sui.entry,
+    );
+
+    const moveCallArgs: TransactionObjectArgument[] = [];
+    if (params) {
+      for (const value of Object.values(params)) {
+        if (typeof value === "string") {
+          moveCallArgs.push(
+            transaction.pure.string(
+              value,
+            ) as unknown as TransactionObjectArgument,
+          );
+        } else if (typeof value === "number") {
+          moveCallArgs.push(
+            transaction.pure.u64(value) as unknown as TransactionObjectArgument,
+          );
+        } else if (typeof value === "boolean") {
+          moveCallArgs.push(
+            transaction.pure.bool(
+              value,
+            ) as unknown as TransactionObjectArgument,
+          );
+        }
+      }
+    }
+
+    transaction.moveCall({
+      target: `${packageAddr}::${module}::${func}`,
+      arguments: moveCallArgs,
+    });
+
+    return {
+      descriptor,
+      manifest,
+      transaction,
+      manifestHash: descriptor.manifestHash,
+      verified,
+    };
+  }
+
   async executeSkill(
     options: ExecuteSkillOptions,
   ): Promise<ExecuteSkillResult> {
@@ -676,12 +789,119 @@ export class AgentOSClient {
     return [movePackage, "main", entry];
   }
 
-  async delegateSubAgent(_options: {
+  /**
+   * Delegate capabilities from a parent agent to a sub-agent.
+   * Builds a PTB targeting `agentos::delegation::grant`. Falls back to
+   * local registry persistence when the on-chain path is unavailable.
+   */
+  async delegateSubAgent(options: {
     signer: Signer;
     parent: string;
     child: SubAgentConfig;
-  }): Promise<AgentPassport> {
-    throw new Error("Not implemented");
+  }): Promise<{
+    digest?: string;
+    capId?: string;
+    registryFallback: boolean;
+  }> {
+    const { signer, parent, child } = options;
+
+    // Build the delegation transaction
+    const transaction = new Transaction();
+    const signerAddress = signer.toSuiAddress();
+    transaction.setSender(signerAddress);
+
+    // Resolve the parent passport object ID
+    let parentPassportId: string | undefined;
+    if (this.#registry) {
+      const resolved = this.#registry.resolveAgent(parent);
+      parentPassportId = resolved?.agent.passportId;
+    }
+
+    let digest: string | undefined;
+    let capId: string | undefined;
+
+    if (parentPassportId && this.#packageId) {
+      // Build the on-chain delegation grant
+      const cap = transaction.add(
+        contracts.delegation.grant({
+          parentPassport: transaction.object(parentPassportId),
+          childAgent: child.name.includes("0x") ? child.name : signerAddress, // Use child address or fallback
+          allowedSkills: [],
+          allowedCapabilities: child.permissions,
+          spendLimit: child.budget,
+          expiryMs: BigInt(child.expiry),
+          packageId: this.#packageId,
+        }),
+      );
+
+      // Transfer the cap to the child agent
+      const childAddr = child.name.includes("0x") ? child.name : signerAddress;
+      transaction.transferObjects([cap], childAddr);
+
+      try {
+        const txBytes = await transaction.build({
+          client: this.#client as never,
+        });
+        const { signature } = await signer.signTransaction(txBytes);
+
+        const result = await (
+          this.#client as unknown as {
+            executeTransactionBlock?: (params: {
+              transactionBlock: Uint8Array;
+              signature: string;
+              options: { showEffects: boolean; showObjectChanges: boolean };
+            }) => Promise<{
+              digest: string;
+              effects?: { status?: { status: string } };
+              objectChanges?: Array<{
+                type: string;
+                objectId: string;
+                objectType?: string;
+              }>;
+            }>;
+          }
+        ).executeTransactionBlock?.({
+          transactionBlock: txBytes,
+          signature,
+          options: { showEffects: true, showObjectChanges: true },
+        });
+
+        if (result) {
+          digest = result.digest;
+          const created = result.objectChanges?.find(
+            (c) =>
+              c.type === "created" &&
+              c.objectType?.includes("delegation::DelegationCap"),
+          );
+          if (created) capId = created.objectId;
+        }
+      } catch (err) {
+        // On-chain failed — will persist to registry below as fallback
+        console.warn(
+          "On-chain delegation failed, falling back to registry:",
+          err,
+        );
+      }
+    }
+
+    // Persist to local registry as fallback (or primary when no packageId)
+    const registryFallback = !digest;
+    if (this.#registry) {
+      this.#registry.addDelegation(parent, {
+        childAgent: child.name.includes("0x") ? child.name : "",
+        childName: child.name,
+        allowedSkills: [],
+        allowedCapabilities: child.permissions,
+        spendLimit: child.budget.toString(),
+        spent: "0",
+        expiryMs: child.expiry.toString(),
+        revoked: false,
+        capId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    return { digest, capId, registryFallback };
   }
 
   async createSkillBucket(_apiKey?: string): Promise<Bucket> {
@@ -820,6 +1040,35 @@ export class AgentOSClient {
       );
       return { transaction, policy };
     },
+
+    delegateSubAgent: (options: {
+      parentPassport: TransactionObjectArgument;
+      childAgent: string;
+      allowedSkills: string[];
+      allowedCapabilities: string[];
+      spendLimit: bigint;
+      expiryMs: bigint;
+    }) => {
+      const transaction = new Transaction();
+      const cap = transaction.add(
+        contracts.delegation.grant({
+          ...options,
+          packageId: this.#packageId,
+        }),
+      );
+      return { transaction, cap };
+    },
+
+    revokeDelegation: (options: { cap: TransactionObjectArgument }) => {
+      const transaction = new Transaction();
+      transaction.add(
+        contracts.delegation.revoke({
+          ...options,
+          packageId: this.#packageId,
+        }),
+      );
+      return { transaction };
+    },
   };
 
   call = {
@@ -834,8 +1083,124 @@ export class AgentOSClient {
   };
 
   view = {
-    isAgentActive: async (_passportId: string): Promise<boolean> => {
-      throw new Error("Not implemented");
+    /** Check if an on-chain AgentPassport is active by reading its fields. */
+    isAgentActive: async (passportId: string): Promise<boolean> => {
+      const c = this.#client as unknown as {
+        getObject?: (params: {
+          id: string;
+          options: { showContent: boolean };
+        }) => Promise<{
+          data?: { content?: { fields?: Record<string, unknown> } };
+        }>;
+      };
+      if (!c.getObject) {
+        // Fallback to registry
+        if (this.#registry) {
+          const agents = this.#registry.listAgents();
+          const agent = agents.find((a) => a.passportId === passportId);
+          return agent?.status === "active";
+        }
+        throw new Error("Cannot read on-chain state: no getObject available");
+      }
+      const obj = await c.getObject({
+        id: passportId,
+        options: { showContent: true },
+      });
+      const fields = obj?.data?.content?.fields;
+      if (!fields) throw new Error(`Passport not found: ${passportId}`);
+      return Boolean(fields.is_active);
     },
   };
+
+  /**
+   * Get reputation data for an agent (exec_count, computed score, active status).
+   * Resolves by name or passport ID. Gracefully falls back to registry data
+   * when the on-chain passport doesn't have the reputation fields (pre-upgrade).
+   */
+  async getAgentReputation(nameOrPassportId: string): Promise<{
+    execCount: number;
+    score: number;
+    attestations: number;
+    isActive: boolean;
+  }> {
+    // Try on-chain first
+    const c = this.#client as unknown as {
+      getObject?: (params: {
+        id: string;
+        options: { showContent: boolean };
+      }) => Promise<{
+        data?: { content?: { fields?: Record<string, unknown> } };
+      }>;
+    };
+
+    let passportId = nameOrPassportId;
+
+    // If it's a name, resolve to passport ID
+    if (!nameOrPassportId.startsWith("0x")) {
+      try {
+        const passport = await this.resolveAgent(nameOrPassportId);
+        passportId = passport.id;
+      } catch {
+        // Return zeros if we can't resolve
+        return { execCount: 0, score: 0, attestations: 0, isActive: false };
+      }
+    }
+
+    if (c.getObject) {
+      try {
+        const obj = await c.getObject({
+          id: passportId,
+          options: { showContent: true },
+        });
+        const fields = obj?.data?.content?.fields;
+        if (fields) {
+          const execCount =
+            typeof fields.exec_count === "number"
+              ? fields.exec_count
+              : typeof fields.exec_count === "string"
+                ? parseInt(fields.exec_count, 10)
+                : 0;
+          const isActive = Boolean(fields.is_active);
+
+          // v0 heuristic score: based on exec_count + active status
+          // TODO: Replace with on-chain AgentPassport reputation field once
+          // the contracts attestation module (issue #55) is deployed and indexed.
+          const score = Math.min(
+            100,
+            Math.floor(execCount * 5 + (isActive ? 20 : 0)),
+          );
+
+          return {
+            execCount,
+            score,
+            attestations: 0, // Will be populated when attestation indexer is available
+            isActive,
+          };
+        }
+      } catch {
+        // Fall through to registry
+      }
+    }
+
+    // Fallback to registry data
+    if (this.#registry) {
+      const agents = this.#registry.listAgents();
+      const agent = agents.find(
+        (a) =>
+          a.passportId === passportId ||
+          a.suinsName === nameOrPassportId ||
+          a.slug === nameOrPassportId,
+      );
+      if (agent) {
+        return {
+          execCount: 0,
+          score: agent.status === "active" ? 20 : 0,
+          attestations: 0,
+          isActive: agent.status === "active",
+        };
+      }
+    }
+
+    return { execCount: 0, score: 0, attestations: 0, isActive: false };
+  }
 }

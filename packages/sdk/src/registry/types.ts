@@ -9,6 +9,19 @@ export interface RegistryAgentRecord {
   createdAt: string;
   /** Optional human-readable summary (registry-only until on-chain metadata). */
   description?: string;
+  /** Sub-agent delegations granted by this agent. */
+  delegations?: Array<{
+    childAgent: string;
+    childName: string;
+    allowedSkills: string[];
+    allowedCapabilities: string[];
+    spendLimit: string;
+    spent: string;
+    expiryMs: string;
+    revoked: boolean;
+    capId?: string;
+    createdAt: string;
+  }>;
 }
 
 export interface RegistrySkillRecord {
