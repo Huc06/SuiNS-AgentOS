@@ -1,7 +1,9 @@
-import type { RegistryAgentRecord } from '@agentos/sdk/node';
+"use client";
 
-import { explorerObjectUrl } from '../../lib/explorer-links';
-import { shortObjectId } from '../../lib/registry-mappers';
+import type { RegistryAgentRecord } from "@agentos/sdk/node";
+
+import { explorerObjectUrl } from "../../lib/explorer-links";
+import { shortObjectId } from "../../lib/registry-mappers";
 
 interface AgentPassportHeaderProps {
   agent: RegistryAgentRecord;
@@ -22,20 +24,23 @@ function CopyButton({ text }: { text: string }) {
 }
 
 const statusStyles = {
-  active: 'bg-green-100 text-green-800 border-green-800',
-  revoked: 'bg-red-100 text-red-800 border-red-800',
+  active: "bg-green-100 text-green-800 border-green-800",
+  revoked: "bg-red-100 text-red-800 border-red-800",
 };
 
 const networkStyles = {
-  mainnet: 'bg-green-100 text-green-800 border-green-800',
-  testnet: 'bg-blue-100 text-blue-800 border-blue-800',
+  mainnet: "bg-green-100 text-green-800 border-green-800",
+  testnet: "bg-blue-100 text-blue-800 border-blue-800",
 };
 
 /**
  * Public agent passport header — visible to ALL visitors (no ownership gate).
  * Shows identity, status, network, on-chain object links, and a reputation placeholder.
  */
-export function AgentPassportHeader({ agent, skillCount }: AgentPassportHeaderProps) {
+export function AgentPassportHeader({
+  agent,
+  skillCount,
+}: AgentPassportHeaderProps) {
   const suiscanUrl = agent.passportId
     ? explorerObjectUrl(agent.network, agent.passportId)
     : null;
@@ -75,7 +80,9 @@ export function AgentPassportHeader({ agent, skillCount }: AgentPassportHeaderPr
           <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
             Version
           </p>
-          <p className="mt-1 font-mono text-sm font-bold">{agent.passportVersion}</p>
+          <p className="mt-1 font-mono text-sm font-bold">
+            {agent.passportVersion}
+          </p>
         </div>
         <div>
           <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
@@ -95,7 +102,9 @@ export function AgentPassportHeader({ agent, skillCount }: AgentPassportHeaderPr
           <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
             Network
           </p>
-          <p className="mt-1 font-mono text-sm font-bold capitalize">{agent.network}</p>
+          <p className="mt-1 font-mono text-sm font-bold capitalize">
+            {agent.network}
+          </p>
         </div>
       </div>
 
@@ -122,7 +131,7 @@ export function AgentPassportHeader({ agent, skillCount }: AgentPassportHeaderPr
             )}
           </div>
         )}
-        {agent.runtimeWallet && agent.runtimeWallet !== '0x0' && (
+        {agent.runtimeWallet && agent.runtimeWallet !== "0x0" && (
           <div className="flex flex-wrap items-center gap-1">
             <span className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
               Runtime:
@@ -152,7 +161,8 @@ export function AgentPassportHeader({ agent, skillCount }: AgentPassportHeaderPr
             Reputation — on-chain attestations coming soon
           </p>
           <p className="mt-1 font-mono text-[10px] text-on-surface-variant">
-            Execution count, endorsements, and trust score will appear here once the attestation module is indexed.
+            Execution count, endorsements, and trust score will appear here once
+            the attestation module is indexed.
           </p>
         </div>
       </div>
