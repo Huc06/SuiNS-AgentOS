@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-import type { AgentCardData } from '../dashboard/agent-card';
-import { AgentCard } from '../dashboard/agent-card';
-import { EmptyState, ErrorAlert, SkeletonCard } from '../ui/skeleton';
+import type { AgentCardData } from "../dashboard/agent-card";
+import { AgentCard } from "../dashboard/agent-card";
+import { EmptyState, ErrorAlert, SkeletonCard } from "../ui/skeleton";
 
-type FilterNetwork = 'all' | 'mainnet' | 'testnet';
+type FilterNetwork = "all" | "mainnet" | "testnet";
 
 const filterChips: { value: FilterNetwork; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'mainnet', label: 'Mainnet' },
-  { value: 'testnet', label: 'Testnet' },
+  { value: "all", label: "All" },
+  { value: "mainnet", label: "Mainnet" },
+  { value: "testnet", label: "Testnet" },
 ];
 
 /**
@@ -22,20 +22,23 @@ export function AgentExplorer() {
   const [agents, setAgents] = useState<AgentCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [networkFilter, setNetworkFilter] = useState<FilterNetwork>('all');
+  const [networkFilter, setNetworkFilter] = useState<FilterNetwork>("all");
   const [hasSkillsOnly, setHasSkillsOnly] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
 
   const loadAgents = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/agents', { cache: 'no-store' });
-      const data = (await res.json()) as { agents?: AgentCardData[]; error?: string };
+      const res = await fetch("/api/agents", { cache: "no-store" });
+      const data = (await res.json()) as {
+        agents?: AgentCardData[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? `Failed (${res.status})`);
       setAgents(data.agents ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load agents');
+      setError(e instanceof Error ? e.message : "Could not load agents");
       setAgents([]);
     } finally {
       setLoading(false);
@@ -48,8 +51,9 @@ export function AgentExplorer() {
 
   // Apply filters
   const filtered = agents.filter((agent) => {
-    if (networkFilter !== 'all' && agent.network !== networkFilter) return false;
-    if (hasSkillsOnly && agent.metric === 'No skills yet') return false;
+    if (networkFilter !== "all" && agent.network !== networkFilter)
+      return false;
+    if (hasSkillsOnly && agent.metric === "No skills yet") return false;
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -62,7 +66,7 @@ export function AgentExplorer() {
   });
 
   return (
-    <section className="mx-auto max-w-container px-margin py-16">
+    <section className="mx-auto max-w-container border-t-2 border-pure-black px-margin py-16">
       {/* Section header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -71,8 +75,8 @@ export function AgentExplorer() {
           </h2>
           <p className="mt-1 font-mono text-sm text-on-surface-variant">
             {agents.length > 0
-              ? `${agents.length} agent${agents.length === 1 ? '' : 's'} named on Sui`
-              : 'Discover AI agents on the Sui network'}
+              ? `${agents.length} agent${agents.length === 1 ? "" : "s"} named on Sui`
+              : "Discover AI agents on the Sui network"}
           </p>
         </div>
 
@@ -107,8 +111,8 @@ export function AgentExplorer() {
             onClick={() => setNetworkFilter(chip.value)}
             className={
               networkFilter === chip.value
-                ? 'border-2 border-electric-purple bg-electric-purple px-3 py-1 font-mono text-xs font-bold text-off-white'
-                : 'border-2 border-pure-black bg-white px-3 py-1 font-mono text-xs font-bold text-on-surface transition-colors hover:bg-surface-container'
+                ? "border-2 border-electric-purple bg-electric-purple px-3 py-1 font-mono text-xs font-bold text-off-white"
+                : "border-2 border-pure-black bg-white px-3 py-1 font-mono text-xs font-bold text-on-surface transition-colors hover:bg-surface-container"
             }
           >
             {chip.label}
@@ -119,8 +123,8 @@ export function AgentExplorer() {
           onClick={() => setHasSkillsOnly(!hasSkillsOnly)}
           className={
             hasSkillsOnly
-              ? 'border-2 border-electric-purple bg-electric-purple px-3 py-1 font-mono text-xs font-bold text-off-white'
-              : 'border-2 border-pure-black bg-white px-3 py-1 font-mono text-xs font-bold text-on-surface transition-colors hover:bg-surface-container'
+              ? "border-2 border-electric-purple bg-electric-purple px-3 py-1 font-mono text-xs font-bold text-off-white"
+              : "border-2 border-pure-black bg-white px-3 py-1 font-mono text-xs font-bold text-on-surface transition-colors hover:bg-surface-container"
           }
         >
           Has skills
