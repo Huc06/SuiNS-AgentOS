@@ -31,6 +31,14 @@ export type {
   SkillResolver,
 } from "./dependency-resolver.js";
 export { formatSkillSubname } from "./suins-utils.js";
+export {
+  resolveAgentAddress,
+  resolveAgentByName,
+  resolveSkillByName,
+  reverseResolve,
+  parseSubname,
+  isValidSuiNSName,
+} from "./suins-resolve.js";
 export { parseSkillMd, convertToAgentOSManifest } from "./skill-md-parser.js";
 export type { SkillMdMetadata } from "./skill-md-parser.js";
 export {

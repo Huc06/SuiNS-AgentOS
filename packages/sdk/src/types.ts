@@ -67,3 +67,52 @@ export interface Bucket {
   sealPolicyId: string;
   state: "pending_policy" | "active";
 }
+
+/** On-chain reputation data from AgentPassport. */
+export interface AgentReputation {
+  execCount: number;
+  score: number;
+  attestations: number;
+  isActive: boolean;
+}
+
+/** Result of buildExecuteSkillTx — separates build from sign+execute. */
+export interface BuildExecuteSkillTxResult {
+  descriptor: SkillDescriptor;
+  manifest: SkillManifest;
+  transaction: unknown; // Transaction from @mysten/sui/transactions
+  manifestHash: string;
+  verified: boolean;
+}
+
+/** Result of a delegation grant operation. */
+export interface DelegationResult {
+  /** Transaction digest (if executed on-chain). */
+  digest?: string;
+  /** DelegationCap object ID (if created on-chain). */
+  capId?: string;
+  /** Whether the delegation was persisted to local registry as fallback. */
+  registryFallback: boolean;
+}
+
+/** A sub-agent delegation record stored in the registry. */
+export interface RegistrySubAgentRecord {
+  childAgent: string;
+  childName: string;
+  allowedSkills: string[];
+  allowedCapabilities: string[];
+  spendLimit: string;
+  spent: string;
+  expiryMs: string;
+  revoked: boolean;
+  capId?: string;
+  createdAt: string;
+}
+
+/** Resolved name result with source information. */
+export interface ResolveNameResult {
+  address: string;
+  name: string;
+  kind: "agent" | "skill" | "unknown";
+  source: "onchain" | "registry";
+}
