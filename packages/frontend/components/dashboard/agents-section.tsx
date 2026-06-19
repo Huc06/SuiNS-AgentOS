@@ -1,17 +1,18 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-import type { AgentCardData } from './agent-card';
-import { AgentCard } from './agent-card';
-import { IconFilter, IconSearch } from './icons';
+import type { AgentCardData } from "./agent-card";
+import { AgentCard } from "./agent-card";
+import { IconFilter, IconSearch } from "./icons";
+import { EmptyState, ErrorAlert, SkeletonCard } from "../ui/skeleton";
 
 type AgentsSectionProps = {
   refreshKey?: number;
 };
 
 export function AgentsSection({ refreshKey = 0 }: AgentsSectionProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [agents, setAgents] = useState<AgentCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -20,12 +21,15 @@ export function AgentsSection({ refreshKey = 0 }: AgentsSectionProps) {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch('/api/agents', { cache: 'no-store' });
-      const data = (await res.json()) as { agents?: AgentCardData[]; error?: string };
+      const res = await fetch("/api/agents", { cache: "no-store" });
+      const data = (await res.json()) as {
+        agents?: AgentCardData[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? `Failed (${res.status})`);
       setAgents(data.agents ?? []);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not load agents');
+      setLoadError(e instanceof Error ? e.message : "Could not load agents");
       setAgents([]);
     } finally {
       setLoading(false);
@@ -68,22 +72,32 @@ export function AgentsSection({ refreshKey = 0 }: AgentsSectionProps) {
         </div>
       </div>
 
-      {loadError && (
-        <p className="font-mono text-sm text-error">{loadError}</p>
-      )}
+      {loadError && <ErrorAlert message={loadError} onRetry={loadAgents} />}
 
       {loading ? (
-        <p className="font-mono text-sm text-on-surface-variant">Loading agents…</p>
+        <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 lg:grid-cols-3">
           {filtered.length > 0 ? (
-            filtered.map((agent) => <AgentCard key={agent.slug} agent={agent} />)
+            filtered.map((agent) => (
+              <AgentCard key={agent.slug} agent={agent} />
+            ))
+          ) : agents.length === 0 ? (
+            <EmptyState
+              title="No agents yet"
+              description="Create your first AI agent with a .sui name and on-chain passport."
+              actionLabel="Create Agent"
+              actionHref="/create"
+            />
           ) : (
-            <p className="col-span-full font-mono text-sm text-on-surface-variant">
-              {agents.length === 0
-                ? 'No agents yet. Create one with New Agent.'
-                : 'No agents match your search.'}
-            </p>
+            <EmptyState
+              title="No agents match your search"
+              description="Try a different search term."
+            />
           )}
         </div>
       )}

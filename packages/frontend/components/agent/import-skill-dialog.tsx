@@ -281,9 +281,23 @@ export function ImportSkillDialog({ agentName }: ImportSkillDialogProps) {
                   )}
 
                   {catalog === null ? (
-                    <p className="font-mono text-sm text-on-surface-variant">
-                      Loading catalog…
-                    </p>
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                          key={i}
+                          aria-hidden="true"
+                          className="animate-pulse border-2 border-pure-black bg-white p-4 motion-reduce:animate-none"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="h-8 w-8 bg-surface-container" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-4 w-1/2 bg-surface-container" />
+                              <div className="h-3 w-1/4 bg-surface-container" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : filtered.length === 0 ? (
                     <p className="border-2 border-dashed border-pure-black py-8 text-center font-mono text-sm text-on-surface-variant">
                       No skills match your search.
