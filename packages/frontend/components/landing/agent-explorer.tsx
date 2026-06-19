@@ -24,7 +24,6 @@ export function AgentExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [networkFilter, setNetworkFilter] = useState<FilterNetwork>("all");
   const [hasSkillsOnly, setHasSkillsOnly] = useState(false);
-  const [search, setSearch] = useState("");
 
   const loadAgents = useCallback(async () => {
     setLoading(true);
@@ -54,52 +53,24 @@ export function AgentExplorer() {
     if (networkFilter !== "all" && agent.network !== networkFilter)
       return false;
     if (hasSkillsOnly && agent.metric === "No skills yet") return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (
-        !agent.displayName.toLowerCase().includes(q) &&
-        !agent.slug.toLowerCase().includes(q)
-      )
-        return false;
-    }
     return true;
   });
 
   return (
     <section className="mx-auto max-w-container border-t-2 border-pure-black px-margin py-16">
       {/* Section header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-display text-3xl font-bold text-on-surface">
-            Live Agent Explorer
-          </h2>
-          <p className="mt-1 font-mono text-sm text-on-surface-variant">
-            {agents.length > 0
-              ? `${agents.length} agent${agents.length === 1 ? "" : "s"} named on Sui`
-              : "Discover AI agents on the Sui network"}
-          </p>
+      <div className="mb-8">
+        <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">
+          Public Directory
         </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:w-64">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter agents…"
-            className="w-full border-2 border-pure-black bg-white px-3 py-2 pl-9 font-mono text-sm outline-none neo-shadow focus:neo-shadow-lg"
-          />
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M16.5 16.5L21 21" strokeLinecap="square" />
-          </svg>
-        </div>
+        <h2 className="font-display text-3xl font-bold text-on-surface">
+          Agents Named on Sui
+        </h2>
+        <p className="mt-1 font-mono text-sm text-on-surface-variant">
+          {agents.length > 0
+            ? `${agents.length} agent${agents.length === 1 ? "" : "s"} with .sui identities — resolve by name, execute skills, delegate.`
+            : "Discover AI agents with on-chain passports on the Sui network."}
+        </p>
       </div>
 
       {/* Filter chips */}
