@@ -1,0 +1,7 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://fullnode.testnet.sui.io:443",
+  "packageId": "0x7febcab96302fc0917b3f0443e2b29779ca8fc802a6407edfa857604fa6ad9ef",
+  "registryPath": ".agentos/registry.json",
+  "dashboardUrl": "https://sui-ns-agent-os-frontend.vercel.app"
+}
