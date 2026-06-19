@@ -5,6 +5,7 @@ import type {
 
 import type { AgentCardData } from "../components/dashboard/agent-card";
 import type { AgentSkillRow } from "./agent-types";
+import { computeAgentReputation, isAgentVerified } from "./reputation";
 
 export function shortObjectId(id: string): string {
   if (id.length <= 12) return id;
@@ -15,6 +16,16 @@ export function registryAgentToCard(
   agent: RegistryAgentRecord,
   skillCount: number,
 ): AgentCardData {
+  const verified = isAgentVerified(agent);
+  const reputation = computeAgentReputation({
+    skillCount,
+    resolutions: 0, // TODO: wire real resolution count when indexed
+    status: agent.status,
+    hasOnchainPassport: Boolean(
+      agent.passportId && !agent.passportId.startsWith("0x00"),
+    ),
+  });
+
   return {
     slug: agent.slug,
     displayName: agent.suinsName.startsWith("@")
@@ -26,8 +37,11 @@ export function registryAgentToCard(
       skillCount === 0
         ? "No skills yet"
         : `${skillCount} skill${skillCount === 1 ? "" : "s"}`,
-    trend: "flat",
+    trend: skillCount >= 2 ? "up" : "flat",
     icon: "package",
+    verified,
+    reputationScore: reputation.score,
+    reputationTier: reputation.tier,
   };
 }
 
