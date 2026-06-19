@@ -12,7 +12,7 @@ type NavItem =
   | { href: string; label: string; external: true };
 
 const nav: NavItem[] = [
-  { href: "/", label: "Explore" },
+  { href: "/explore", label: "Explore" },
   { href: "/create", label: "Dashboard" },
   {
     href: "https://github.com/Huc06/SuiNS-AgentOS",
