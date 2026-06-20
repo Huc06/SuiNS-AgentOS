@@ -232,6 +232,201 @@ async function main() {
     }
   }
 
+  // ===== Seed Skills =====
+  console.log(`\n📦 Seeding skills...`);
+
+  const DEMO_SKILLS = [
+    {
+      agent: "alpha",
+      skillId: "web-search",
+      name: "web-search",
+      version: "v1.0.0",
+    },
+    {
+      agent: "alpha",
+      skillId: "delegate-policy",
+      name: "delegate-policy",
+      version: "v1.0.0",
+    },
+    {
+      agent: "beta-agent",
+      skillId: "sandbox-tool",
+      name: "sandbox-tool",
+      version: "v0.9.0",
+    },
+    {
+      agent: "walrus-bot",
+      skillId: "walrus-read",
+      name: "walrus-read",
+      version: "v2.0.0",
+    },
+  ];
+
+  const WALRUS_PUBLISHER = "https://publisher.walrus-testnet.walrus.space";
+  const WALRUS_AGGREGATOR = "https://aggregator.walrus-testnet.walrus.space";
+
+  for (const skill of DEMO_SKILLS) {
+    const existingSkill = registry.skills.find(
+      (s) =>
+        (s as { skillId?: string; agentSlug?: string }).skillId ===
+          skill.skillId &&
+        (s as { agentSlug?: string }).agentSlug === skill.agent,
+    );
+
+    // Skip if already has real blob (not placeholder)
+    if (existingSkill) {
+      const blob =
+        (existingSkill as { walrusManifestBlob?: string }).walrusManifestBlob ??
+        "";
+      if (!blob.startsWith("walrus://")) {
+        console.log(`   ⏭  ${skill.agent}/${skill.skillId} — already seeded`);
+        continue;
+      }
+    }
+
+    // Build a real manifest
+    const manifest = {
+      name: skill.skillId,
+      version: skill.version.replace("v", ""),
+      publisher: `@${skill.agent}`,
+      manifestType: "sui-agent-skill/v1",
+      mcp: {
+        compatible: true,
+        tools: [{ name: skill.skillId, description: `${skill.name} skill` }],
+      },
+      sui: {
+        movePackage: packageId || "0x0",
+        entry: "main::execute",
+        policyRequired: [],
+      },
+      dependencies: [],
+    };
+
+    const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2));
+    const { createHash } = await import("node:crypto");
+    const manifestHash = `0x${createHash("sha256").update(manifestBytes).digest("hex")}`;
+
+    // Upload manifest to Walrus
+    let blobId = `walrus://blob/${skill.skillId}-${skill.version}`;
+    try {
+      const uploadRes = await fetch(`${WALRUS_PUBLISHER}/v1/blobs`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: manifestBytes,
+      });
+      if (uploadRes.ok) {
+        const uploadData = (await uploadRes.json()) as {
+          newlyCreated?: { blobObject?: { blobId?: string } };
+          alreadyCertified?: { blobId?: string };
+        };
+        blobId =
+          uploadData.newlyCreated?.blobObject?.blobId ??
+          uploadData.alreadyCertified?.blobId ??
+          blobId;
+        console.log(
+          `   ✓  ${skill.agent}/${skill.skillId} — uploaded to Walrus: ${blobId.slice(0, 16)}…`,
+        );
+      } else {
+        console.log(
+          `   ⚠  ${skill.agent}/${skill.skillId} — Walrus upload failed (${uploadRes.status}), using placeholder`,
+        );
+      }
+    } catch (err) {
+      console.log(
+        `   ⚠  ${skill.agent}/${skill.skillId} — Walrus unreachable, using placeholder`,
+      );
+    }
+
+    // Mint SkillDescriptor on-chain
+    let objectId = `0x${createHash("sha256")
+      .update(skill.agent + skill.skillId)
+      .digest("hex")
+      .slice(0, 64)}`;
+    if (hasPrivateKey && packageId) {
+      try {
+        const skillIdBytes = Array.from(Buffer.from(skill.skillId))
+          .map((b) => `${b}u8`)
+          .join(",");
+        const blobBytes = Array.from(Buffer.from(blobId))
+          .map((b) => `${b}u8`)
+          .join(",");
+        const hashBytes = Array.from(Buffer.from(manifestHash))
+          .map((b) => `${b}u8`)
+          .join(",");
+        const mvrBytes = Array.from(
+          Buffer.from(`@${skill.agent}/${skill.skillId}`),
+        )
+          .map((b) => `${b}u8`)
+          .join(",");
+        const versionBytes = Array.from(Buffer.from(skill.version))
+          .map((b) => `${b}u8`)
+          .join(",");
+        const subnameBytes = Array.from(
+          Buffer.from(`${skill.skillId}.${skill.agent}.sui`),
+        )
+          .map((b) => `${b}u8`)
+          .join(",");
+
+        const cmd = [
+          "sui client ptb",
+          `--move-call ${packageId}::skill_descriptor::create "vector[${skillIdBytes}]" "vector[${blobBytes}]" "vector[${hashBytes}]" "vector[${mvrBytes}]" "vector[${versionBytes}]" "vector[${subnameBytes}]" "vector[]"`,
+          "--assign descriptor",
+          `--transfer-objects "[descriptor]" @${registry.agents.find((a) => a.slug === skill.agent)?.runtimeWallet || "0x0"}`,
+          "--gas-budget 50000000",
+          "--json",
+        ].join(" ");
+
+        const result = execSync(cmd, { encoding: "utf8", timeout: 30000 });
+        const parsed = JSON.parse(result);
+        const created = parsed.objectChanges?.find(
+          (c: { type: string; objectType?: string; objectId?: string }) =>
+            c.type === "created" && c.objectType?.includes("SkillDescriptor"),
+        );
+        if (created?.objectId) {
+          objectId = created.objectId;
+          console.log(
+            `   ✓  ${skill.agent}/${skill.skillId} — on-chain: ${objectId.slice(0, 10)}…`,
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `   ⚠  ${skill.agent}/${skill.skillId} — on-chain mint failed, using hash ID`,
+        );
+      }
+    }
+
+    // Update registry
+    const skillRecord = {
+      agentSlug: skill.agent,
+      skillId: skill.skillId,
+      name: skill.name,
+      mvrPackage: `@${skill.agent}/${skill.skillId}`,
+      version: skill.version,
+      walrusManifestBlob: blobId,
+      manifestHash,
+      objectId,
+      network,
+      status: "active",
+      resolutions: "0",
+      lastUpdated: new Date().toISOString(),
+      icon: "token",
+      source: "custom",
+      suinsName: `${skill.skillId}.${skill.agent}.sui`,
+    };
+
+    const existIdx = registry.skills.findIndex(
+      (s) =>
+        (s as { skillId?: string; agentSlug?: string }).skillId ===
+          skill.skillId &&
+        (s as { agentSlug?: string }).agentSlug === skill.agent,
+    );
+    if (existIdx >= 0) {
+      registry.skills[existIdx] = skillRecord;
+    } else {
+      registry.skills.push(skillRecord);
+    }
+  }
+
   // Save and copy to frontend seed
   saveRegistry(registry);
   const frontendSeed = join(ROOT, "packages", "frontend", "registry.seed.json");
