@@ -243,6 +243,7 @@ export default function WorkflowEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(false);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -261,17 +262,27 @@ export default function WorkflowEditorPage() {
 
   return (
     <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
- {/* Top nav */}
- <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
- <div className="flex items-center gap-3">
- <Link href="/create" className="font-mono text-sm text-on-surface-variant hover:text-on-surface">{"← Workflows"}</Link>
- <span className="text-on-surface-variant/40">{"/"}</span>
- <span className="font-display text-lg font-bold text-on-surface">{"@"}{slug}</span>
- </div>
- <div className="flex-1 text-center">
- <span className="font-mono text-sm text-on-surface-variant">{"▶ Runs"}</span>
- </div>
- </div>
+      {/* Top nav */}
+      <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/create"
+            className="font-mono text-sm text-on-surface-variant hover:text-on-surface"
+          >
+            {"← Workflows"}
+          </Link>
+          <span className="text-on-surface-variant/40">{"/"}</span>
+          <span className="font-display text-lg font-bold text-on-surface">
+            {"@"}
+            {slug}
+          </span>
+        </div>
+        <div className="flex-1 text-center">
+          <span className="font-mono text-sm text-on-surface-variant">
+            {"▶ Runs"}
+          </span>
+        </div>
+      </div>
 
       {/* Canvas */}
       <ReactFlow
@@ -298,20 +309,231 @@ export default function WorkflowEditorPage() {
         />
       </ReactFlow>
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-4">
-        <button
-          type="button"
-          className="border-2 border-pure-black bg-white px-4 py-2 font-mono text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-        >
-          Cannot Execute
-        </button>
-        <button
-          type="button"
-          className="border-2 border-pure-black bg-electric-purple px-6 py-2 font-mono text-xs font-bold text-white neo-shadow hover:bg-electric-purple/90"
-        >
-          Run Workflow
-        </button>
+      {/* Bottom metrics toggle */}
+      <div className="absolute bottom-0 left-0 right-0 z-20">
+        {/* Toggle button — pill */}
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowMetrics(!showMetrics)}
+            className="relative -top-3 flex h-6 w-16 items-center justify-center rounded-full bg-electric-purple text-white shadow-lg ring-2 ring-off-white transition-colors hover:bg-electric-purple/90"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${showMetrics ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Metrics panel — ~half screen */}
+        {showMetrics && (
+          <div className="h-[45vh] overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4">
+            <div className="grid h-full grid-cols-3 gap-4">
+              {/* Network stats + TX/SEC */}
+              <div className="flex flex-col gap-4">
+                <div className="border border-pure-black/20 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="font-mono text-xs font-bold text-white">
+                      NETWORK (LIVE)
+                    </h4>
+                    <span className="flex items-center gap-1 font-mono text-[10px] text-green-700">
+                      ● LIVE
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="font-mono text-[10px] text-on-surface-variant">
+                        NETWORK TPS
+                      </p>
+                      <p className="font-mono text-lg font-bold text-white">
+                        0
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] text-on-surface-variant">
+                        TOTAL ACTIONS
+                      </p>
+                      <p className="font-mono text-lg font-bold text-white">
+                        3,771,710
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] text-on-surface-variant">
+                        ACTIVE TUNNELS
+                      </p>
+                      <p className="font-mono text-lg font-bold text-white">
+                        289
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] text-on-surface-variant">
+                        SETTLED TUNNELS
+                      </p>
+                      <p className="font-mono text-lg font-bold text-white">
+                        1,804
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="border border-pure-black/20 bg-white p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="font-mono text-xs font-bold text-white">
+                      TRANSACTIONS / SEC
+                    </h4>
+                    <span className="flex items-center gap-1 font-mono text-[10px] text-green-700">
+                      ● LIVE
+                    </span>
+                  </div>
+                  <p className="font-mono text-sm text-on-surface-variant">
+                    <span className="text-lg font-bold text-white">0</span>{" "}
+                    tx/sec · live
+                  </p>
+                </div>
+              </div>
+
+              {/* Live transactions with table header */}
+              <div className="border border-pure-black/20 bg-white p-4">
+                <h4 className="mb-2 font-mono text-xs font-bold text-white">
+                  LIVE TRANSACTIONS
+                </h4>
+                <div className="mb-3 flex gap-2">
+                  <span className="border border-electric-purple bg-electric-purple/20 px-2 py-0.5 font-mono text-[10px] font-bold text-electric-purple">
+                    All
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Walrus
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Harbor
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Sui PTB
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Delegate
+                  </span>
+                </div>
+                {/* Table header */}
+                <div className="mb-1 flex items-center justify-between border-b border-pure-black/20 pb-1 font-mono text-[9px] font-bold uppercase text-on-surface-variant">
+                  <span className="w-20">Digest</span>
+                  <span className="w-16">Address</span>
+                  <span className="w-14">Time</span>
+                  <span className="w-12">Type</span>
+                  <span className="w-12">Status</span>
+                  <span className="w-16 text-right">Amount</span>
+                </div>
+                {/* Rows */}
+                <div className="space-y-1.5">
+                  {[
+                    {
+                      digest: "5avtT8...ef6K",
+                      addr: "—",
+                      time: "22:52:22",
+                      type: "Store",
+                      status: "Opened",
+                      amount: "—",
+                    },
+                    {
+                      digest: "yXLUjx...mm9V",
+                      addr: "—",
+                      time: "22:31:58",
+                      type: "Exec",
+                      status: "Settled",
+                      amount: "0.01 SUI",
+                    },
+                    {
+                      digest: "BRnV7p...ZzKH",
+                      addr: "—",
+                      time: "22:31:58",
+                      type: "Store",
+                      status: "Opened",
+                      amount: "—",
+                    },
+                    {
+                      digest: "9osc3z...He9B",
+                      addr: "—",
+                      time: "22:31:57",
+                      type: "Seal",
+                      status: "Opened",
+                      amount: "—",
+                    },
+                    {
+                      digest: "4hX1eN...1qkC",
+                      addr: "—",
+                      time: "22:31:35",
+                      type: "Exec",
+                      status: "Settled",
+                      amount: "0.01 SUI",
+                    },
+                  ].map((tx) => (
+                    <div
+                      key={tx.digest}
+                      className="flex items-center justify-between font-mono text-[10px]"
+                    >
+                      <span className="w-20 text-on-surface-variant">{tx.digest}</span>
+                      <span className="w-16 text-on-surface-variant">{tx.addr}</span>
+                      <span className="w-14 text-on-surface-variant">{tx.time}</span>
+                      <span className="w-12 text-on-surface-variant">{tx.type}</span>
+                      <span
+                        className={`w-12 ${tx.status === "Settled" ? "text-green-700" : "text-electric-purple"}`}
+                      >
+                        {tx.status}
+                      </span>
+                      <span
+                        className={`w-16 text-right ${tx.amount !== "—" ? "text-green-700" : "text-on-surface-variant"}`}
+                      >
+                        {tx.amount}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* My activity with table header */}
+              <div className="border border-pure-black/20 bg-white p-4">
+                <h4 className="mb-2 font-mono text-xs font-bold text-white">
+                  MY ACTIVITY
+                </h4>
+                <div className="mb-3 flex gap-2">
+                  <span className="border border-electric-purple bg-electric-purple/20 px-2 py-0.5 font-mono text-[10px] font-bold text-electric-purple">
+                    All
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Walrus
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Harbor
+                  </span>
+                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                    Sui PTB
+                  </span>
+                </div>
+                {/* Table header */}
+                <div className="mb-1 flex items-center justify-between border-b border-pure-black/20 pb-1 font-mono text-[9px] font-bold uppercase text-on-surface-variant">
+                  <span className="w-14">Time</span>
+                  <span className="w-12">Type</span>
+                  <span className="w-12">Status</span>
+                  <span className="w-16 text-right">Amount</span>
+                </div>
+                <p className="mt-4 text-center font-mono text-xs italic text-on-surface-variant">
+                  No activity yet.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Action buttons removed */}
       </div>
 
       {/* + button */}
@@ -372,7 +594,7 @@ export default function WorkflowEditorPage() {
                 {
                   category: "security",
                   tools: [{ label: "Harbor", subtitle: "Seal encrypt" }],
-                  color: "text-blue-400",
+                  color: "text-electric-purple",
                   count: 1,
                 },
                 {
