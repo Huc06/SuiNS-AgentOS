@@ -141,14 +141,14 @@ function WorkflowCard({ agent }: { agent: AgentCardData }) {
   return (
     <a
       href={`/create/${agent.slug}`}
-      className="block border border-gray-200 bg-[#f8f8fa] p-5 transition-colors hover:border-electric-purple hover:bg-electric-purple/5"
+      className="group block border-[3px] border-pure-black bg-white p-8 neo-shadow transition-all hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0_0_#6800FF]"
     >
-      <div className="mb-3 flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center bg-gray-200 font-mono text-sm font-bold text-on-surface-variant">
+      <div className="mb-4 flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center border-2 border-electric-purple bg-electric-purple/10 font-mono text-lg font-bold text-electric-purple">
           {agent.slug.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-sm font-bold text-on-surface">
+          <p className="truncate font-display text-xl font-bold text-on-surface group-hover:text-electric-purple">
             {agent.displayName}
           </p>
           <p className="font-mono text-[10px] text-on-surface-variant">
@@ -158,7 +158,7 @@ function WorkflowCard({ agent }: { agent: AgentCardData }) {
       </div>
 
       {/* Stats */}
-      <div className="flex gap-6 border-t border-gray-200 pt-3">
+      <div className="flex gap-6 border-t-2 border-pure-black/10 pt-3">
         <div>
           <p className="font-mono text-[10px] uppercase text-on-surface-variant">
             Skills
@@ -179,7 +179,9 @@ function WorkflowCard({ agent }: { agent: AgentCardData }) {
           <p className="font-mono text-[10px] uppercase text-on-surface-variant">
             Status
           </p>
-          <p className="font-mono text-sm text-on-surface-variant">—</p>
+          <p className="font-mono text-sm font-bold text-on-surface">
+            {agent.trend === "up" ? "Active" : "—"}
+          </p>
         </div>
       </div>
     </a>

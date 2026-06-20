@@ -16,14 +16,14 @@ export function AppSidebar() {
   return (
     <aside className="fixed left-0 top-0 z-50 flex h-screen w-16 flex-col border-r-2 border-pure-black bg-off-white py-4 md:w-56">
       {/* Header */}
-      <div className="border-b-2 border-pure-black px-4 py-3">
+      <div className="px-4 py-3">
         <Link href="/" className="font-mono text-sm font-bold text-on-surface">
           AGENTOS
         </Link>
       </div>
 
       {/* Platform section */}
-      <div className="border-b border-pure-black/10 px-4 py-2">
+      <div className="px-4 py-2">
         <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
           Platform
         </p>
@@ -42,7 +42,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Resources section */}
-      <div className="border-b border-pure-black/10 border-t border-t-pure-black/10 px-4 py-2">
+      <div className="px-4 py-2">
         <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
           Resources
         </p>
@@ -63,7 +63,7 @@ export function AppSidebar() {
       <div className="flex-1" />
 
       {/* Bottom */}
-      <div className="space-y-1 border-t-2 border-pure-black p-2">
+      <div className="space-y-1 p-2">
         <div className="px-3 py-2 font-mono text-[10px] text-on-surface-variant">
           Open Source
         </div>

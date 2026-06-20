@@ -65,44 +65,32 @@ function SkillNode({
       />
 
       {/* Action toolbar — shows on hover */}
-      <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            alert(`Run node: ${data.label}`);
-          }}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-          title="Run"
-        >
-          ▶
-        </button>
+      <div className="absolute -top-10 left-1/2 flex -translate-x-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
           onClick={handleDuplicate}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-          title="Duplicate"
+          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+          title="Edit"
         >
-          ✎
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path d="M11 4H4v16h16v-7" />
+            <path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
         </button>
         <button
           type="button"
           onClick={handleDelete}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
           title="Delete"
         >
-          🗑
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            alert(`Settings: ${data.label}`);
-          }}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-          title="Settings"
-        >
-          ⚙
+          ×
         </button>
       </div>
 
@@ -273,27 +261,17 @@ export default function WorkflowEditorPage() {
 
   return (
     <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
-      {/* Top nav */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-pure-black/10 bg-off-white/95 px-4 py-2 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/create"
-            className="font-mono text-xs text-on-surface-variant hover:text-on-surface"
-          >
-            ← Workflows
-          </Link>
-          <span className="text-on-surface-variant/40">/</span>
-          <span className="font-mono text-xs font-bold text-on-surface">
-            @{slug}
-          </span>
-          <span className="font-mono text-[10px] text-on-surface-variant">
-            ▶ Runs
-          </span>
-        </div>
-        <span className="font-mono text-[10px] text-on-surface-variant">
-          0/1,000
-        </span>
-      </div>
+ {/* Top nav */}
+ <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
+ <div className="flex items-center gap-3">
+ <Link href="/create" className="font-mono text-sm text-on-surface-variant hover:text-on-surface">{"← Workflows"}</Link>
+ <span className="text-on-surface-variant/40">{"/"}</span>
+ <span className="font-display text-lg font-bold text-on-surface">{"@"}{slug}</span>
+ </div>
+ <div className="flex-1 text-center">
+ <span className="font-mono text-sm text-on-surface-variant">{"▶ Runs"}</span>
+ </div>
+ </div>
 
       {/* Canvas */}
       <ReactFlow
