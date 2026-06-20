@@ -26,6 +26,70 @@ fun test_create_passport() {
 }
 
 #[test]
+fun test_memory_namespace_defaults_to_suins_name() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    {
+        let passport = agent_passport::create(
+            b"alpha-agent",
+            @0xB,
+            scenario.ctx(),
+        );
+        // The memory namespace is anchored to the .sui name on create.
+        assert!(agent_passport::memory_namespace(&passport) == b"alpha-agent", 0);
+        destroy(passport);
+    };
+    scenario.end();
+}
+
+#[test]
+fun test_set_memory_namespace_by_owner() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    {
+        let mut passport = agent_passport::create(
+            b"alpha-agent",
+            @0xB,
+            scenario.ctx(),
+        );
+
+        agent_passport::set_memory_namespace(
+            &mut passport,
+            b"memwal://alpha",
+            scenario.ctx(),
+        );
+        assert!(agent_passport::memory_namespace(&passport) == b"memwal://alpha", 0);
+
+        destroy(passport);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = agent_passport::E_NOT_OWNER)]
+fun test_set_memory_namespace_non_owner_aborts() {
+    let owner = @0xA;
+    let attacker = @0xD;
+    let mut scenario = test_scenario::begin(owner);
+
+    let mut passport = agent_passport::create(
+        b"alpha-agent",
+        @0xB,
+        scenario.ctx(),
+    );
+
+    scenario.next_tx(attacker);
+    agent_passport::set_memory_namespace(
+        &mut passport,
+        b"memwal://hijack",
+        scenario.ctx(),
+    );
+
+    destroy(passport);
+    scenario.end();
+}
+
+#[test]
 fun test_revoke_passport() {
     let owner = @0xA;
     let mut scenario = test_scenario::begin(owner);

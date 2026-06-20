@@ -9,6 +9,13 @@ export interface RegistryAgentRecord {
   createdAt: string;
   /** Optional human-readable summary (registry-only until on-chain metadata). */
   description?: string;
+  /**
+   * Walrus-memory namespaces this agent has written to (deduped, most-recent
+   * first). Populated by workflow `memory` (remember) runs so the canvas can
+   * offer them in the namespace picker. Memwal has no list-namespaces endpoint,
+   * so this registry-side ledger is the only source for known namespaces.
+   */
+  memoryNamespaces?: string[];
   /** Sub-agent delegations granted by this agent. */
   delegations?: Array<{
     childAgent: string;

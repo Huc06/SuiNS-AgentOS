@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getRegistry } from '../../../lib/registry-server';
+import { getRegistryStore } from '../../../lib/registry-server';
 
 /**
  * GET /api/delegations?agent=<slug>
@@ -18,8 +18,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ delegations: [] });
   }
 
-  const registry = getRegistry();
-  const delegations = registry.listDelegations(agentSlug);
+  const registry = getRegistryStore();
+  const delegations = await registry.listDelegations(agentSlug);
   return NextResponse.json({ delegations });
 }
 
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const registry = getRegistry();
-    registry.addDelegation(body.agentSlug, body.delegation);
+    const registry = getRegistryStore();
+    await registry.addDelegation(body.agentSlug, body.delegation);
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

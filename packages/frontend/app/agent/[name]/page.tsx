@@ -12,7 +12,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
   const label = data?.card.displayName ?? `@${name}`;
   return {
     title: `${label} — Agent Portfolio | SuiNS AgentOS`,
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function AgentPortfolioPage({ params }: Props) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
 
   if (!data) {
     return <AgentNotFound name={name} />;

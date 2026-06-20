@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getRegistry } from '../../../../lib/registry-server';
+import { getRegistryStore } from '../../../../lib/registry-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +14,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const registry = getRegistry();
-    const removed = registry.removeAgent(key);
+    const registry = getRegistryStore();
+    const removed = await registry.removeAgent(key);
     return NextResponse.json({
       removed: {
         slug: removed.slug,

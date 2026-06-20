@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getRegistry } from "../../../lib/registry-server";
+import { getRegistryStore } from "../../../lib/registry-server";
 import {
   createSuinsClient,
   normalizeSuinsInput,
@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
 
   try {
     // 1. Try local registry first
-    const registry = getRegistry();
-    const resolved = registry.resolveAgent(name);
+    const registry = getRegistryStore();
+    const resolved = await registry.resolveAgent(name);
     if (resolved) {
       return NextResponse.json({ ...resolved, source: "registry" });
     }

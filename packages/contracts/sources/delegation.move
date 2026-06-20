@@ -11,6 +11,10 @@ const E_REVOKED: u64 = 3;
 const E_EXPIRED: u64 = 4;
 const E_OVER_SPEND_LIMIT: u64 = 5;
 const E_SKILL_NOT_ALLOWED: u64 = 6;
+/// The transaction sender is not the cap's bound `child_agent`.
+const E_NOT_CHILD_AGENT: u64 = 7;
+/// The supplied passport is not the cap's `parent_passport`.
+const E_PASSPORT_MISMATCH: u64 = 8;
 
 // ===== Objects =====
 
@@ -120,9 +124,13 @@ public fun assert_valid(
     };
 }
 
-/// Consume spend from the delegation cap. Aborts if spent + amount > spend_limit.
-public fun consume(cap: &mut DelegationCap, amount: u64) {
+/// Consume spend from the delegation cap. The caller (`ctx.sender()`) MUST be
+/// the cap's bound `child_agent` (FIX-2: previously this had no caller auth, so
+/// anyone holding a reference could draw down the budget). Aborts if revoked,
+/// if the caller is not the child, or if spent + amount > spend_limit.
+public fun consume(cap: &mut DelegationCap, amount: u64, ctx: &TxContext) {
     assert!(!cap.revoked, E_REVOKED);
+    assert!(cap.child_agent == ctx.sender(), E_NOT_CHILD_AGENT);
     assert!(cap.spent + amount <= cap.spend_limit, E_OVER_SPEND_LIMIT);
     cap.spent = cap.spent + amount;
 
@@ -131,6 +139,30 @@ public fun consume(cap: &mut DelegationCap, amount: u64) {
         amount,
         new_spent: cap.spent,
     });
+}
+
+/// Record a sub-agent execution against the cap's `parent_passport`, authorized
+/// by a `DelegationCap` instead of passport ownership (FIX-1).
+///
+/// The transaction sender MUST be the cap's bound `child_agent` (the delegated
+/// runtime), the cap must not be revoked or expired (mirrors `assert_valid`'s
+/// liveness checks), and `passport` MUST be the cap's `parent_passport`. This
+/// lets a delegated runtime atomically bump a passport's `exec_count` inside an
+/// import/run PTB without holding owner or `runtime_wallet` authority — the case
+/// where the existing `agent_passport::record_execution` (sender == owner ||
+/// runtime_wallet) would abort and unwind the whole atomic chain.
+public fun record_subagent_execution(
+    passport: &mut agentos::agent_passport::AgentPassport,
+    cap: &DelegationCap,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    assert!(!cap.revoked, E_REVOKED);
+    assert!(clock.timestamp_ms() <= cap.expiry_ms, E_EXPIRED);
+    assert!(cap.child_agent == ctx.sender(), E_NOT_CHILD_AGENT);
+    assert!(cap.parent_passport == object::id(passport), E_PASSPORT_MISMATCH);
+
+    agentos::agent_passport::record_execution_internal(passport);
 }
 
 /// Revoke a delegation cap. Only the parent owner can revoke.
@@ -181,4 +213,10 @@ public fun expiry_ms(cap: &DelegationCap): u64 {
 
 public fun is_revoked(cap: &DelegationCap): bool {
     cap.revoked
+}
+
+/// True if `clock` is past the cap's expiry. Convenience for off-chain callers
+/// and the `record_subagent_execution` / `assert_valid` liveness checks.
+public fun is_expired(cap: &DelegationCap, clock: &Clock): bool {
+    clock.timestamp_ms() > cap.expiry_ms
 }

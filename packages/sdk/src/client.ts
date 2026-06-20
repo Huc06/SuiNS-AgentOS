@@ -4,6 +4,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import type { TransactionObjectArgument } from "@mysten/sui/transactions";
 
 import * as contracts from "./contracts/index.js";
+import { SUI_CLOCK_OBJECT_ID } from "./contracts/attestation.js";
 import { DependencyResolver } from "./dependency-resolver.js";
 import { HarborClient } from "./harbor.js";
 import type { HarborUploadResult } from "./harbor.js";
@@ -88,6 +89,80 @@ export interface ExecuteSkillOptions {
 export interface ExecuteSkillResult {
   digest: string;
   effects: unknown;
+}
+
+/**
+ * Reference to a Sui object passed as a skill param (by object id).
+ * Distinguished from a plain string id so the binder calls `tx.object(...)`
+ * instead of `tx.pure.string(...)`.
+ */
+export interface SkillParamObjectRef {
+  object: string;
+}
+
+/**
+ * Reference to a value returned by an earlier moveCall in the same PTB.
+ * `result` is the index of a prior command's return slot. Used to chain a
+ * returned object from one call into the skill entry call.
+ */
+export interface SkillParamResultRef {
+  /** Index into the PTB's prior move-call results. */
+  result: number;
+  /** Optional nested index when the prior command returns a tuple. */
+  index?: number;
+}
+
+/** A single skill execution parameter: a primitive, an object ref, or a chained result. */
+export type SkillParam =
+  | string
+  | number
+  | boolean
+  | SkillParamObjectRef
+  | SkillParamResultRef;
+
+function isObjectRef(value: unknown): value is SkillParamObjectRef {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as SkillParamObjectRef).object === "string"
+  );
+}
+
+function isResultRef(value: unknown): value is SkillParamResultRef {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as SkillParamResultRef).result === "number"
+  );
+}
+
+/**
+ * Options for {@link AgentOSClient.buildExecuteSkillTx}.
+ *
+ * When `delegationCapId` is present the builder injects the delegated-execution
+ * coordination calls around the skill entry (assert_valid → entry → consume →
+ * record_subagent_execution). Otherwise it behaves exactly as before.
+ */
+export interface BuildExecuteSkillTxOptions {
+  suinsName: string;
+  params?: Record<string, unknown>;
+  agentCapabilities?: string[];
+  /**
+   * DelegationCap object id. When set, the skill runs under a sub-agent
+   * delegation: the cap is validated, spend is consumed, and the execution is
+   * recorded against the cap's parent passport via `record_subagent_execution`.
+   */
+  delegationCapId?: string;
+  /**
+   * Spend (in MIST) to draw from the cap's budget for this execution.
+   * Required-effective default is 0 when omitted. Only used in the delegated path.
+   */
+  cost?: bigint | number;
+  /**
+   * The parent (subject) AgentPassport object id whose `exec_count` is bumped.
+   * Must equal `cap.parent_passport`. Only used in the delegated path.
+   */
+  subjectPassportId?: string;
 }
 
 export class AgentOSClient {
@@ -331,12 +406,85 @@ export class AgentOSClient {
     if (!this.#registry) {
       throw new Error("Not implemented: set registryPath");
     }
+    const network =
+      options.options?.network === "mainnet" ? "mainnet" : "testnet";
+
+    // 1. Mint the AgentPassport on-chain (best-effort).
+    //    When a packageId is configured and the client exposes execution,
+    //    this produces a real on-chain object id; otherwise we fall back to a
+    //    registry-only record (synthetic id) so dev mode still works.
+    let onChainPassportId: string | undefined;
+    if (this.#packageId) {
+      try {
+        const transaction = new Transaction();
+        const passport = transaction.add(
+          contracts.agentPassport.create({
+            suinsName: options.name,
+            runtimeWallet: options.runtimeWallet,
+            packageId: this.#packageId,
+          }),
+        );
+        const signerAddress = options.signer.toSuiAddress();
+        transaction.transferObjects([passport], signerAddress);
+        transaction.setSender(signerAddress);
+
+        const txBytes = await transaction.build({
+          client: this.#client as never,
+        });
+        const { signature } = await options.signer.signTransaction(txBytes);
+
+        const result = await (
+          this.#client as unknown as {
+            executeTransactionBlock?: (params: {
+              transactionBlock: Uint8Array;
+              signature: string;
+              options: { showEffects: boolean; showObjectChanges: boolean };
+            }) => Promise<{
+              digest: string;
+              effects?: { status?: { status: string; error?: string } };
+              objectChanges?: Array<{
+                type: string;
+                objectId: string;
+                objectType?: string;
+              }>;
+            }>;
+          }
+        ).executeTransactionBlock?.({
+          transactionBlock: txBytes,
+          signature,
+          options: { showEffects: true, showObjectChanges: true },
+        });
+
+        if (result?.effects?.status?.status === "failure") {
+          throw new Error(
+            `On-chain agent creation failed: ${result.effects.status.error ?? "transaction failed"}`,
+          );
+        }
+
+        const created = result?.objectChanges?.find(
+          (c) =>
+            c.type === "created" &&
+            c.objectType?.includes("agent_passport::AgentPassport"),
+        );
+        if (created) onChainPassportId = created.objectId;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.message.startsWith("On-chain agent creation failed:")
+        ) {
+          throw err;
+        }
+        // Execution unavailable (e.g. test/local mode) — fall back to registry only.
+      }
+    }
+
+    // 2. Persist to the local registry, recording the real passport id when minted.
     const record = this.#registry.registerAgent({
       suinsName: options.name,
       runtimeWallet: options.runtimeWallet,
-      network: options.options?.network === "mainnet" ? "mainnet" : "testnet",
+      network,
+      passportId: onChainPassportId,
     });
-    void options.signer;
     return passportFromRecord(record);
   }
 
@@ -565,18 +713,21 @@ export class AgentOSClient {
    *
    * Steps: resolve skill → download manifest → verify hash → check capabilities → build PTB.
    */
-  async buildExecuteSkillTx(options: {
-    suinsName: string;
-    params?: Record<string, unknown>;
-    agentCapabilities?: string[];
-  }): Promise<{
+  async buildExecuteSkillTx(options: BuildExecuteSkillTxOptions): Promise<{
     descriptor: SkillDescriptor;
     manifest: SkillManifest;
     transaction: Transaction;
     manifestHash: string;
     verified: boolean;
   }> {
-    const { suinsName, params, agentCapabilities } = options;
+    const {
+      suinsName,
+      params,
+      agentCapabilities,
+      delegationCapId,
+      cost,
+      subjectPassportId,
+    } = options;
 
     // 1. Resolve skill by SuiNS name
     const descriptor = await this.resolveSkill(suinsName);
@@ -627,33 +778,55 @@ export class AgentOSClient {
       manifest.sui.entry,
     );
 
-    const moveCallArgs: TransactionObjectArgument[] = [];
-    if (params) {
-      for (const value of Object.values(params)) {
-        if (typeof value === "string") {
-          moveCallArgs.push(
-            transaction.pure.string(
-              value,
-            ) as unknown as TransactionObjectArgument,
-          );
-        } else if (typeof value === "number") {
-          moveCallArgs.push(
-            transaction.pure.u64(value) as unknown as TransactionObjectArgument,
-          );
-        } else if (typeof value === "boolean") {
-          moveCallArgs.push(
-            transaction.pure.bool(
-              value,
-            ) as unknown as TransactionObjectArgument,
-          );
-        }
-      }
+    const moveCallArgs = this.#bindParams(transaction, params);
+
+    // 5a. Delegated path: validate the cap BEFORE the skill runs.
+    const cap = delegationCapId
+      ? transaction.object(delegationCapId)
+      : undefined;
+    if (cap) {
+      transaction.add(
+        contracts.delegation.assertValid({
+          cap,
+          clock: transaction.object(SUI_CLOCK_OBJECT_ID),
+          skillId: descriptor.skillId,
+          packageId: this.#packageId,
+        }),
+      );
     }
 
+    // 5b. The skill entry call.
     transaction.moveCall({
       target: `${packageAddr}::${module}::${func}`,
       arguments: moveCallArgs,
     });
+
+    // 5c. Delegated path: consume spend, then record the execution against the
+    // cap's parent passport (FIX-1) — in that order so a record never lands for
+    // an execution that blew the budget.
+    if (cap) {
+      transaction.add(
+        contracts.delegation.consume({
+          cap,
+          amount: BigInt(cost ?? 0),
+          packageId: this.#packageId,
+        }),
+      );
+
+      if (!subjectPassportId) {
+        throw new Error(
+          "buildExecuteSkillTx: subjectPassportId (the cap's parent passport object id) is required when delegationCapId is set",
+        );
+      }
+      transaction.add(
+        contracts.delegation.recordSubagentExecution({
+          subjectPassport: transaction.object(subjectPassportId),
+          cap,
+          clock: transaction.object(SUI_CLOCK_OBJECT_ID),
+          packageId: this.#packageId,
+        }),
+      );
+    }
 
     return {
       descriptor,
@@ -706,28 +879,7 @@ export class AgentOSClient {
     );
 
     // Build arguments from params if provided
-    const moveCallArgs: TransactionObjectArgument[] = [];
-    if (params) {
-      for (const value of Object.values(params)) {
-        if (typeof value === "string") {
-          moveCallArgs.push(
-            transaction.pure.string(
-              value,
-            ) as unknown as TransactionObjectArgument,
-          );
-        } else if (typeof value === "number") {
-          moveCallArgs.push(
-            transaction.pure.u64(value) as unknown as TransactionObjectArgument,
-          );
-        } else if (typeof value === "boolean") {
-          moveCallArgs.push(
-            transaction.pure.bool(
-              value,
-            ) as unknown as TransactionObjectArgument,
-          );
-        }
-      }
-    }
+    const moveCallArgs = this.#bindParams(transaction, params);
 
     transaction.moveCall({
       target: `${packageAddr}::${module}::${func}`,
@@ -769,6 +921,59 @@ export class AgentOSClient {
   }
 
   /**
+   * Bind a `params` record into positional moveCall arguments.
+   *
+   * Supports, in addition to the original flat primitives:
+   *  - `{ object: "0x…" }` → `tx.object(id)` (object reference)
+   *  - `{ result: i, index?: j }` → a value returned by an earlier command in
+   *    the same PTB (chained object/result). `result` indexes `tx`'s prior
+   *    commands' results; `index` selects a slot when that command returned a
+   *    tuple.
+   *
+   * Primitive `string`/`number`/`boolean` keep their original encoding
+   * (`pure.string` / `pure.u64` / `pure.bool`) so the non-object path is
+   * unchanged.
+   */
+  #bindParams(
+    transaction: Transaction,
+    params?: Record<string, unknown>,
+  ): TransactionObjectArgument[] {
+    const moveCallArgs: TransactionObjectArgument[] = [];
+    if (!params) return moveCallArgs;
+
+    for (const value of Object.values(params)) {
+      if (isObjectRef(value)) {
+        moveCallArgs.push(transaction.object(value.object));
+      } else if (isResultRef(value)) {
+        const command = transaction.getData().commands[value.result];
+        if (!command) {
+          throw new Error(
+            `Param references result #${value.result} but the PTB has no such prior command`,
+          );
+        }
+        const slot =
+          value.index === undefined
+            ? { Result: value.result }
+            : { NestedResult: [value.result, value.index] };
+        moveCallArgs.push(slot as unknown as TransactionObjectArgument);
+      } else if (typeof value === "string") {
+        moveCallArgs.push(
+          transaction.pure.string(value) as unknown as TransactionObjectArgument,
+        );
+      } else if (typeof value === "number") {
+        moveCallArgs.push(
+          transaction.pure.u64(value) as unknown as TransactionObjectArgument,
+        );
+      } else if (typeof value === "boolean") {
+        moveCallArgs.push(
+          transaction.pure.bool(value) as unknown as TransactionObjectArgument,
+        );
+      }
+    }
+    return moveCallArgs;
+  }
+
+  /**
    * Parse a manifest's movePackage and entry into [packageAddress, module, function].
    * Supports formats like:
    *   movePackage: "0xabc123"
@@ -787,6 +992,57 @@ export class AgentOSClient {
     }
     // Assume entry is just function name; module defaults to skill name
     return [movePackage, "main", entry];
+  }
+
+  /**
+   * Resolve a child sub-agent identifier (a `.sui` name or a `0x…` address)
+   * into its runtime wallet address and the skill ids it has published.
+   *
+   * The runtime wallet becomes the cap's `child_agent` (so `consume` and
+   * `record_subagent_execution` — which assert `sender == child_agent` — pass
+   * for the delegated runtime). In single-keypair dev mode this equals the
+   * runtime address. The skill ids scope the cap's `allowed_skills` allowlist.
+   */
+  async #resolveChild(
+    child: SubAgentConfig,
+  ): Promise<{ childAddress: string; allowedSkills: string[] }> {
+    const name = child.name;
+
+    // Direct address form — no runtime wallet to look up; no skills to scope.
+    if (name.includes("0x") && !name.includes(".")) {
+      return { childAddress: name, allowedSkills: [] };
+    }
+
+    let childAddress = name;
+    let allowedSkills: string[] = [];
+
+    // Resolve the child's runtime wallet (chain first, then local registry).
+    try {
+      const passport = await this.resolveAgent(name);
+      // Prefer the runtime wallet; fall back to the owner address.
+      childAddress = passport.runtimeWallet || passport.owner || name;
+    } catch {
+      // Fall back to the local registry for both address and skills below.
+      if (this.#registry) {
+        const resolved = this.#registry.resolveAgent(name);
+        const agent = resolved?.agent as
+          | { runtimeWallet?: string; owner?: string }
+          | undefined;
+        childAddress = agent?.runtimeWallet || agent?.owner || name;
+      }
+    }
+
+    // Scope allowed_skills to the child's real published skill ids.
+    try {
+      const skills = await this.listSkills(name);
+      allowedSkills = skills.map((s) => s.skillId).filter(Boolean);
+    } catch {
+      // No registry / no skills — leave the allowlist empty (= allow all),
+      // which matches the previous behaviour for un-scoped children.
+      allowedSkills = [];
+    }
+
+    return { childAddress, allowedSkills };
   }
 
   /**
@@ -817,6 +1073,10 @@ export class AgentOSClient {
       parentPassportId = resolved?.agent.passportId;
     }
 
+    // Resolve the child's runtime wallet (the cap's child_agent) and scope the
+    // allowlist to the child's real published skills.
+    const { childAddress, allowedSkills } = await this.#resolveChild(child);
+
     let digest: string | undefined;
     let capId: string | undefined;
 
@@ -825,8 +1085,8 @@ export class AgentOSClient {
       const cap = transaction.add(
         contracts.delegation.grant({
           parentPassport: transaction.object(parentPassportId),
-          childAgent: child.name.includes("0x") ? child.name : signerAddress, // Use child address or fallback
-          allowedSkills: [],
+          childAgent: childAddress,
+          allowedSkills,
           allowedCapabilities: child.permissions,
           spendLimit: child.budget,
           expiryMs: BigInt(child.expiry),
@@ -834,9 +1094,8 @@ export class AgentOSClient {
         }),
       );
 
-      // Transfer the cap to the child agent
-      const childAddr = child.name.includes("0x") ? child.name : signerAddress;
-      transaction.transferObjects([cap], childAddr);
+      // Transfer the cap to the child agent's runtime wallet
+      transaction.transferObjects([cap], childAddress);
 
       try {
         const txBytes = await transaction.build({
@@ -888,9 +1147,9 @@ export class AgentOSClient {
     const registryFallback = !digest;
     if (this.#registry) {
       this.#registry.addDelegation(parent, {
-        childAgent: child.name.includes("0x") ? child.name : "",
+        childAgent: childAddress,
         childName: child.name,
-        allowedSkills: [],
+        allowedSkills,
         allowedCapabilities: child.permissions,
         spendLimit: child.budget.toString(),
         spent: "0",

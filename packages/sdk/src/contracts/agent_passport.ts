@@ -34,3 +34,42 @@ export function revoke(options: {
     });
   };
 }
+
+/**
+ * Bind an AgentPassport's memory namespace on-chain. Mirrors the Move
+ * `set_memory_namespace(passport: &mut AgentPassport, namespace: vector<u8>, ctx)`
+ * — only the owner can call it (enforced by the contract).
+ */
+export function setMemoryNamespace(options: {
+  passport: TransactionObjectArgument;
+  namespace: string;
+  packageId?: string;
+}) {
+  return (tx: Transaction) => {
+    tx.moveCall({
+      target: moveTarget(options.packageId, 'agent_passport', 'set_memory_namespace'),
+      arguments: [
+        options.passport,
+        tx.pure.vector('u8', Array.from(new TextEncoder().encode(options.namespace))),
+      ],
+    });
+  };
+}
+
+/**
+ * Record a skill execution against an AgentPassport, bumping its `exec_count`.
+ * The Move `record_execution(passport: &mut AgentPassport, ctx)` only takes the
+ * passport; `ctx` is injected by the runtime, so the only PTB argument is the
+ * passport object.
+ */
+export function recordExecution(options: {
+  passport: TransactionObjectArgument;
+  packageId?: string;
+}) {
+  return (tx: Transaction) => {
+    tx.moveCall({
+      target: moveTarget(options.packageId, 'agent_passport', 'record_execution'),
+      arguments: [options.passport],
+    });
+  };
+}

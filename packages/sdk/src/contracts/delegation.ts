@@ -63,7 +63,9 @@ export function revoke(options: {
 
 /**
  * Build a `agentos::delegation::consume` move call.
- * Deducts spend from the cap's budget.
+ * Deducts spend from the cap's budget. The on-chain fn now also asserts
+ * `ctx.sender() == cap.child_agent` (FIX-2); `ctx` is injected by the runtime,
+ * so the PTB args remain `[cap, amount]`.
  */
 export function consume(options: {
   /** The DelegationCap object. */
@@ -76,6 +78,35 @@ export function consume(options: {
     tx.moveCall({
       target: moveTarget(options.packageId, "delegation", "consume"),
       arguments: [options.cap, tx.pure.u64(options.amount)],
+    });
+  };
+}
+
+/**
+ * Build a `agentos::delegation::record_subagent_execution` move call (FIX-1).
+ * Bumps the cap's `parent_passport` exec_count, authorized by the cap instead
+ * of passport ownership. The on-chain fn asserts: cap not revoked, not expired,
+ * `ctx.sender() == cap.child_agent`, and `passport == cap.parent_passport`.
+ * `ctx` is injected by the runtime, so the only PTB args are the passport, the
+ * cap, and the Clock.
+ */
+export function recordSubagentExecution(options: {
+  /** The cap's parent AgentPassport object (mutated). */
+  subjectPassport: TransactionObjectArgument;
+  /** The DelegationCap authorizing the execution record. */
+  cap: TransactionObjectArgument;
+  /** The Clock object (typically `0x6`). */
+  clock: TransactionObjectArgument;
+  packageId?: string;
+}) {
+  return (tx: Transaction): void => {
+    tx.moveCall({
+      target: moveTarget(
+        options.packageId,
+        "delegation",
+        "record_subagent_execution",
+      ),
+      arguments: [options.subjectPassport, options.cap, options.clock],
     });
   };
 }

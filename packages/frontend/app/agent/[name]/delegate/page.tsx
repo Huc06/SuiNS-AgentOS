@@ -11,7 +11,7 @@ interface Props {
 
 export default async function AgentDelegatePage({ params }: Props) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
 
   if (!data) {
     return <AgentNotFound name={name} />;

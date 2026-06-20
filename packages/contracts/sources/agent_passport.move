@@ -55,7 +55,9 @@ public fun create(
         runtime_wallet,
         policy_root: @0x0,
         skill_root: @0x0,
-        memory_namespace: vector[],
+        // Anchor the memory namespace to the `.sui` name by default; the owner
+        // can rebind it later via `set_memory_namespace`.
+        memory_namespace: suins_name,
         is_active: true,
         exec_count: 0,
     };
@@ -74,6 +76,18 @@ public fun create(
 public fun record_execution(passport: &mut AgentPassport, ctx: &TxContext) {
     let sender = ctx.sender();
     assert!(sender == passport.owner || sender == passport.runtime_wallet, E_NOT_AUTHORIZED);
+    record_execution_internal(passport);
+}
+
+/// Increment the execution counter and emit `ExecutionRecorded`.
+///
+/// Authorization is the CALLER's responsibility — this is `public(package)`, so
+/// only sibling modules in `agentos` may invoke it. It exists so that
+/// `delegation::record_subagent_execution`, after validating a `DelegationCap`,
+/// can bump the counter for a delegated runtime that is neither the owner nor
+/// the `runtime_wallet` (avoiding a circular module dependency between
+/// `agent_passport` and `delegation`).
+public(package) fun record_execution_internal(passport: &mut AgentPassport) {
     passport.exec_count = passport.exec_count + 1;
 
     event::emit(ExecutionRecorded {
@@ -93,6 +107,17 @@ public fun revoke(passport: &mut AgentPassport, ctx: &TxContext) {
     });
 }
 
+/// Bind the agent's memory namespace (the key under which its Walrus memory
+/// is stored). Only the passport owner may change it.
+public fun set_memory_namespace(
+    passport: &mut AgentPassport,
+    namespace: vector<u8>,
+    ctx: &TxContext,
+) {
+    assert!(passport.owner == ctx.sender(), E_NOT_OWNER);
+    passport.memory_namespace = namespace;
+}
+
 // ===== Getters =====
 
 public fun owner(passport: &AgentPassport): address {
@@ -105,6 +130,10 @@ public fun suins_name(passport: &AgentPassport): vector<u8> {
 
 public fun runtime_wallet(passport: &AgentPassport): address {
     passport.runtime_wallet
+}
+
+public fun memory_namespace(passport: &AgentPassport): vector<u8> {
+    passport.memory_namespace
 }
 
 public fun is_active(passport: &AgentPassport): bool {

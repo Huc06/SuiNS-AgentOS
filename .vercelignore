@@ -1,0 +1,28 @@
+# SECRETS & deps — MUST never be uploaded. A .vercelignore makes Vercel ignore
+# .gitignore, so these (which were only in .gitignore) must be listed explicitly.
+# Secrets belong in Vercel Project → Environment Variables, never in an uploaded file.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+node_modules
+**/node_modules
+.vercel
+
+# Local build caches & outputs — Vercel rebuilds these fresh.
+# Excluding them keeps the deploy upload small (avoids the 100 MB file limit
+# hit by .turbo/cache/*.tar.zst and packages/frontend/.next).
+.turbo
+**/.turbo
+**/.next
+packages/contracts/build
+**/*.tar.zst
+
+# Runtime data (the deployed app seeds from registry.seed.json, not these).
+.agentos
+
+# Repo/dev artifacts not needed for the build.
+.git
+**/coverage
+**/.vitest
