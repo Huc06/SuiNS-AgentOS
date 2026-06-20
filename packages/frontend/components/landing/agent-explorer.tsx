@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AgentCardData } from "../dashboard/agent-card";
 import { AgentCard } from "../dashboard/agent-card";
+import { CreateAgentModal } from "../dashboard/create-agent-modal";
 import { EmptyState, ErrorAlert, SkeletonCard } from "../ui/skeleton";
 
 type FilterNetwork = "all" | "mainnet" | "testnet";
@@ -24,6 +25,7 @@ export function AgentExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [networkFilter, setNetworkFilter] = useState<FilterNetwork>("all");
   const [hasSkillsOnly, setHasSkillsOnly] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const loadAgents = useCallback(async () => {
     setLoading(true);
@@ -59,18 +61,27 @@ export function AgentExplorer() {
   return (
     <section className="mx-auto max-w-container px-margin py-16">
       {/* Section header */}
-      <div className="mb-8">
-        <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">
-          Public Directory
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">
+            Public Directory
+          </div>
+          <h2 className="font-display text-3xl font-bold text-on-surface">
+            Agents Named on Sui
+          </h2>
+          <p className="mt-1 font-mono text-sm text-on-surface-variant">
+            {agents.length > 0
+              ? `${agents.length} agent${agents.length === 1 ? "" : "s"} with .sui identities — resolve by name, execute skills, delegate.`
+              : "Discover AI agents with on-chain passports on the Sui network."}
+          </p>
         </div>
-        <h2 className="font-display text-3xl font-bold text-on-surface">
-          Agents Named on Sui
-        </h2>
-        <p className="mt-1 font-mono text-sm text-on-surface-variant">
-          {agents.length > 0
-            ? `${agents.length} agent${agents.length === 1 ? "" : "s"} with .sui identities — resolve by name, execute skills, delegate.`
-            : "Discover AI agents with on-chain passports on the Sui network."}
-        </p>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="mt-1 inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-4 py-2 font-mono text-xs font-bold text-white shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0_0_#000]"
+        >
+          + Create Agent Passport
+        </button>
       </div>
 
       {/* Filter chips */}
@@ -131,6 +142,16 @@ export function AgentExplorer() {
           description="Try adjusting the network filter or search term."
         />
       )}
+
+      {/* Create Agent Passport Modal */}
+      <CreateAgentModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setCreateOpen(false);
+          void loadAgents();
+        }}
+      />
     </section>
   );
 }
