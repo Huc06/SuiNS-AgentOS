@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { AgentNotFound } from "../../../components/agent/agent-not-found";
-import { SiteHeader } from "../../../components/site-header";
 import { resolveAgentPageData } from "../../../lib/registry-resolve";
 import { shortObjectId } from "../../../lib/registry-mappers";
 import { explorerObjectUrl } from "../../../lib/explorer-links";
+import { CopyButton } from "./copy-button";
 
 interface Props {
   params: Promise<{ name: string }>;
@@ -15,12 +15,12 @@ export async function generateMetadata({ params }: Props) {
   const data = resolveAgentPageData(name);
   const label = data?.card.displayName ?? `@${name}`;
   return {
-    title: `${label} — Agent Profile | SuiNS AgentOS`,
-    description: `Public profile for ${label}. View skills, identity, and delegation on Sui.`,
+    title: `${label} — Agent Portfolio | SuiNS AgentOS`,
+    description: `Portfolio for ${label}. Skills, identity, and delegation on Sui.`,
   };
 }
 
-export default async function AgentProfilePage({ params }: Props) {
+export default async function AgentPortfolioPage({ params }: Props) {
   const { name } = await params;
   const data = resolveAgentPageData(name);
 
@@ -32,227 +32,377 @@ export default async function AgentProfilePage({ params }: Props) {
   const skills = data.skills;
   const deps = skills.flatMap((s) => s.dependencies ?? []);
   const uniqueDeps = [...new Set(deps)];
+  const createdDate = new Date(agent.createdAt).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+  });
 
   return (
-    <>
-      <SiteHeader activeHref="/explore" />
-
-      {/* Header — neo-brutalist, consistent with app */}
-      <div className="bg-off-white">
-        <div className="mx-auto max-w-container px-margin py-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center border-2 border-pure-black bg-electric-purple font-display text-lg font-bold text-off-white neo-shadow">
-              {agent.slug.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h1 className="font-display text-2xl font-bold text-on-surface">
-                {agent.suinsName}
-              </h1>
-              <p className="font-mono text-xs text-on-surface-variant">
-                {agent.passportVersion} · {agent.network} ·{" "}
-                {shortObjectId(agent.passportId)}{" "}
-                <a
-                  href={explorerObjectUrl(agent.network, agent.passportId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold text-electric-purple hover:underline"
-                >
-                  Suiscan ↗
-                </a>
-              </p>
-            </div>
-          </div>
-          {/* Network tab */}
-          <div className="mt-4 border-b border-pure-black/5">
-            <span className="inline-block border-b-2 border-electric-purple px-1 pb-2 font-mono text-xs font-bold uppercase text-electric-purple">
-              {agent.network}
-            </span>
-          </div>
+    <div className="min-h-screen bg-off-white">
+      {/* Minimal top bar */}
+      <header className="border-b border-pure-black/10 bg-off-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <Link
+            href="/explore"
+            className="font-mono text-xs font-bold text-black/50 hover:text-black"
+          >
+            ← Back to Portfolio
+          </Link>
+          <Link href="/" className="font-mono text-sm font-bold text-black">
+            AGENTOS
+          </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Three-column layout */}
-      <div className="mx-auto flex max-w-container min-h-[60vh]">
-        {/* Left sidebar */}
-        <aside className="hidden w-48 shrink-0 py-6 lg:block">
-          <nav className="space-y-1 px-4">
-            <a
-              href="#overview"
-              className="block border-2 border-electric-purple bg-soft-lavender px-3 py-2 font-mono text-xs font-bold text-pure-black neo-shadow"
-            >
-              Overview
-            </a>
-            <a
-              href="#skills"
-              className="flex items-center justify-between px-3 py-2 font-mono text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-            >
-              Skills
-              <span className="border border-pure-black/20 bg-surface-container px-1.5 text-[10px]">
-                {skills.length}
-              </span>
-            </a>
-            <a
-              href="#dependencies"
-              className="flex items-center justify-between px-3 py-2 font-mono text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-            >
-              Dependencies
-              <span className="border border-pure-black/20 bg-surface-container px-1.5 text-[10px]">
-                {uniqueDeps.length}
-              </span>
-            </a>
-            <Link
-              href={`/agent/${name}/delegate`}
-              className="block px-3 py-2 font-mono text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-            >
-              Delegation
-            </Link>
-            <span className="block px-3 py-2 font-mono text-xs text-on-surface-variant/50 italic">
-              Analytics — soon
-            </span>
-          </nav>
-        </aside>
-
-        {/* Main content */}
-        <main className="min-w-0 flex-1 px-6 py-6 lg:px-10">
-          <section id="overview" className="mb-10">
-            <h2 className="mb-4 font-display text-lg font-bold">Overview</h2>
-            {agent.description ? (
-              <p className="font-mono text-sm leading-relaxed text-on-surface-variant">
-                {agent.description}
+      <div className="mx-auto max-w-3xl px-4">
+        {/* ===== Profile Header ===== */}
+        <section className="border-x border-pure-black/10 py-8">
+          <div className="flex items-center gap-5 px-6">
+            {/* Avatar */}
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-pure-black bg-electric-purple font-display text-2xl font-bold text-white shadow-[4px_4px_0_0_#000]">
+              {agent.slug.charAt(0).toUpperCase()}
+              {/* Status dot */}
+              <span
+                className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white ${agent.status === "active" ? "bg-green-500" : "bg-red-500"}`}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-2xl font-bold tracking-tight text-black">
+                  {agent.suinsName}
+                </h1>
+                {/* Verified badge */}
+                {agent.status === "active" && (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="shrink-0 text-electric-purple"
+                  >
+                    <path
+                      d="M9 12l2 2 4-4"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M12 2l2.4 3.6h4.2l-.6 4.2L21 12l-3 2.4.6 4.2h-4.2L12 22l-2.4-3.6H5.4l.6-4.2L3 12l3-2.4-.6-4.2h4.2L12 2z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      fill="currentColor"
+                      fillOpacity="0.1"
+                    />
+                  </svg>
+                )}
+              </div>
+              {/* Flip subtitle */}
+              <p className="mt-1 font-mono text-sm text-black/60">
+                Autonomous agent · {agent.network} · Since {createdDate}
               </p>
-            ) : (
-              <div className="border-2 border-dashed border-pure-black/20 px-4 py-8 text-center">
-                <p className="font-mono text-sm text-on-surface-variant">
-                  No description yet. Add one from the management console.
+            </div>
+          </div>
+        </section>
+
+        <Separator />
+
+        {/* ===== Overview / Bio ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <OverviewItem label="Version" value={agent.passportVersion} />
+            <OverviewItem label="Network" value={agent.network} />
+            <OverviewItem label="Skills" value={String(skills.length)} />
+            <OverviewItem
+              label="Delegations"
+              value={String(agent.delegations?.length ?? 0)}
+            />
+            {agent.description && (
+              <div className="col-span-full">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+                  About
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-black/80">
+                  {agent.description}
                 </p>
               </div>
             )}
-          </section>
+          </div>
+        </section>
 
-          <section id="skills" className="mb-10">
-            <h2 className="mb-4 font-display text-lg font-bold">
-              Skills ({skills.length})
-            </h2>
-            {skills.length === 0 ? (
-              <p className="font-mono text-sm text-on-surface-variant">
-                No skills published.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {skills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="border-2 border-pure-black bg-white p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-mono text-sm font-bold">
-                          {skill.name}
-                        </p>
-                        <p className="font-mono text-xs text-on-surface-variant">
-                          {skill.mvrPackage} · {skill.version}
-                        </p>
-                      </div>
-                      <span className="border-2 border-green-800 bg-green-100 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-green-800">
-                        {skill.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <Separator />
+
+        {/* ===== On-chain Identity ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
+            Identity
+          </h2>
+          <div className="space-y-3">
+            <IdentityRow
+              label="Passport"
+              value={shortObjectId(agent.passportId)}
+              full={agent.passportId}
+              href={explorerObjectUrl(agent.network, agent.passportId)}
+            />
+            {agent.runtimeWallet && agent.runtimeWallet !== "0x0" && (
+              <IdentityRow
+                label="Runtime Wallet"
+                value={shortObjectId(agent.runtimeWallet)}
+                full={agent.runtimeWallet}
+                href={explorerObjectUrl(agent.network, agent.runtimeWallet)}
+              />
             )}
-          </section>
+          </div>
+          {/* Resolve command */}
+          <div className="mt-4 rounded-lg border border-pure-black/10 bg-black/[0.02] px-4 py-3">
+            <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+              Resolve
+            </p>
+            <code className="mt-1 block font-mono text-xs text-black">
+              agentos resolve {agent.suinsName}
+            </code>
+          </div>
+        </section>
 
-          <section id="dependencies">
-            <h2 className="mb-4 font-display text-lg font-bold">
-              Dependencies ({uniqueDeps.length})
-            </h2>
-            {uniqueDeps.length === 0 ? (
-              <p className="font-mono text-sm text-on-surface-variant">
-                No dependencies.
-              </p>
-            ) : (
-              <div className="space-y-2">
+        <Separator />
+
+        {/* ===== Skills ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
+            Skills{" "}
+            <sup className="ml-1 text-sm font-medium text-black/40">
+              {skills.length}
+            </sup>
+          </h2>
+          {skills.length === 0 ? (
+            <p className="font-mono text-sm text-black/50">
+              No skills published yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {skills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className="group flex items-center border border-pure-black/10 bg-white transition-colors hover:bg-black/[0.02]"
+                >
+                  {/* Icon */}
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center border-r border-pure-black/10 text-black/40 group-hover:text-electric-purple">
+                    {skill.icon === "token" ? (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v12M6 12h12" />
+                      </svg>
+                    ) : skill.icon === "wallet" ? (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <rect x="2" y="6" width="20" height="14" rx="2" />
+                        <path d="M22 10H18a2 2 0 000 4h4" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M16 3l5 5-5 5" />
+                        <path d="M21 8H9" />
+                        <path d="M8 21l-5-5 5-5" />
+                        <path d="M3 16h12" />
+                      </svg>
+                    )}
+                  </div>
+                  {/* Content */}
+                  <div className="flex flex-1 items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-black">
+                        {skill.name}
+                      </p>
+                      <p className="font-mono text-[11px] text-black/50">
+                        {skill.mvrPackage} · {skill.version}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${skill.status === "active" ? "bg-green-100 text-green-800" : "bg-black/5 text-black/40"}`}
+                    >
+                      {skill.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <Separator />
+
+        {/* ===== Tech Stack / Dependencies ===== */}
+        {uniqueDeps.length > 0 && (
+          <>
+            <section className="border-x border-pure-black/10 px-6 py-6">
+              <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
+                Dependencies{" "}
+                <sup className="ml-1 text-sm font-medium text-black/40">
+                  {uniqueDeps.length}
+                </sup>
+              </h2>
+              <div className="flex flex-wrap gap-2">
                 {uniqueDeps.map((dep) => (
-                  <div
+                  <span
                     key={dep}
-                    className="border-2 border-pure-black/20 bg-surface-container px-3 py-2 font-mono text-xs"
+                    className="rounded-md border border-pure-black/10 bg-black/[0.03] px-3 py-1.5 font-mono text-xs text-black"
                   >
                     {dep}
-                  </div>
+                  </span>
                 ))}
               </div>
-            )}
-          </section>
-        </main>
+            </section>
+            <Separator />
+          </>
+        )}
 
-        {/* Right sidebar */}
-        <aside className="hidden w-64 shrink-0 py-6 pl-6 xl:block">
-          <div className="space-y-6">
-            {/* Resolve */}
-            <div>
-              <h3 className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                Resolve
-              </h3>
-              <p className="mb-2 font-mono text-xs text-on-surface-variant">
-                Resolve this agent in your project:
-              </p>
-              <div className="border-2 border-pure-black bg-white px-3 py-2 neo-shadow">
-                <code className="block break-all font-mono text-xs text-on-surface">
-                  agentos resolve {agent.suinsName}
-                </code>
-              </div>
-            </div>
+        {/* ===== Quick Links ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <h2 className="sr-only">Links</h2>
+          <div className="flex flex-wrap gap-3">
+            <QuickLink
+              href={explorerObjectUrl(agent.network, agent.passportId)}
+              external
+              label="Suiscan"
+            />
+            <QuickLink href={`/agent/${name}/skills`} label="Manage Skills" />
+            <QuickLink href={`/agent/${name}/delegate`} label="Delegation" />
+            <QuickLink href={`/agent/${name}/manage`} label="Console" />
+          </div>
+        </section>
 
-            {/* Executions */}
+        <Separator />
+
+        {/* ===== Footer Stats ===== */}
+        <section className="border-x border-b border-pure-black/10 px-6 py-6">
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <p className="font-mono text-[10px] font-bold uppercase text-black/40">
                 Skill Executions
-              </h3>
-              <p className="font-display text-2xl font-bold text-on-surface">
-                0
               </p>
-              <p className="font-mono text-[10px] text-on-surface-variant">
-                on-chain counter (live after indexer)
+              <p className="mt-1 text-2xl font-bold text-black">0</p>
+              <p className="font-mono text-[10px] text-black/40">
+                on-chain counter — live after indexer
               </p>
             </div>
-
-            {/* Description */}
-            <div>
-              <h3 className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                Description
-              </h3>
-              <p className="font-mono text-xs text-on-surface-variant">
-                {agent.description || "No description."}
+            <div className="text-right">
+              <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+                Reputation
               </p>
-            </div>
-
-            {/* Links */}
-            <div>
-              <h3 className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                Links
-              </h3>
-              <div className="space-y-2">
-                <a
-                  href={explorerObjectUrl(agent.network, agent.passportId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block font-mono text-xs font-bold text-electric-purple hover:underline"
-                >
-                  Passport on Suiscan ↗
-                </a>
-                <Link
-                  href={`/agent/${name}/manage`}
-                  className="block font-mono text-xs font-bold text-electric-purple hover:underline"
-                >
-                  Management Console →
-                </Link>
-              </div>
+              <p className="mt-1 text-2xl font-bold text-black">—</p>
+              <p className="font-mono text-[10px] text-black/40">
+                attestations coming soon
+              </p>
             </div>
           </div>
-        </aside>
-      </div>
+        </section>
 
-    </>
+        {/* Bottom spacer */}
+        <div className="h-16" />
+      </div>
+    </div>
+  );
+}
+
+// ===== Helper Components =====
+
+function Separator() {
+  return (
+    <div className="h-6 w-full border-x border-pure-black/10 bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(0,0,0,0.03)_4px,rgba(0,0,0,0.03)_5px)]" />
+  );
+}
+
+function OverviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+        {label}
+      </p>
+      <p className="mt-0.5 text-sm font-bold capitalize text-black">{value}</p>
+    </div>
+  );
+}
+
+function IdentityRow({
+  label,
+  value,
+  full,
+  href,
+}: {
+  label: string;
+  value: string;
+  full: string;
+  href: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-pure-black/10 px-4 py-2.5">
+      <div>
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+          {label}
+        </p>
+        <code className="font-mono text-xs text-black">{value}</code>
+      </div>
+      <div className="flex items-center gap-2">
+        <CopyBtn text={full} />
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[10px] font-bold text-electric-purple hover:underline"
+        >
+          Explorer ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// CopyBtn wraps the client component
+function CopyBtn({ text }: { text: string }) {
+  return <CopyButton text={text} />;
+}
+
+function QuickLink({
+  href,
+  label,
+  external,
+}: {
+  href: string;
+  label: string;
+  external?: boolean;
+}) {
+  const cls =
+    "flex items-center gap-1 rounded-lg border border-pure-black/10 px-4 py-2 font-mono text-xs font-bold text-black transition-all hover:-translate-y-0.5 hover:border-electric-purple hover:text-electric-purple hover:shadow-[2px_2px_0_0_#6800FF]";
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+        {label} <span className="text-[10px]">↗</span>
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={cls}>
+      {label}
+    </Link>
   );
 }
