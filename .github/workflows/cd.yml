@@ -14,8 +14,8 @@ on:
           - frontend-build
 
 env:
-  SUI_VERSION: '1.70.1'
-  PNPM_VERSION: '10.13.1'
+  SUI_VERSION: "1.70.1"
+  PNPM_VERSION: "10.13.1"
 
 jobs:
   publish-contracts:
@@ -64,7 +64,23 @@ jobs:
             echo "SUI_PRIVATE_KEY secret is not configured — skipping publish."
             exit 0
           fi
-          sui client publish --gas-budget 200000000 --json
+          RESULT=$(sui client publish --gas-budget 200000000 --json 2>&1)
+          echo "$RESULT"
+          PACKAGE_ID=$(echo "$RESULT" | jq -r '.objectChanges[] | select(.type == "published") | .packageId // empty')
+          if [ -n "$PACKAGE_ID" ]; then
+            echo "## Published Package" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **PackageID:** \`$PACKAGE_ID\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Network:** testnet" >> "$GITHUB_STEP_SUMMARY"
+            echo "package_id=$PACKAGE_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload publish result
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-testnet
+          path: packages/contracts/Published.toml
+          retention-days: 30
 
   build-frontend:
     name: Build frontend artifact

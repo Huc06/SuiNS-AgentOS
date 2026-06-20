@@ -6,13 +6,13 @@
 
 ## 1. Do you need env setup yet?
 
-| Environment | Required today? | Notes |
-|-------------|-----------------|-------|
-| Local `pnpm dev` | No | Wallet Connect + mock registry is enough for demo |
-| GitHub Actions CI | No extra secrets | CI only builds/tests |
-| GitHub `testnet` env | Yes (when publishing Move) | `SUI_PRIVATE_KEY`, `SUI_RPC_URL` |
-| Enoki + auth | Yes (for zkLogin) | 2 Enoki API keys + frontend vars |
-| Cloudflare Pages | Yes (when deploying UI) | Env + domain |
+| Environment          | Required today?            | Notes                                             |
+| -------------------- | -------------------------- | ------------------------------------------------- |
+| Local `pnpm dev`     | No                         | Wallet Connect + mock registry is enough for demo |
+| GitHub Actions CI    | No extra secrets           | CI only builds/tests                              |
+| GitHub `testnet` env | Yes (when publishing Move) | `SUI_PRIVATE_KEY`, `SUI_RPC_URL`                  |
+| Enoki + auth         | Yes (for zkLogin)          | 2 Enoki API keys + frontend vars                  |
+| Cloudflare Pages     | Yes (when deploying UI)    | Env + domain                                      |
 
 ---
 
@@ -22,9 +22,9 @@ Create a project at [Enoki Portal](https://portal.enoki.mystenlabs.com) (Mysten)
 
 ### Two API key types (must be separate)
 
-| Key | Type | Feature | Used where |
-|-----|------|---------|------------|
-| **Public** | Public | zkLogin, network **Testnet** | Frontend `NEXT_PUBLIC_ENOKI_API_KEY` |
+| Key         | Type    | Feature                         | Used where                                                    |
+| ----------- | ------- | ------------------------------- | ------------------------------------------------------------- |
+| **Public**  | Public  | zkLogin, network **Testnet**    | Frontend `NEXT_PUBLIC_ENOKI_API_KEY`                          |
 | **Private** | Private | Sponsored transactions, Testnet | Backend / API route `ENOKI_SECRET_KEY` — **never** in browser |
 
 ### Enoki Portal — Sponsored transactions (after `packageId`)
@@ -72,30 +72,32 @@ References: [Enoki sponsored transactions](https://docs.enoki.mystenlabs.com/ts-
 
 ---
 
-## 4. Cloudflare — invite and deploy
+## 4. Vercel — deploy frontend
 
-Cloudflare owner **invites member** → you deploy Pages.
+Vercel project for `packages/frontend` in this pnpm + turbo monorepo.
 
-**Send the owner:**
+**Vercel Settings:**
 
-- Your Cloudflare login email.
-- Your GitHub account (if connecting repo via GitHub).
+| Setting         | Value                                                               |
+| --------------- | ------------------------------------------------------------------- |
+| Root directory  | `packages/frontend`                                                 |
+| Build command   | `cd ../.. && pnpm install && pnpm build --filter=@agentos/frontend` |
+| Install command | `pnpm install`                                                      |
+| Framework       | Next.js (auto-detected)                                             |
+| Node.js version | 20.x                                                                |
 
-**Suggested role:** *Cloudflare Pages* — **Edit** (enough for preview + production deploy; Super Admin not required).
+**Environment Variables (Production + Preview):**
 
-**After access — Cloudflare Pages env (Production + Preview):**
+| Variable                         | Secret? | Notes                                                                |
+| -------------------------------- | ------- | -------------------------------------------------------------------- |
+| `NEXT_PUBLIC_AGENTOS_PACKAGE_ID` | No      | `0x7febcab96302fc0917b3f0443e2b29779ca8fc802a6407edfa857604fa6ad9ef` |
+| `NEXT_PUBLIC_SUI_NETWORK`        | No      | `testnet`                                                            |
+| `NEXT_PUBLIC_ENOKI_API_KEY`      | No      | Enoki public key                                                     |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID`   | No      | Google OAuth client ID                                               |
+| `ENOKI_SECRET_KEY`               | **Yes** | Enoki private key                                                    |
+| `HARBOR_API_KEY`                 | **Yes** | Harbor gateway key (optional)                                        |
 
-| Variable | Secret? | Notes |
-|----------|---------|-------|
-| `NEXT_PUBLIC_ENOKI_API_KEY` | No (public key) | Enoki public |
-| `ENOKI_SECRET_KEY` | **Yes** | Enoki private |
-| `NEXT_PUBLIC_SUI_NETWORK` | No | `testnet` |
-| `AGENTOS_PACKAGE_ID` | No | After publish (see pipeline doc §2) |
-| `AGENTOS_REGISTRY_PATH` | No | Optional if server reads registry |
-
-Suggested build command: `cd ../.. && pnpm install && pnpm build --filter=@agentos/frontend`  
-Root directory: `packages/frontend`  
-Framework preset: Next.js
+The `registry.seed.json` file is bundled at build time so the explorer shows seeded agents even on a cold serverless start.
 
 ---
 
@@ -103,10 +105,10 @@ Framework preset: Next.js
 
 For `cd.yml` workflow → publish contracts:
 
-| Secret | Description |
-|--------|-------------|
-| `SUI_PRIVATE_KEY` | `suiprivkey1...` — testnet deploy wallet |
-| `SUI_RPC_URL` | `https://fullnode.testnet.sui.io:443` (or custom RPC) |
+| Secret            | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `SUI_PRIVATE_KEY` | `suiprivkey1...` — testnet deploy wallet              |
+| `SUI_RPC_URL`     | `https://fullnode.testnet.sui.io:443` (or custom RPC) |
 
 ---
 
