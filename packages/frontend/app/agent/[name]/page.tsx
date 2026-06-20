@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { AgentNotFound } from "../../../components/agent/agent-not-found";
-import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { resolveAgentPageData } from "../../../lib/registry-resolve";
 import { shortObjectId } from "../../../lib/registry-mappers";
@@ -254,7 +253,6 @@ export default async function AgentProfilePage({ params }: Props) {
         </aside>
       </div>
 
-      <SiteFooter />
     </>
   );
 }
