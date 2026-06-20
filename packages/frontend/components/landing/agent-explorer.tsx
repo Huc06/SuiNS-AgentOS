@@ -57,7 +57,7 @@ export function AgentExplorer() {
   });
 
   return (
-    <section className="mx-auto max-w-container border-t-2 border-pure-black px-margin py-16">
+    <section className="mx-auto max-w-container px-margin py-16">
       {/* Section header */}
       <div className="mb-8">
         <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">

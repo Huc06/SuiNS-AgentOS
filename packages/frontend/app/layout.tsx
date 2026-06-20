@@ -3,6 +3,7 @@ import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
 import "@mysten/dapp-kit/dist/index.css";
 
+import { AppSidebar } from "../components/app-sidebar";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -51,7 +52,14 @@ export default function RootLayout({
         <a href="#main-content" className="skip-to-content">
           Skip to content
         </a>
-        <Providers>{children}</Providers>
+        <Providers>
+          <div className="flex min-h-screen">
+            <AppSidebar />
+            <div id="main-content" className="ml-16 flex-1 md:ml-56">
+              {children}
+            </div>
+          </div>
+        </Providers>
       </body>
     </html>
   );

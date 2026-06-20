@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agentos": {
+      "command": "node",
+      "args": ["packages/mcp/dist/index.js"],
+      "cwd": ".",
+      "env": {
+        "AGENTOS_REGISTRY_PATH": ".agentos/registry.json",
+        "SUI_PRIVATE_KEY": "${SUI_PRIVATE_KEY}",
+        "AGENTOS_PACKAGE_ID": "0x6568deb11f5fa2f69b370ab797fbf1ee3db67a6151bd4a48b9f6233874c70c6a"
+      }
+    }
+  }
+}

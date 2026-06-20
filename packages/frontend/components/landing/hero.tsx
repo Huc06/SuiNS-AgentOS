@@ -4,7 +4,7 @@ import { HeroSearch } from "./hero-search";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden border-b-2 border-pure-black bg-off-white py-20 md:py-32">
+    <section className="relative overflow-hidden bg-off-white py-20 md:py-32">
       <div className="relative z-10 mx-auto max-w-container px-margin">
         <div className="grid grid-cols-1 items-center gap-gutter lg:grid-cols-12">
           <div className="lg:col-span-8">
@@ -52,15 +52,6 @@ export function Hero() {
           </div>
         </div>
       </div>
-
-      <div
-        className="pointer-events-none absolute -bottom-10 -right-10 h-64 w-64 rounded-full border-2 border-pure-black opacity-10"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute right-20 top-20 h-32 w-32 rotate-45 border-2 border-pure-black opacity-10"
-        aria-hidden
-      />
     </section>
   );
 }
