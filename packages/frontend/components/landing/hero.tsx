@@ -1,5 +1,6 @@
-import { FeaturedAgents } from './featured-agents';
-import { HeroSearch } from './hero-search';
+"use client";
+
+import { HeroSearch } from "./hero-search";
 
 export function Hero() {
   return (
@@ -18,11 +19,11 @@ export function Hero() {
               Agents.
             </h1>
             <p className="mb-12 max-w-2xl font-mono text-lg leading-relaxed text-on-surface-variant">
-              SuiNS AgentOS is the identity, wallet, skill registry, and delegation layer for AI
-              agents on Sui — permissioned, composable, and resolvable by name.
+              SuiNS AgentOS is the identity, wallet, skill registry, and
+              delegation layer for AI agents on Sui — permissioned, composable,
+              and resolvable by name.
             </p>
             <HeroSearch />
-            <FeaturedAgents />
           </div>
 
           <div className="relative hidden lg:col-span-4 lg:block">
@@ -39,10 +40,13 @@ export function Hero() {
                 }}
               />
               <div className="absolute bottom-4 left-4 right-4 border-2 border-pure-black bg-pure-black p-4 font-mono text-xs font-bold text-off-white">
+                <div className="mb-1 text-[10px] uppercase text-soft-lavender/60">
+                  — illustrative —
+                </div>
                 <div className="mb-2 text-soft-lavender">AGENT_PASSPORT</div>
-                <div>suins: alpha.sui</div>
+                <div>suins: your-agent.sui</div>
                 <div>status: active</div>
-                <div>skills: 12 · delegates: 3</div>
+                <div>skills: N · delegates: N</div>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
-import { AgentManageContent } from '../../../components/agent/agent-manage-content';
-import { AgentManageSidebar } from '../../../components/agent/agent-manage-sidebar';
-import { AgentNotFound } from '../../../components/agent/agent-not-found';
-import { SiteFooter } from '../../../components/site-footer';
-import { SiteHeader } from '../../../components/site-header';
-import { resolveAgentPageData } from '../../../lib/registry-resolve';
+import { AgentManageContent } from "../../../components/agent/agent-manage-content";
+import { AgentManageSidebar } from "../../../components/agent/agent-manage-sidebar";
+import { AgentNotFound } from "../../../components/agent/agent-not-found";
+import { AgentPassportHeader } from "../../../components/agent/agent-passport-header";
+import { SiteFooter } from "../../../components/site-footer";
+import { SiteHeader } from "../../../components/site-header";
+import { resolveAgentPageData } from "../../../lib/registry-resolve";
 
 interface Props {
   params: Promise<{ name: string }>;
@@ -14,8 +15,8 @@ export async function generateMetadata({ params }: Props) {
   const data = resolveAgentPageData(name);
   const label = data?.card.displayName ?? `@${name}`;
   return {
-    title: `Manage ${label} | SuiNS AgentOS`,
-    description: `Manage skills, delegation, and passport for ${label}.`,
+    title: `${label} — Agent Passport | SuiNS AgentOS`,
+    description: `On-chain passport for ${label}. Skills, delegation, and reputation on Sui.`,
   };
 }
 
@@ -30,7 +31,14 @@ export default async function AgentManagePage({ params }: Props) {
   return (
     <>
       <SiteHeader activeHref="/create" />
-      <div className="mx-auto flex min-h-[calc(100vh-180px)] w-full max-w-container min-w-0 overflow-x-hidden px-margin">
+      <div className="mx-auto w-full max-w-container min-w-0 overflow-x-hidden px-margin pt-8">
+        {/* Public passport header — visible to ALL visitors */}
+        <AgentPassportHeader
+          agent={data.resolved.agent}
+          skillCount={data.skills.length}
+        />
+      </div>
+      <div className="mx-auto flex min-h-[calc(100vh-400px)] w-full max-w-container flex-col min-w-0 overflow-x-hidden px-margin lg:flex-row">
         <AgentManageSidebar agentSlug={data.card.slug} />
         <AgentManageContent
           agentSlug={data.card.slug}

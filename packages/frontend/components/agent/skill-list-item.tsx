@@ -7,6 +7,7 @@ import { suiObjectUrl, walrusBlobUrl } from "../../lib/explorer-urls";
 import { shortObjectId } from "../../lib/registry-mappers";
 import { IconCopy, IconEdit, IconSwap, IconToken, IconWallet } from "./icons";
 import { PublishUpgradeButton } from "./publish-upgrade-button";
+import { SkillExecutionConsole } from "./skill-execution-console";
 
 const iconMap = {
   token: IconToken,
@@ -41,6 +42,7 @@ const sourceBadge: Record<
 
 export function SkillListItem({ skill }: { skill: AgentSkillRow }) {
   const [copied, setCopied] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(false);
   // null = not yet checked / checking (don't show warning to avoid flicker);
   // true = blob reachable; false = blob unreachable (show warning).
   const [blobAvailable, setBlobAvailable] = useState<boolean | null>(null);
@@ -244,14 +246,27 @@ export function SkillListItem({ skill }: { skill: AgentSkillRow }) {
         <div className="flex items-center min-[480px]:justify-end xl:justify-end">
           <button
             type="button"
+            onClick={() => setConsoleOpen(!consoleOpen)}
             className={`font-mono text-xs font-bold decoration-2 underline-offset-4 hover:underline sm:text-sm ${
               active ? "text-electric-purple" : "text-on-surface-variant"
             }`}
           >
-            {active ? "View Analytics →" : "View Records →"}
+            {consoleOpen
+              ? "Close Console ×"
+              : active
+                ? "Run →"
+                : "View Records →"}
           </button>
         </div>
       </div>
+      {consoleOpen && (
+        <div className="mt-4">
+          <SkillExecutionConsole
+            skill={skill}
+            onClose={() => setConsoleOpen(false)}
+          />
+        </div>
+      )}
     </article>
   );
 }
