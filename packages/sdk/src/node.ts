@@ -15,6 +15,7 @@ export type {
 } from "./client.js";
 export type { AgentPassport, SkillDescriptor, SubAgentConfig } from "./types.js";
 export * from "./registry/index.js";
+export * from "./storage/index.js";
 export * as contracts from "./contracts/index.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";

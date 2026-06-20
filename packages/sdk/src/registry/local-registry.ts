@@ -1,9 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
-import { createHash, randomBytes } from "node:crypto";
 
 import type { SkillManifest } from "../types.js";
-import { normalizeSuinsName, slugFromSuins } from "./normalize.js";
+import * as logic from "./registry-logic.js";
 import { SEED_REGISTRY } from "./seed.js";
 import type {
   RegistryAgentRecord,
@@ -56,34 +55,23 @@ export class LocalRegistry {
   }
 
   findAgentBySuins(suinsName: string): RegistryAgentRecord | undefined {
-    const normalized = normalizeSuinsName(suinsName);
-    return this.#data.agents.find(
-      (a) =>
-        a.suinsName === normalized ||
-        a.slug === normalized.replace(/\.sui$/, ""),
-    );
+    return logic.findAgentBySuins(this.#data, suinsName);
   }
 
   findAgentBySlug(slug: string): RegistryAgentRecord | undefined {
-    return this.#data.agents.find((a) => a.slug === slug);
+    return logic.findAgentBySlug(this.#data, slug);
   }
 
   resolveAgent(name: string): ResolveAgentResponse | null {
-    const agent =
-      this.findAgentBySuins(name) ??
-      this.findAgentBySlug(name.replace(/^@/, ""));
-    if (!agent) return null;
-    const skills = this.#data.skills.filter((s) => s.agentSlug === agent.slug);
-    return { agent, skills };
+    return logic.resolveAgent(this.#data, name);
   }
 
   listSkills(agentName: string): RegistrySkillRecord[] {
-    const resolved = this.resolveAgent(agentName);
-    return resolved?.skills ?? [];
+    return logic.listSkills(this.#data, agentName);
   }
 
   listAgents(): RegistryAgentRecord[] {
-    return this.#data.agents.filter((a) => a.status === "active");
+    return logic.listAgents(this.#data);
   }
 
   registerAgent(input: {
@@ -95,49 +83,16 @@ export class LocalRegistry {
     /** Real on-chain AgentPassport object id, when minted. Falls back to a synthetic id. */
     passportId?: string;
   }): RegistryAgentRecord {
-    const suinsName = normalizeSuinsName(input.suinsName);
-    if (!suinsName.endsWith(".sui")) {
-      throw new Error("Invalid SuiNS name — must end with .sui");
-    }
-    const existing = this.findAgentBySuins(suinsName);
-    if (existing) {
-      throw new Error(`Agent already registered: ${existing.suinsName}`);
-    }
-
-    const slug = slugFromSuins(suinsName);
-    const passportId =
-      input.passportId?.trim() || `0x${randomBytes(20).toString("hex")}`;
-    const record: RegistryAgentRecord = {
-      slug,
-      suinsName,
-      passportId,
-      runtimeWallet: input.runtimeWallet,
-      network: input.network ?? "testnet",
-      passportVersion: input.passportVersion ?? "Passport v1.0.0",
-      status: "active",
-      createdAt: new Date().toISOString(),
-      ...(input.description?.trim()
-        ? { description: input.description.trim() }
-        : {}),
-    };
-    this.#data.agents.push(record);
+    const { value } = logic.registerAgent(this.#data, input);
     this.save();
-    return record;
+    return value;
   }
 
   /** Remove agent and its skills from the local registry (does not revoke on-chain passport). */
   removeAgent(name: string): RegistryAgentRecord {
-    const resolved = this.resolveAgent(name);
-    if (!resolved) {
-      throw new Error(`Agent not found: ${name}`);
-    }
-    const { agent } = resolved;
-    this.#data.agents = this.#data.agents.filter((a) => a.slug !== agent.slug);
-    this.#data.skills = this.#data.skills.filter(
-      (s) => s.agentSlug !== agent.slug,
-    );
+    const { value } = logic.removeAgent(this.#data, name);
     this.save();
-    return agent;
+    return value;
   }
 
   /** Add a delegation record to the local registry for an agent. */
@@ -156,16 +111,7 @@ export class LocalRegistry {
       createdAt: string;
     },
   ): void {
-    const resolved = this.resolveAgent(agentName);
-    if (!resolved) {
-      throw new Error(`Agent not found: ${agentName}`);
-    }
-    const agent = resolved.agent;
-    // Store delegations as a sub-array on the agent record
-    if (!agent.delegations) {
-      agent.delegations = [];
-    }
-    agent.delegations.push(delegation);
+    logic.addDelegation(this.#data, agentName, delegation);
     this.save();
   }
 
@@ -182,9 +128,7 @@ export class LocalRegistry {
     capId?: string;
     createdAt: string;
   }> {
-    const resolved = this.resolveAgent(agentName);
-    if (!resolved) return [];
-    return resolved.agent.delegations ?? [];
+    return logic.listDelegations(this.#data, agentName);
   }
 
   /**
@@ -195,50 +139,24 @@ export class LocalRegistry {
    * list-namespaces endpoint, so this registry ledger is the only known source.
    */
   recordMemoryNamespace(agentName: string, namespace: string): string[] {
-    const ns = namespace.trim();
-    const resolved = this.resolveAgent(agentName);
-    if (!resolved || !ns) return resolved?.agent.memoryNamespaces ?? [];
-    const agent = resolved.agent;
-    const existing = agent.memoryNamespaces ?? [];
-    const next = [ns, ...existing.filter((n) => n !== ns)].slice(0, 50);
+    const { value, changed } = logic.recordMemoryNamespace(
+      this.#data,
+      agentName,
+      namespace,
+    );
     // Only write when the list actually changed (avoids churning the file).
-    const changed =
-      next.length !== existing.length ||
-      next.some((n, i) => n !== existing[i]);
-    if (changed) {
-      agent.memoryNamespaces = next;
-      this.save();
-    }
-    return next;
+    if (changed) this.save();
+    return value;
   }
 
   /** List the Walrus-memory namespaces known for an agent (most-recent first). */
   listMemoryNamespaces(agentName: string): string[] {
-    const resolved = this.resolveAgent(agentName);
-    return resolved?.agent.memoryNamespaces ?? [];
+    return logic.listMemoryNamespaces(this.#data, agentName);
   }
 
   /** Search agents by fuzzy matching on slug + suinsName. */
   searchAgents(query: string, limit = 6): RegistryAgentRecord[] {
-    const q = query.toLowerCase().trim();
-    if (!q) return [];
-    const active = this.listAgents();
-
-    // Score: prefix > substring > subsequence
-    const scored = active
-      .map((agent) => {
-        const name = agent.suinsName.toLowerCase();
-        const slug = agent.slug.toLowerCase();
-        let score = 0;
-        if (slug.startsWith(q) || name.startsWith(q)) score = 3;
-        else if (slug.includes(q) || name.includes(q)) score = 2;
-        else if (isSubsequence(q, slug) || isSubsequence(q, name)) score = 1;
-        return { agent, score };
-      })
-      .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return scored.slice(0, limit).map((s) => s.agent);
+    return logic.searchAgents(this.#data, query, limit);
   }
 
   publishSkill(input: {
@@ -257,54 +175,9 @@ export class LocalRegistry {
     /** Origin of the skill. Defaults to `custom` when not provided. */
     source?: "custom" | "sui-skills" | "suiperpower";
   }): RegistrySkillRecord {
-    const resolved = this.resolveAgent(input.agentName);
-    if (!resolved) {
-      throw new Error(`Agent not found: ${input.agentName}`);
-    }
-
-    const manifestJson = JSON.stringify(input.manifest);
-    const manifestHash =
-      input.manifestHash ??
-      `0x${createHash("sha256").update(manifestJson).digest("hex").slice(0, 16)}`;
-    const walrusManifestBlob =
-      input.walrusManifestBlob ??
-      `walrus://blob/${input.manifest.name}-${input.manifest.version}`;
-    const mvrPackage = input.manifest.publisher.startsWith("@")
-      ? input.manifest.publisher
-      : `@${resolved.agent.slug}/${input.manifest.name}`;
-
-    const record: RegistrySkillRecord = {
-      agentSlug: resolved.agent.slug,
-      skillId: input.manifest.name,
-      name: input.manifest.name,
-      mvrPackage,
-      version: `v${input.manifest.version}`,
-      walrusManifestBlob,
-      manifestHash,
-      objectId: input.objectId ?? `0x${randomBytes(20).toString("hex")}`,
-      network: input.network ?? resolved.agent.network,
-      status: "active",
-      resolutions: "0",
-      lastUpdated: "just now",
-      icon: "token",
-      source: input.source ?? "custom",
-      ...(input.manifest.dependencies && input.manifest.dependencies.length > 0
-        ? { dependencies: input.manifest.dependencies }
-        : {}),
-      ...(input.suinsName ? { suinsName: input.suinsName } : {}),
-      ...(input.sealPolicyId ? { sealPolicyId: input.sealPolicyId } : {}),
-    };
-
-    const dup = this.#data.skills.find(
-      (s) => s.agentSlug === record.agentSlug && s.skillId === record.skillId,
-    );
-    if (dup) {
-      Object.assign(dup, record);
-    } else {
-      this.#data.skills.push(record);
-    }
+    const { value } = logic.publishSkill(this.#data, input);
     this.save();
-    return record;
+    return value;
   }
 }
 
@@ -335,12 +208,4 @@ export function descriptorFromRecord(record: RegistrySkillRecord) {
       ? { sealPolicyId: record.sealPolicyId, decryptionRequired: true }
       : {}),
   };
-}
-
-function isSubsequence(sub: string, str: string): boolean {
-  let si = 0;
-  for (let i = 0; i < str.length && si < sub.length; i++) {
-    if (str[i] === sub[si]) si++;
-  }
-  return si === sub.length;
 }
