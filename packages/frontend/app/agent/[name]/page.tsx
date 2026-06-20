@@ -272,17 +272,17 @@ export default async function AgentPortfolioPage({ params }: Props) {
         {/* ===== Stack (Skills as tech stack) ===== */}
         <section className="border-x border-pure-black/10 px-6 py-6">
           <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
-            Stack{" "}
-            <sup className="ml-1 text-sm font-medium text-black/40">
+            Stack
+            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
               {skills.length}
-            </sup>
+            </span>
           </h2>
           {skills.length === 0 ? (
             <p className="font-mono text-sm text-black/50">
               No skills published yet.
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {skills.map((skill) => (
                 <div
                   key={skill.id}
