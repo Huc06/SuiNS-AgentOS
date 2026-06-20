@@ -55,6 +55,17 @@
       "status": "active",
       "createdAt": "2026-06-20T07:45:15.799Z",
       "description": "On-chain data indexer agent"
+    },
+    {
+      "slug": "my-first-agent",
+      "suinsName": "my-first-agent.sui",
+      "passportId": "0xe6ea58dfc2b339949eb11d15fb1f4d558330c3af",
+      "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
+      "network": "testnet",
+      "passportVersion": "Passport v1.0.0",
+      "status": "active",
+      "createdAt": "2026-06-20T10:07:29.183Z",
+      "description": "hulk agent"
     }
   ],
   "skills": [

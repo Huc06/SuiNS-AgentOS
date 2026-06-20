@@ -192,7 +192,7 @@ export function HeroSearch() {
             disabled={resolving}
             className="shrink-0 border-l-2 border-pure-black bg-electric-purple px-8 py-5 font-display text-lg font-bold uppercase text-off-white transition-colors hover:bg-pure-black disabled:opacity-60"
           >
-            {resolving ? "…" : "Resolve"}
+            {resolving ? "…" : "Find"}
           </button>
         </div>
 
