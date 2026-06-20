@@ -4,53 +4,56 @@
     {
       "slug": "alpha",
       "suinsName": "alpha.sui",
-      "passportId": "0x74a1c7c9c00000000000000000000000000000001",
-      "runtimeWallet": "0x0",
-      "network": "mainnet",
+      "passportId": "0x27dbb6bd5c8b6a0146fe9567def381ae5921acaefe2602ca8c48b8f2e03d42cb",
+      "runtimeWallet": "0x616c70686172756e74696d6577616c6c65740000000000000000000000000000",
+      "network": "testnet",
       "passportVersion": "Passport v1.2.4",
       "status": "active",
-      "createdAt": "2026-01-15T00:00:00.000Z"
+      "createdAt": "2026-06-20T07:45:07.851Z",
+      "description": "Primary research agent"
     },
     {
       "slug": "beta-agent",
       "suinsName": "beta-agent.sui",
-      "passportId": "0x3f01de901a00000000000000000000000000000002",
-      "runtimeWallet": "0x0",
+      "passportId": "0x81ed6f989f418beada65baeb2eecffc8db1f709eda8ee1d7781dfec2d9f02305",
+      "runtimeWallet": "0x626574612d6167656e7472756e74696d6577616c6c6574000000000000000000",
       "network": "testnet",
       "passportVersion": "Passport v0.9.1-beta",
       "status": "active",
-      "createdAt": "2026-02-01T00:00:00.000Z"
+      "createdAt": "2026-06-20T07:45:09.725Z",
+      "description": "Testing & QA agent"
     },
     {
       "slug": "walrus-bot",
       "suinsName": "walrus-bot.sui",
-      "passportId": "0x88c411fa02000000000000000000000000000003",
-      "runtimeWallet": "0x0",
-      "network": "mainnet",
+      "passportId": "0xc68150f9ea7bd50f1ce2f49024fda511165058d0318003bda03150036af85577",
+      "runtimeWallet": "0x77616c7275732d626f7472756e74696d6577616c6c6574000000000000000000",
+      "network": "testnet",
       "passportVersion": "Passport v2.1.0",
       "status": "active",
-      "createdAt": "2026-02-10T00:00:00.000Z"
+      "createdAt": "2026-06-20T07:45:11.476Z",
+      "description": "Storage management agent"
     },
     {
       "slug": "defi-rebalancer",
       "suinsName": "defi-rebalancer.sui",
-      "passportId": "0x646566692d726562616c616e63657270617373706f7274000000000000000000",
-      "runtimeWallet": "0x646566692d726562616c616e63657272756e74696d6500000000000000000000",
+      "passportId": "0xbab621a49afc8c3df6a55ca88825c501746ac4eafa7aca1e8b221c6c90057151",
+      "runtimeWallet": "0x646566692d726562616c616e63657272756e74696d6577616c6c657400000000",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
       "status": "active",
-      "createdAt": "2026-06-20T06:46:30.134Z",
+      "createdAt": "2026-06-20T07:45:13.361Z",
       "description": "DeFi portfolio rebalancer"
     },
     {
       "slug": "sui-indexer",
       "suinsName": "sui-indexer.sui",
-      "passportId": "0x7375692d696e646578657270617373706f727400000000000000000000000000",
-      "runtimeWallet": "0x7375692d696e646578657272756e74696d650000000000000000000000000000",
+      "passportId": "0x8c00800e1d8a259d85390183ecbb7a3d2c5bac326578894162b4231e41701a01",
+      "runtimeWallet": "0x7375692d696e646578657272756e74696d6577616c6c65740000000000000000",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
       "status": "active",
-      "createdAt": "2026-06-20T06:46:30.134Z",
+      "createdAt": "2026-06-20T07:45:15.799Z",
       "description": "On-chain data indexer agent"
     }
   ],

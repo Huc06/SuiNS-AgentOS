@@ -1,24 +1,49 @@
 #!/usr/bin/env npx tsx
 /**
  * Seed script for testnet demo.
- * Mints real AgentPassports on testnet, uploads manifests to Walrus,
- * and writes the results to .agentos/registry.json.
+ * When SUI_PRIVATE_KEY is available, mints real AgentPassports on testnet.
+ * Otherwise creates local-only registry entries with placeholder IDs.
  *
  * Usage: pnpm seed
- * Requires: SUI_PRIVATE_KEY env or local sui keystore
+ * Env: SUI_PRIVATE_KEY (optional — enables on-chain minting)
  */
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
+import { config } from "dotenv";
+
+// Load .env.local from frontend package for the private key
+config({
+  path: join(
+    import.meta.dirname ?? ".",
+    "..",
+    "packages",
+    "frontend",
+    ".env.local",
+  ),
+});
 
 const ROOT = join(import.meta.dirname ?? ".", "..");
 const REGISTRY_PATH = join(ROOT, ".agentos", "registry.json");
 const CONFIG_PATH = join(ROOT, ".agentos", "config.json");
 
+interface RegistryAgent {
+  slug: string;
+  suinsName: string;
+  passportId: string;
+  runtimeWallet: string;
+  network: string;
+  passportVersion: string;
+  status: string;
+  createdAt: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
 interface RegistryFile {
   version: 1;
-  agents: Array<Record<string, unknown>>;
+  agents: RegistryAgent[];
   skills: Array<Record<string, unknown>>;
 }
 
@@ -41,52 +66,170 @@ function saveRegistry(data: RegistryFile): void {
 }
 
 const DEMO_AGENTS = [
-  { name: "alpha", description: "Primary research agent" },
-  { name: "beta-agent", description: "Testing & QA agent" },
-  { name: "walrus-bot", description: "Storage management agent" },
-  { name: "defi-rebalancer", description: "DeFi portfolio rebalancer" },
-  { name: "sui-indexer", description: "On-chain data indexer agent" },
+  {
+    name: "alpha",
+    description: "Primary research agent",
+    version: "Passport v1.2.4",
+  },
+  {
+    name: "beta-agent",
+    description: "Testing & QA agent",
+    version: "Passport v0.9.1-beta",
+  },
+  {
+    name: "walrus-bot",
+    description: "Storage management agent",
+    version: "Passport v2.1.0",
+  },
+  {
+    name: "defi-rebalancer",
+    description: "DeFi portfolio rebalancer",
+    version: "Passport v1.0.0",
+  },
+  {
+    name: "sui-indexer",
+    description: "On-chain data indexer agent",
+    version: "Passport v1.0.0",
+  },
 ];
 
+/**
+ * Attempt to mint an AgentPassport on-chain using the Sui CLI.
+ * Returns the passport object ID on success, null on failure.
+ */
+function mintOnChain(
+  packageId: string,
+  suinsName: string,
+  runtimeWallet: string,
+): { passportId: string; digest: string } | null {
+  const privateKey = process.env.SUI_PRIVATE_KEY?.trim();
+  if (!privateKey) return null;
+
+  try {
+    // Build the PTB command using sui client ptb
+    // vector<u8> format for CLI: vector[97u8, 108u8, ...]
+    const nameBytes = Array.from(Buffer.from(suinsName))
+      .map((b) => `${b}u8`)
+      .join(",");
+    const cmd = [
+      "sui client ptb",
+      `--move-call ${packageId}::agent_passport::create "vector[${nameBytes}]" @${runtimeWallet}`,
+      "--assign passport",
+      `--transfer-objects "[passport]" @${runtimeWallet}`,
+      "--gas-budget 50000000",
+      "--json",
+    ].join(" ");
+
+    const result = execSync(cmd, { encoding: "utf8", timeout: 30000 });
+    const parsed = JSON.parse(result);
+
+    const digest = parsed.digest;
+    const created = parsed.objectChanges?.find(
+      (c: { type: string; objectType?: string; objectId?: string }) =>
+        c.type === "created" && c.objectType?.includes("AgentPassport"),
+    );
+
+    if (created?.objectId && digest) {
+      return { passportId: created.objectId, digest };
+    }
+  } catch (err) {
+    console.warn(
+      `   ⚠  On-chain mint failed for ${suinsName}:`,
+      (err as Error).message?.slice(0, 80),
+    );
+  }
+
+  return null;
+}
+
 async function main() {
-  const config = loadConfig();
-  const packageId = config.packageId || process.env.AGENTOS_PACKAGE_ID;
-  const network = config.network || "testnet";
+  const appConfig = loadConfig();
+  const packageId =
+    appConfig.packageId ||
+    process.env.NEXT_PUBLIC_AGENTOS_PACKAGE_ID ||
+    process.env.AGENTOS_PACKAGE_ID;
+  const network = appConfig.network || "testnet";
+  const hasPrivateKey = Boolean(process.env.SUI_PRIVATE_KEY?.trim());
 
   console.log(`\n🌱 Seeding ${DEMO_AGENTS.length} agents on ${network}`);
-  console.log(`   Package: ${packageId || "(no packageId — registry-only mode)"}\n`);
+  console.log(`   Package: ${packageId || "(no packageId)"}`);
+  console.log(
+    `   On-chain mint: ${hasPrivateKey ? "YES (SUI_PRIVATE_KEY found)" : "NO (local-only)"}\n`,
+  );
 
   const registry = loadRegistry();
 
   for (const agent of DEMO_AGENTS) {
     const suinsName = `${agent.name}.sui`;
-    const exists = registry.agents.find(
-      (a) => (a as { suinsName?: string }).suinsName === suinsName,
+    const existingIdx = registry.agents.findIndex(
+      (a) => a.suinsName === suinsName,
     );
 
-    if (exists) {
-      console.log(`   ⏭  ${suinsName} already in registry — skipping`);
-      continue;
+    if (existingIdx >= 0) {
+      const existing = registry.agents[existingIdx];
+      // Skip if already has a real (non-placeholder) passportId
+      if (
+        existing.passportId &&
+        !existing.passportId.includes("000000000000")
+      ) {
+        console.log(`   ⏭  ${suinsName} — already seeded with real ID`);
+        continue;
+      }
     }
 
-    // Generate a deterministic-looking address for the agent
-    const runtimeWallet = `0x${Buffer.from(agent.name + "runtime").toString("hex").padEnd(64, "0").slice(0, 64)}`;
-    const passportId = `0x${Buffer.from(agent.name + "passport").toString("hex").padEnd(64, "0").slice(0, 64)}`;
+    // Generate a runtime wallet address
+    const runtimeWallet = `0x${Buffer.from(agent.name + "runtimewallet")
+      .toString("hex")
+      .padEnd(64, "0")
+      .slice(0, 64)}`;
 
-    const record = {
+    let passportId: string;
+    let mintDigest: string | undefined;
+
+    // Try on-chain mint
+    if (hasPrivateKey && packageId) {
+      const result = mintOnChain(packageId, suinsName, runtimeWallet);
+      if (result) {
+        passportId = result.passportId;
+        mintDigest = result.digest;
+        console.log(
+          `   ✓  ${suinsName} — minted on-chain: ${passportId.slice(0, 10)}…`,
+        );
+        console.log(`      tx: ${mintDigest}`);
+      } else {
+        passportId = `0x${Buffer.from(agent.name + "passport")
+          .toString("hex")
+          .padEnd(64, "0")
+          .slice(0, 64)}`;
+        console.log(`   ⚠  ${suinsName} — mint failed, using placeholder ID`);
+      }
+    } else {
+      passportId = `0x${Buffer.from(agent.name + "passport")
+        .toString("hex")
+        .padEnd(64, "0")
+        .slice(0, 64)}`;
+      console.log(
+        `   ✓  ${suinsName} — registered (local-only, no private key)`,
+      );
+    }
+
+    const record: RegistryAgent = {
       slug: agent.name,
       suinsName,
       passportId,
       runtimeWallet,
       network,
-      passportVersion: "Passport v1.0.0",
+      passportVersion: agent.version,
       status: "active",
       createdAt: new Date().toISOString(),
       description: agent.description,
     };
 
-    registry.agents.push(record);
-    console.log(`   ✓  ${suinsName} — registered`);
+    if (existingIdx >= 0) {
+      registry.agents[existingIdx] = record;
+    } else {
+      registry.agents.push(record);
+    }
   }
 
   // Save and copy to frontend seed
@@ -96,11 +239,14 @@ async function main() {
 
   console.log(`\n✅ Registry saved: ${REGISTRY_PATH}`);
   console.log(`✅ Frontend seed: ${frontendSeed}`);
-  console.log(`\n📋 Total: ${registry.agents.length} agents, ${registry.skills.length} skills`);
+  console.log(
+    `📋 Total: ${registry.agents.length} agents, ${registry.skills.length} skills`,
+  );
 
   if (packageId) {
-    console.log(`\n🔗 Verify on Suiscan:`);
-    console.log(`   https://suiscan.xyz/testnet/object/${packageId}`);
+    console.log(
+      `\n🔗 Suiscan: https://suiscan.xyz/testnet/object/${packageId}`,
+    );
   }
 }
 
