@@ -444,6 +444,24 @@ export function preflight(
         return mk("will-run", "Memory write to the relayer.");
       }
 
+      case "memory-recall": {
+        if (!env.memwal) {
+          return mk(
+            "will-skip",
+            "No memory relayer configured (skipped, not a failure).",
+            "MEMWAL_SKIP",
+          );
+        }
+        if (!nodeStr(node, "query")) {
+          return mk(
+            "will-error",
+            "No recall query provided (params.query).",
+            "MISSING_CONFIG",
+          );
+        }
+        return mk("will-run", "Semantic recall from the relayer.");
+      }
+
       case "sui": {
         const hasMoveTarget = Boolean(nodeStr(node, "movePackage") && nodeStr(node, "entry"));
         const hasPassport = Boolean(nodeStr(node, "passportId")) || env.passportOnChain;

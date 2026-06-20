@@ -187,6 +187,37 @@ export class LocalRegistry {
     return resolved.agent.delegations ?? [];
   }
 
+  /**
+   * Record a Walrus-memory namespace an agent has written to, so it can later
+   * be offered in the canvas namespace picker. Deduped and kept most-recent
+   * first; capped to avoid unbounded growth. No-op (returns the current list)
+   * when the agent is unknown or the namespace is blank. Memwal has no
+   * list-namespaces endpoint, so this registry ledger is the only known source.
+   */
+  recordMemoryNamespace(agentName: string, namespace: string): string[] {
+    const ns = namespace.trim();
+    const resolved = this.resolveAgent(agentName);
+    if (!resolved || !ns) return resolved?.agent.memoryNamespaces ?? [];
+    const agent = resolved.agent;
+    const existing = agent.memoryNamespaces ?? [];
+    const next = [ns, ...existing.filter((n) => n !== ns)].slice(0, 50);
+    // Only write when the list actually changed (avoids churning the file).
+    const changed =
+      next.length !== existing.length ||
+      next.some((n, i) => n !== existing[i]);
+    if (changed) {
+      agent.memoryNamespaces = next;
+      this.save();
+    }
+    return next;
+  }
+
+  /** List the Walrus-memory namespaces known for an agent (most-recent first). */
+  listMemoryNamespaces(agentName: string): string[] {
+    const resolved = this.resolveAgent(agentName);
+    return resolved?.agent.memoryNamespaces ?? [];
+  }
+
   /** Search agents by fuzzy matching on slug + suinsName. */
   searchAgents(query: string, limit = 6): RegistryAgentRecord[] {
     const q = query.toLowerCase().trim();

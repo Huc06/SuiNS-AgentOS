@@ -506,18 +506,226 @@ const attest: StepExecutor = async (node, ctx) => {
 };
 
 /**
- * Memory: persist a summary of prior outputs into the agent's memory
- * namespace. Skipped (not failed) when no memory backend is wired.
+ * Resolve the memory namespace for a node: an explicit `params.namespace`
+ * wins, then the run's passport namespace, then the agent's `.sui` name.
  */
-const memory: StepExecutor = async (_node, ctx, prevOutputs) => {
+function memoryNamespace(node: WorkflowNode, ctx: RunContext): string {
+  return (
+    strParam(node, "namespace") ||
+    ctx.passport?.memoryNamespace ||
+    ctx.agentName
+  );
+}
+
+/**
+ * Tolerantly pull a Walrus blob id out of a memwal `remember` response. The
+ * relayer may surface it at the top level or nested under a `result`/`data`
+ * envelope, under any of a few common keys. Returns `undefined` when none is
+ * present (the step still reports `done` — the write succeeded regardless).
+ */
+function extractBlobId(value: unknown): string | undefined {
+  const keys = ["blobId", "blob_id", "blob", "id"];
+  const seen = new Set<unknown>();
+  const visit = (v: unknown, depth: number): string | undefined => {
+    if (depth > 3 || typeof v !== "object" || v === null || seen.has(v)) {
+      return undefined;
+    }
+    seen.add(v);
+    const rec = v as Record<string, unknown>;
+    for (const k of keys) {
+      const candidate = rec[k];
+      // Avoid mistaking a short numeric "id" for a blob id; blob ids are long.
+      if (
+        typeof candidate === "string" &&
+        candidate.length > 0 &&
+        (k !== "id" || candidate.length >= 20)
+      ) {
+        return candidate;
+      }
+    }
+    for (const nested of ["result", "data", "memory"]) {
+      const found = visit(rec[nested], depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return visit(value, 0);
+}
+
+/**
+ * Build the text a memory node should remember. Precedence:
+ *   1. an explicit `params.text` string,
+ *   2. a `params.template` with `{{nodeId}}` / `{{nodeId.field}}` placeholders
+ *      filled from prior step outputs,
+ *   3. otherwise a compact one-line digest of the prior steps (node:status,
+ *      blob/tx when present) — NOT a lossy JSON.stringify dump of everything.
+ */
+function buildMemoryText(node: WorkflowNode, prevOutputs: StepResult[]): string {
+  const explicit = strParam(node, "text");
+  if (explicit) return explicit;
+
+  const template = strParam(node, "template");
+  if (template) {
+    return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr: string) => {
+      const [nodeId, field] = String(expr).split(".");
+      const step = prevOutputs.find((s) => s.nodeId === nodeId);
+      if (!step) return "";
+      if (!field) {
+        if (step.txDigest) return step.txDigest;
+        if (step.blobId) return step.blobId;
+        return typeof step.output === "string"
+          ? step.output
+          : JSON.stringify(step.output ?? null);
+      }
+      const out = step.output;
+      if (out && typeof out === "object" && field in (out as object)) {
+        const v = (out as Record<string, unknown>)[field];
+        return typeof v === "string" ? v : JSON.stringify(v ?? null);
+      }
+      if (field === "txDigest" && step.txDigest) return step.txDigest;
+      if (field === "blobId" && step.blobId) return step.blobId;
+      return "";
+    });
+  }
+
+  // Default: a readable, non-lossy summary line (not a giant JSON dump).
+  const parts = prevOutputs
+    .filter((s) => s.status === "done")
+    .map((s) => {
+      if (s.txDigest) return `${s.nodeId}: tx ${s.txDigest}`;
+      if (s.blobId) return `${s.nodeId}: blob ${s.blobId}`;
+      return `${s.nodeId}: ${s.status}`;
+    });
+  return parts.length > 0 ? parts.join("; ") : "workflow run";
+}
+
+/**
+ * Memory (remember): persist a memory into the agent's namespace and report the
+ * real, synchronous Walrus blob id it landed in. The remembered text is an
+ * explicit `params.text` / templated `params.template`, otherwise a compact
+ * digest of prior steps — NOT a JSON.stringify dump of every prior output.
+ * Skipped (not failed) when no memory backend is wired.
+ */
+const memory: StepExecutor = async (node, ctx, prevOutputs) => {
   if (!ctx.memory) {
     return { status: "skipped", output: { note: "memwal not configured" } };
   }
-  const ns = ctx.passport?.memoryNamespace || ctx.agentName;
-  const text = JSON.stringify(prevOutputs.map((s) => s.output ?? null));
-  const result = await ctx.memory.remember(ns, text);
-  return { status: "done", output: { namespace: ns, result } };
+  const namespace = memoryNamespace(node, ctx);
+  const text = buildMemoryText(node, prevOutputs);
+  const result = await ctx.memory.remember(namespace, text);
+  const blobId = extractBlobId(result);
+  return {
+    status: "done",
+    ...(blobId ? { blobId } : {}),
+    output: { namespace, text, ...(blobId ? { blobId } : {}) },
+  };
 };
+
+/**
+ * Memory recall: semantic-search the agent's memory namespace and pull the
+ * ranked matches INTO the graph so downstream nodes (and the canvas) can read
+ * them. Skipped (not failed) when no memory backend is wired.
+ *
+ * Params: `{ namespace?, query, limit? }` (namespace falls back to the run's
+ * passport namespace / agent name; query falls back to `ctx.params.query`).
+ * Output: `{ namespace, query, total, results: [{ text, score, blobId }] }`
+ * where `score = 1 - distance` (higher is closer).
+ */
+const memoryRecall: StepExecutor = async (node, ctx, _prevOutputs) => {
+  if (!ctx.memory) {
+    return { status: "skipped", output: { note: "memwal not configured" } };
+  }
+  const namespace = memoryNamespace(node, ctx);
+  const query =
+    strParam(node, "query") ??
+    (typeof ctx.params?.query === "string" ? ctx.params.query : undefined);
+  if (!query) {
+    return {
+      status: "error",
+      error: "memory-recall: no query provided (params.query)",
+    };
+  }
+  const limitRaw = node.params?.limit;
+  const limit =
+    typeof limitRaw === "number"
+      ? limitRaw
+      : typeof limitRaw === "string" && limitRaw.trim().length > 0
+        ? Number(limitRaw)
+        : undefined;
+
+  const raw = await ctx.memory.recall(
+    namespace,
+    query,
+    Number.isFinite(limit) ? (limit as number) : undefined,
+  );
+  const results = normalizeRecall(raw);
+  return {
+    status: "done",
+    output: { namespace, query, total: results.length, results },
+  };
+};
+
+/** A single ranked recall hit pulled into the graph. */
+interface RecallHit {
+  text: string;
+  score?: number;
+  blobId?: string;
+}
+
+/**
+ * Normalise a memwal `recall` response into ranked hits. Tolerant of the
+ * relayer's exact shape: accepts `{ results | memories | matches: [...] }` (or a
+ * bare array), and per-hit `{ text|memory|content, distance|score, blobId }`.
+ * `score = 1 - distance` when a distance is given (clamped to 0..1).
+ */
+function normalizeRecall(raw: unknown): RecallHit[] {
+  const arr = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object"
+      ? ((raw as Record<string, unknown>).results ??
+        (raw as Record<string, unknown>).memories ??
+        (raw as Record<string, unknown>).matches)
+      : undefined;
+  if (!Array.isArray(arr)) return [];
+
+  const hits: RecallHit[] = [];
+  for (const item of arr) {
+    if (typeof item === "string") {
+      hits.push({ text: item });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const text =
+      typeof rec.text === "string"
+        ? rec.text
+        : typeof rec.memory === "string"
+          ? rec.memory
+          : typeof rec.content === "string"
+            ? rec.content
+            : typeof rec.value === "string"
+              ? rec.value
+              : undefined;
+    if (text === undefined) continue;
+
+    let score: number | undefined;
+    if (typeof rec.score === "number" && Number.isFinite(rec.score)) {
+      score = rec.score;
+    } else if (
+      typeof rec.distance === "number" &&
+      Number.isFinite(rec.distance)
+    ) {
+      score = Math.max(0, Math.min(1, 1 - rec.distance));
+    }
+    const blobId = extractBlobId(rec);
+    hits.push({
+      text,
+      ...(score !== undefined ? { score } : {}),
+      ...(blobId ? { blobId } : {}),
+    });
+  }
+  return hits;
+}
 
 /** Registry of executors keyed by node type. */
 export const executors: Record<WorkflowNodeType, StepExecutor> = {
@@ -526,6 +734,7 @@ export const executors: Record<WorkflowNodeType, StepExecutor> = {
   harbor,
   sui,
   memory,
+  "memory-recall": memoryRecall,
   "import-agent": importAgent,
   delegate,
   "call-sub-agent": callSubAgent,

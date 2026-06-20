@@ -82,6 +82,45 @@ describe("LocalRegistry", () => {
     rmSync(dir, { recursive: true });
   });
 
+  it("records memory namespaces deduped, most-recent first, and lists them", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agentos-"));
+    const path = join(dir, "registry.json");
+    const registry = new LocalRegistry(path, {
+      version: 1,
+      agents: [],
+      skills: [],
+    });
+    registry.registerAgent({ suinsName: "mem.sui", runtimeWallet: "0x1" });
+
+    expect(registry.listMemoryNamespaces("mem.sui")).toEqual([]);
+
+    registry.recordMemoryNamespace("mem.sui", "mem.sui");
+    registry.recordMemoryNamespace("mem.sui", "project-x");
+    // Re-recording an existing namespace promotes it to the front, deduped.
+    registry.recordMemoryNamespace("mem.sui", "mem.sui");
+
+    expect(registry.listMemoryNamespaces("mem.sui")).toEqual([
+      "mem.sui",
+      "project-x",
+    ]);
+
+    // Blank namespaces and unknown agents are no-ops (return current list).
+    expect(registry.recordMemoryNamespace("mem.sui", "  ")).toEqual([
+      "mem.sui",
+      "project-x",
+    ]);
+    expect(registry.recordMemoryNamespace("nope.sui", "x")).toEqual([]);
+
+    // Persisted to disk: a fresh registry instance sees the same namespaces.
+    const reopened = LocalRegistry.open(path);
+    expect(reopened.listMemoryNamespaces("mem.sui")).toEqual([
+      "mem.sui",
+      "project-x",
+    ]);
+
+    rmSync(dir, { recursive: true });
+  });
+
   it("removeAgent deletes agent and skills", () => {
     const dir = mkdtempSync(join(tmpdir(), "agentos-"));
     const path = join(dir, "registry.json");

@@ -16,7 +16,8 @@
 
 /**
  * The node kinds supported by the editor canvas:
- * - storage / security / memory: `walrus`, `harbor`, `memory`
+ * - storage / security / memory: `walrus`, `harbor`, `memory` (remember),
+ *   `memory-recall` (semantic recall — pulls memories INTO the graph)
  * - blockchain: `sui`
  * - triggers: `trigger`
  * - coordinate (multi-agent): `import-agent` (read-only catalog),
@@ -29,6 +30,7 @@ export type WorkflowNodeType =
   | "harbor"
   | "sui"
   | "memory"
+  | "memory-recall"
   | "import-agent"
   | "call-sub-agent"
   | "delegate"
@@ -217,9 +219,15 @@ export interface RunContext {
   client: unknown;
   /** Build->sponsor->sign->execute a transaction. Returns at least a digest. */
   execute: (tx: unknown) => Promise<{ digest: string; objectChanges?: unknown }>;
-  /** Optional Memwal-style memory writer (wired in a later phase). */
+  /**
+   * Optional Memwal-style agent memory. `remember` persists a memory and
+   * (synchronously) returns the Walrus blob it landed in; `recall` runs a
+   * semantic search over a namespace. Injected by the host (null/absent when no
+   * relayer is configured → the memory steps skip gracefully).
+   */
   memory?: {
     remember: (ns: string, text: string) => Promise<unknown>;
+    recall: (ns: string, query: string, limit?: number) => Promise<unknown>;
   };
   /** Optional manifest/blob uploader (defaults to a Walrus upload host-side). */
   uploadManifest?: (...a: unknown[]) => Promise<{ blobId: string }>;
