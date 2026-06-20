@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getAgentosPackageId } from '../../../../../lib/enoki-config';
 import { loadRootEnv } from '../../../../../lib/load-root-env';
 import { computePreflight } from '../../../../../lib/preflight';
-import { getRegistry } from '../../../../../lib/registry-server';
+import { getRegistryStore } from '../../../../../lib/registry-server';
 
 // Ensure repo-root .env is visible so the presence booleans are accurate.
 loadRootEnv();
@@ -97,8 +97,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const registry = getRegistry();
-  const resolved = registry.resolveAgent(key);
+  const registry = getRegistryStore();
+  const resolved = await registry.resolveAgent(key);
   if (!resolved) {
     return NextResponse.json(
       { error: `Agent not found: ${key}` },

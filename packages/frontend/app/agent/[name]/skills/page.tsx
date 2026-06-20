@@ -18,7 +18,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
   const label = data?.card.displayName ?? `@${name}`;
   return {
     title: `Skills · ${label} | SuiNS AgentOS`,
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function AgentSkillsPage({ params }: Props) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
 
   if (!data) {
     return <AgentNotFound name={name} />;

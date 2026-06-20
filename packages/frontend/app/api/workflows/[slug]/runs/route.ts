@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getRegistry } from '../../../../../lib/registry-server';
+import { getRegistryStore } from '../../../../../lib/registry-server';
 import { listRuns } from '../../../../../lib/runs-store';
 
 export const dynamic = 'force-dynamic';
@@ -15,8 +15,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'slug is required' }, { status: 400 });
   }
 
-  const registry = getRegistry();
-  const resolved = registry.resolveAgent(key);
+  const registry = getRegistryStore();
+  const resolved = await registry.resolveAgent(key);
   if (!resolved) {
     return NextResponse.json(
       { error: `Agent not found: ${key}` },
@@ -24,6 +24,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
 
-  const runs = listRuns(resolved.agent.slug);
+  const runs = await listRuns(resolved.agent.slug);
   return NextResponse.json({ runs });
 }

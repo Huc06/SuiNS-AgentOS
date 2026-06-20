@@ -1,64 +1,91 @@
-import { existsSync, mkdirSync, writeFileSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
-  loadConfig,
-  LocalRegistry,
-  resolveRegistryPath,
+  createDefaultRegistryStore,
+  resolveRegistryStorePath,
+  type RegistryStore,
 } from "@agentos/sdk/node";
 
 /**
- * Path to the bundled read-only registry that ships with the build.
- * This file is copied into the frontend package at build time from the
- * repo root `.agentos/registry.json`. On Vercel, we copy it to /tmp
- * on first request so the serverless function always has data.
+ * Server-side registry access for the deployed app.
+ *
+ * The frontend talks ONLY to the async {@link RegistryStore} abstraction from
+ * `@agentos/sdk/node`, so a real database (D1 / Postgres / KV) can slot in later
+ * by adding a new backend here WITHOUT touching any route code. By default the
+ * store is file-backed (the same `.agentos/registry.json` the CLI and MCP server
+ * read/write), preserving today's dev behavior.
+ *
+ * This is the frontend's intentional fork from the CLI/MCP surfaces: those keep
+ * using the synchronous `LocalRegistry`; the deployed app uses this pluggable
+ * async store so writes are durable and race-free (and a DB can replace files).
+ */
+
+/**
+ * Path to the bundled read-only registry that ships with the build. Copied into
+ * the frontend package at build time from the repo root `.agentos/registry.json`.
+ * On Vercel, the SDK factory copies it to `/tmp` on first request so the
+ * serverless function always has seed data.
  */
 const BUNDLED_REGISTRY = join(process.cwd(), "registry.seed.json");
 
-function ensureVercelRegistry(targetPath: string): void {
-  // If the target already exists (warm instance), nothing to do
-  if (existsSync(targetPath)) return;
+/**
+ * Storage backend selector. `STORAGE_BACKEND` chooses the implementation:
+ *   - "file"   (default) — file-backed {@link RegistryStore} (atomic, race-free)
+ *   - "memory"           — ephemeral in-memory store (serverless read-only fs)
+ * Future values ("d1", "postgres", "kv") can be added here without changing any
+ * route — they all consume the {@link RegistryStore} interface.
+ */
+type StorageBackend = "file" | "memory";
 
-  // Ensure the directory exists
-  mkdirSync(dirname(targetPath), { recursive: true });
-
-  // Copy bundled seed registry to /tmp
-  if (existsSync(BUNDLED_REGISTRY)) {
-    copyFileSync(BUNDLED_REGISTRY, targetPath);
-  } else {
-    // Fallback: write minimal empty registry so LocalRegistry.open doesn't crash
-    writeFileSync(
-      targetPath,
-      JSON.stringify({ version: 1, agents: [], skills: [] }, null, 2),
-      "utf8",
-    );
-  }
+function selectedBackend(): StorageBackend {
+  const raw = process.env.STORAGE_BACKEND?.trim().toLowerCase();
+  if (raw === "memory") return "memory";
+  return "file";
 }
 
 /**
- * Resolve the registry JSON path the same way for every surface (the registry
- * itself + any `AgentOSClient` constructed server-side), so they all read/write
- * the one shared `.agentos/registry.json`.
+ * Resolve options for the SDK store factory once. The frontend runs from a
+ * package subdir, so the repo-root `.agentos/registry.json` lives two levels up.
  */
-export function getRegistryPath(): string {
-  const cwd = process.cwd();
-  const config = loadConfig(cwd);
-  const repoRoot = join(cwd, "../..");
-
-  if (process.env.AGENTOS_REGISTRY_PATH) {
-    return process.env.AGENTOS_REGISTRY_PATH;
-  }
-  if (process.env.VERCEL) {
-    // Vercel serverless: filesystem is read-only except /tmp.
-    // Copy the bundled seed registry to /tmp on first request.
-    const registryPath = join(tmpdir(), ".agentos", "registry.json");
-    ensureVercelRegistry(registryPath);
-    return registryPath;
-  }
-  return resolveRegistryPath(config, repoRoot);
+function storeOptions() {
+  return {
+    cwd: process.cwd(),
+    repoRoot: join(process.cwd(), "../.."),
+    bundledRegistry: BUNDLED_REGISTRY,
+  };
 }
 
-export function getRegistry(): LocalRegistry {
-  return LocalRegistry.open(getRegistryPath());
+/**
+ * Resolve the registry JSON path the same way for every surface (the store
+ * itself + any `AgentOSClient` constructed server-side), so they all read/write
+ * the one shared `.agentos/registry.json` (or `/tmp` on Vercel). Honors
+ * `AGENTOS_REGISTRY_PATH`. Used by the workflow run route to back its internal
+ * (synchronous) `AgentOSClient` with the same file the store uses.
+ */
+export function getRegistryPath(): string {
+  return resolveRegistryStorePath(storeOptions());
+}
+
+/**
+ * Process-wide cached store. Caching matters for the in-memory backend (a fresh
+ * instance per call would lose all writes) and avoids rebuilding the file store
+ * — including the per-path async lock that serializes concurrent mutations — on
+ * every request. Keyed by backend so a config flip during dev rebuilds it.
+ */
+let cached: { backend: StorageBackend; store: RegistryStore } | undefined;
+
+/**
+ * Get the shared async {@link RegistryStore}. Callers MUST `await` its methods.
+ */
+export function getRegistryStore(): RegistryStore {
+  const backend = selectedBackend();
+  if (cached && cached.backend === backend) {
+    return cached.store;
+  }
+  const store = createDefaultRegistryStore({
+    ...storeOptions(),
+    inMemoryFallback: backend === "memory",
+  });
+  cached = { backend, store };
+  return store;
 }

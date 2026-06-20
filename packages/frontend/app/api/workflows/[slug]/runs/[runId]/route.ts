@@ -14,7 +14,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'runId is required' }, { status: 400 });
   }
 
-  const run = getRun(id);
+  const run = await getRun(id);
   if (!run) {
     return NextResponse.json(
       { error: `Run not found: ${id}` },

@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { getAgentosPackageId } from '../../../lib/enoki-config';
 import { registryAgentToCard } from '../../../lib/registry-mappers';
-import { getRegistry } from '../../../lib/registry-server';
+import { getRegistryStore } from '../../../lib/registry-server';
 import {
   getRuntimeAddress,
   sponsoredExecuteServer,
@@ -15,11 +15,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const registry = getRegistry();
-    const agents = registry.listAgents().map((agent) => {
-      const skills = registry.listSkills(agent.suinsName);
-      return registryAgentToCard(agent, skills.length);
-    });
+    const registry = getRegistryStore();
+    const agentRecords = await registry.listAgents();
+    const agents = await Promise.all(
+      agentRecords.map(async (agent) => {
+        const skills = await registry.listSkills(agent.suinsName);
+        return registryAgentToCard(agent, skills.length);
+      }),
+    );
     return NextResponse.json({ agents });
   } catch (e) {
     return NextResponse.json(
@@ -59,10 +62,10 @@ export async function POST(request: NextRequest) {
   }
   const { suinsName, runtimeWallet, network, description } = parsed.data;
 
-  const registry = getRegistry();
+  const registry = getRegistryStore();
 
   // Reject duplicates before doing any on-chain work.
-  if (registry.findAgentBySuins(suinsName)) {
+  if (await registry.findAgentBySuins(suinsName)) {
     return NextResponse.json(
       { error: `Agent already registered: ${suinsName}` },
       { status: 409 },
@@ -104,14 +107,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const agent = registry.registerAgent({
+    const agent = await registry.registerAgent({
       suinsName,
       runtimeWallet,
       network: network ?? 'testnet',
       description,
       passportId,
     });
-    const skills = registry.listSkills(agent.suinsName);
+    const skills = await registry.listSkills(agent.suinsName);
     return NextResponse.json({
       agent,
       card: registryAgentToCard(agent, skills.length),

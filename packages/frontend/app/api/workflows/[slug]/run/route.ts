@@ -21,7 +21,10 @@ import { z } from 'zod';
 
 import { getAgentosPackageId, getSuiNetwork } from '../../../../../lib/enoki-config';
 import { loadRootEnv } from '../../../../../lib/load-root-env';
-import { getRegistry, getRegistryPath } from '../../../../../lib/registry-server';
+import {
+  getRegistryStore,
+  getRegistryPath,
+} from '../../../../../lib/registry-server';
 import { appendRun } from '../../../../../lib/runs-store';
 import { sponsoredExecuteServer } from '../../../../../lib/sponsored-execute';
 
@@ -128,8 +131,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const registry = getRegistry();
-  const resolved = registry.resolveAgent(key);
+  const registry = getRegistryStore();
+  const resolved = await registry.resolveAgent(key);
   if (!resolved) {
     return NextResponse.json(
       { error: `Agent not found: ${key}` },
@@ -174,7 +177,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
         remember: async (ns: string, text: string) => {
           const result = await memwal.remember(ns, text);
           try {
-            getRegistry().recordMemoryNamespace(agent.suinsName, ns);
+            await getRegistryStore().recordMemoryNamespace(
+              agent.suinsName,
+              ns,
+            );
           } catch {
             // Namespace bookkeeping is best-effort; never fail the run for it.
           }
@@ -268,7 +274,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { steps, status } = await runWorkflow(graph, ctx);
     const runId = randomUUID();
-    appendRun({
+    await appendRun({
       runId,
       agentSlug: agent.slug,
       status,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateManifest, type SkillManifest } from "@agentos/sdk/node";
 
-import { getRegistry } from "../../../lib/registry-server";
+import { getRegistryStore } from "../../../lib/registry-server";
 import { registrySkillToRow } from "../../../lib/registry-mappers";
 
 export const dynamic = "force-dynamic";
@@ -88,8 +88,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const registry = getRegistry();
-    const skill = registry.publishSkill({
+    const registry = getRegistryStore();
+    const skill = await registry.publishSkill({
       agentName: agentName.trim(),
       manifest,
       walrusManifestBlob: walrusManifestBlob?.trim(),

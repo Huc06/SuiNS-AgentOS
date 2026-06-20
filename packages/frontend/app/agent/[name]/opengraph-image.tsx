@@ -7,7 +7,7 @@ export const contentType = 'image/png';
 
 export default async function OGImage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
-  const data = resolveAgentPageData(name);
+  const data = await resolveAgentPageData(name);
 
   const agentName = data?.resolved.agent.suinsName ?? `@${name}`;
   const status = data?.resolved.agent.status ?? 'unknown';

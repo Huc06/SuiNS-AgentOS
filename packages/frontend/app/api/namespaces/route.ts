@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getRegistry } from '../../../lib/registry-server';
+import { getRegistryStore } from '../../../lib/registry-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const registry = getRegistry();
-    const resolved = registry.resolveAgent(agent);
+    const registry = getRegistryStore();
+    const resolved = await registry.resolveAgent(agent);
     if (!resolved) {
       return NextResponse.json(
         { error: `Agent not found: ${agent}` },
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     const defaultNs = resolved.agent.suinsName;
-    const recorded = registry.listMemoryNamespaces(agent);
+    const recorded = await registry.listMemoryNamespaces(agent);
     // Default (the .sui name) first, then the rest, deduped.
     const namespaces = [
       defaultNs,

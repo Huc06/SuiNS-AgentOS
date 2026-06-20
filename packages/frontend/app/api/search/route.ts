@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getRegistry } from '../../../lib/registry-server';
+import { getRegistryStore } from '../../../lib/registry-server';
 import { registryAgentToCard } from '../../../lib/registry-mappers';
 
 export async function GET(request: Request) {
@@ -11,13 +11,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [] });
   }
 
-  const registry = getRegistry();
-  const results = registry.searchAgents(q, 6);
+  const registry = getRegistryStore();
+  const results = await registry.searchAgents(q, 6);
 
-  const cards = results.map((agent) => {
-    const skills = registry.listSkills(agent.suinsName);
-    return registryAgentToCard(agent, skills.length);
-  });
+  const cards = await Promise.all(
+    results.map(async (agent) => {
+      const skills = await registry.listSkills(agent.suinsName);
+      return registryAgentToCard(agent, skills.length);
+    }),
+  );
 
   return NextResponse.json({ results: cards });
 }
