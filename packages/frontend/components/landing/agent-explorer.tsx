@@ -59,18 +59,26 @@ export function AgentExplorer() {
   return (
     <section className="mx-auto max-w-container px-margin py-16">
       {/* Section header */}
-      <div className="mb-8">
-        <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">
-          Public Directory
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mb-2 inline-block border-2 border-electric-purple bg-electric-purple/10 px-3 py-1 font-mono text-xs font-bold uppercase text-electric-purple">
+            Public Directory
+          </div>
+          <h2 className="font-display text-3xl font-bold text-on-surface">
+            Agents Named on Sui
+          </h2>
+          <p className="mt-1 font-mono text-sm text-on-surface-variant">
+            {agents.length > 0
+              ? `${agents.length} agent${agents.length === 1 ? "" : "s"} with .sui identities — resolve by name, execute skills, delegate.`
+              : "Discover AI agents with on-chain passports on the Sui network."}
+          </p>
         </div>
-        <h2 className="font-display text-3xl font-bold text-on-surface">
-          Agents Named on Sui
-        </h2>
-        <p className="mt-1 font-mono text-sm text-on-surface-variant">
-          {agents.length > 0
-            ? `${agents.length} agent${agents.length === 1 ? "" : "s"} with .sui identities — resolve by name, execute skills, delegate.`
-            : "Discover AI agents with on-chain passports on the Sui network."}
-        </p>
+        <a
+          href="/create"
+          className="mt-1 inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-4 py-2 font-mono text-xs font-bold text-white shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0_0_#000]"
+        >
+          + Create Agent Passport
+        </a>
       </div>
 
       {/* Filter chips */}
