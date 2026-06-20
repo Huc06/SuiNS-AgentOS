@@ -4,7 +4,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -35,27 +34,25 @@ function SkillNode({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     setNodes((nds) => nds.filter((n) => n.id !== id));
-    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    setEdges((eds) =>
+      eds.filter((edge) => edge.source !== id && edge.target !== id),
+    );
   };
 
-  const handleDuplicate = (e: React.MouseEvent) => {
+  const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setNodes((nds) => {
-      const original = nds.find((n) => n.id === id);
-      if (!original) return nds;
-      return [
-        ...nds,
-        {
-          ...original,
-          id: `${id}-copy-${Date.now()}`,
-          position: {
-            x: original.position.x + 40,
-            y: original.position.y + 40,
-          },
-        },
-      ];
-    });
+    // TODO: open edit modal
   };
+
+  const nodeColor =
+    data.label === "Walrus" || data.label === "Memory"
+      ? "group-hover:border-purple-500 group-hover:shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+      : data.label === "Harbor"
+        ? "group-hover:border-blue-500 group-hover:shadow-[0_0_12px_rgba(96,165,250,0.3)]"
+        : data.label === "Sui"
+          ? "group-hover:border-cyan-500 group-hover:shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+          : "group-hover:border-orange-500 group-hover:shadow-[0_0_12px_rgba(249,115,22,0.3)]";
+
   return (
     <div className="group relative flex flex-col items-center">
       <Handle
@@ -64,12 +61,12 @@ function SkillNode({
         className="!h-3 !w-3 !border-2 !border-electric-purple !bg-white"
       />
 
-      {/* Action toolbar — shows on hover */}
+      {/* Hover toolbar — Edit + Delete only */}
       <div className="absolute -top-10 left-1/2 flex -translate-x-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
-          onClick={handleDuplicate}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+          onClick={handleEdit}
+          className="flex h-7 w-7 items-center justify-center border-2 border-pure-black bg-white text-xs text-black hover:bg-surface-container"
           title="Edit"
         >
           <svg
@@ -87,29 +84,21 @@ function SkillNode({
         <button
           type="button"
           onClick={handleDelete}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+          className="flex h-7 w-7 items-center justify-center border-2 border-pure-black bg-white text-xs text-red-600 hover:bg-red-50"
           title="Delete"
         >
-          ×
+          &times;
         </button>
       </div>
 
       {/* Node box */}
       <div
-        className={`flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black bg-white shadow-neo transition-all ${
-          data.label === "Walrus" || data.label === "Memory"
-            ? "text-electric-purple group-hover:border-electric-purple group-hover:shadow-[4px_4px_0_0_#6800FF]"
-            : data.label === "Harbor"
-              ? "text-vibrant-blue group-hover:border-vibrant-blue group-hover:shadow-[4px_4px_0_0_#0098F5]"
-              : data.label === "Sui"
-                ? "text-vibrant-blue group-hover:border-vibrant-blue group-hover:shadow-[4px_4px_0_0_#0098F5]"
-                : "text-electric-purple group-hover:border-electric-purple group-hover:shadow-[4px_4px_0_0_#6800FF]"
-        }`}
+        className={`flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black/30 bg-white text-black transition-all ${nodeColor}`}
       >
         {data.label === "Walrus" || data.label === "Memory" ? (
           <img
             src="/images/logos/walrus-memory.svg"
-            alt="Walrus Memory"
+            alt="Walrus"
             className="h-7 w-auto object-contain"
           />
         ) : data.label === "Harbor" ? (
@@ -139,15 +128,14 @@ function SkillNode({
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-on-surface-variant !bg-surface-container"
+        className="!h-3 !w-3 !border-2 !border-pure-black/30 !bg-white"
       />
 
-      {/* Labels */}
-      <p className="mt-3 text-center font-mono text-xs font-bold text-on-surface">
+      <p className="mt-3 text-center font-mono text-xs font-bold text-black">
         {data.label}
       </p>
       {data.subtitle && (
-        <p className="text-center font-mono text-[10px] text-on-surface-variant">
+        <p className="text-center font-mono text-[10px] text-black/50">
           {data.subtitle}
         </p>
       )}
@@ -155,11 +143,9 @@ function SkillNode({
   );
 }
 
-const nodeTypes: NodeTypes = {
-  skill: SkillNode,
-};
+const nodeTypes: NodeTypes = { skill: SkillNode };
 
-// ===== Initial demo flow =====
+// ===== Demo flow =====
 
 const initialNodes: Node[] = [
   {
@@ -207,18 +193,18 @@ const initialEdges: Edge[] = [
     source: "walrus-store",
     target: "harbor-seal",
     type: "smoothstep",
-    label: "ENCRYPT",
-    labelStyle: { fill: "#494457", fontSize: 9, fontFamily: "monospace" },
     style: { stroke: "#6800FF", strokeDasharray: "5 5" },
+    label: "ENCRYPT",
+    labelStyle: { fill: "#000", fontSize: 9, fontFamily: "monospace" },
   },
   {
     id: "e3",
     source: "walrus-store",
     target: "sui-exec",
     type: "smoothstep",
+    style: { stroke: "#f97316", strokeDasharray: "5 5" },
     label: "ON-CHAIN",
-    labelStyle: { fill: "#494457", fontSize: 9, fontFamily: "monospace" },
-    style: { stroke: "#0098F5", strokeDasharray: "5 5" },
+    labelStyle: { fill: "#000", fontSize: 9, fontFamily: "monospace" },
   },
   {
     id: "e4",
@@ -232,18 +218,21 @@ const initialEdges: Edge[] = [
     source: "sui-exec",
     target: "memory",
     type: "smoothstep",
-    style: { stroke: "#0098F5", strokeDasharray: "5 5" },
+    style: { stroke: "#f97316", strokeDasharray: "5 5" },
   },
 ];
+
+// ===== Page =====
 
 export default function WorkflowEditorPage() {
   const params = useParams();
   const slug = params.slug as string;
-
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(45);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -260,66 +249,135 @@ export default function WorkflowEditorPage() {
     [setEdges],
   );
 
+  // Drag to resize bottom panel
+  const handleDragResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = panelHeight;
+      const onMove = (ev: MouseEvent) => {
+        const diff = startY - ev.clientY;
+        const newH = Math.min(
+          80,
+          Math.max(20, startH + (diff / window.innerHeight) * 100),
+        );
+        setPanelHeight(newH);
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [panelHeight],
+  );
+
+  // Toggle sidebar collapse — sends event to parent layout
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => !prev);
+    document.dispatchEvent(
+      new CustomEvent("toggle-sidebar", {
+        detail: { collapsed: !sidebarCollapsed },
+      }),
+    );
+  };
+
   return (
     <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
-      {/* Top nav */}
+      {/* ===== Top bar ===== */}
       <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
+        {/* Left: sidebar toggle + breadcrumb */}
         <div className="flex items-center gap-3">
-          <Link
-            href="/create"
-            className="font-mono text-sm text-on-surface-variant hover:text-on-surface"
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="flex h-7 w-7 items-center justify-center border-2 border-pure-black bg-white text-black hover:bg-surface-container"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {"← Workflows"}
-          </Link>
-          <span className="text-on-surface-variant/40">{"/"}</span>
-          <span className="font-display text-lg font-bold text-on-surface">
-            {"@"}
-            {slug}
-          </span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              {sidebarCollapsed ? (
+                <>
+                  <path d="M3 3h18v18H3z" />
+                  <path d="M9 3v18" />
+                  <path d="M14 12l3-3m0 0l3 3m-3-3v6" />
+                </>
+              ) : (
+                <>
+                  <path d="M3 3h18v18H3z" />
+                  <path d="M9 3v18" />
+                  <path d="M15 9l-3 3 3 3" />
+                </>
+              )}
+            </svg>
+          </button>
+          <nav className="flex items-center gap-1 font-mono text-sm text-black">
+            <Link href="/create" className="text-black/50 hover:text-black">
+              Workflows
+            </Link>
+            <span className="text-black/30">/</span>
+            <span className="font-bold text-black">@{slug}</span>
+          </nav>
         </div>
+
+        {/* Center: ▶ Runs */}
         <div className="flex-1 text-center">
-          <span className="font-mono text-sm text-on-surface-variant">
-            {"▶ Runs"}
-          </span>
+          <span className="font-mono text-sm font-bold text-black">▶ Runs</span>
         </div>
+
+        {/* Right: tools toggle */}
+        <button
+          type="button"
+          onClick={() => setShowTools(!showTools)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-lg text-black transition-all hover:border-electric-purple hover:text-electric-purple"
+        >
+          +
+        </button>
       </div>
 
-      {/* Canvas */}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        fitView
-        deleteKeyCode={["Backspace", "Delete"]}
-        className="bg-off-white"
-        defaultEdgeOptions={{
-          type: "smoothstep",
-          style: { stroke: "#6800FF", strokeDasharray: "5 5" },
-        }}
+      {/* ===== Canvas ===== */}
+      <div
+        className="absolute inset-0 pt-[52px]"
+        style={{ paddingBottom: showMetrics ? `${panelHeight}vh` : 0 }}
       >
-        <Background color="#e8e4df" gap={24} size={1} />
-        <Controls className="[&_button]:!border [&_button]:!border-pure-black/20 [&_button]:!bg-white [&_button]:!text-on-surface" />
-        <MiniMap
-          className="!border !border-pure-black/20 !bg-white"
-          nodeColor="#6800FF"
-          maskColor="rgba(250,248,245,0.7)"
-        />
-      </ReactFlow>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          fitView
+          deleteKeyCode={["Backspace", "Delete"]}
+          className="bg-off-white"
+          defaultEdgeOptions={{
+            type: "smoothstep",
+            style: { stroke: "#6800FF", strokeDasharray: "5 5" },
+          }}
+        >
+          <Background color="#e8e4df" gap={24} size={1} />
+          <Controls className="[&_button]:!border-2 [&_button]:!border-pure-black/20 [&_button]:!bg-white [&_button]:!text-black" />
+        </ReactFlow>
+      </div>
 
-      {/* Bottom metrics toggle */}
+      {/* ===== Bottom panel (neo-brutalist, resizable) ===== */}
       <div className="absolute bottom-0 left-0 right-0 z-20">
-        {/* Toggle button — pill */}
+        {/* Drag handle */}
         <div className="flex justify-center">
           <button
             type="button"
             onClick={() => setShowMetrics(!showMetrics)}
-            className="relative -top-3 flex h-6 w-16 items-center justify-center rounded-full bg-electric-purple text-white shadow-lg ring-2 ring-off-white transition-colors hover:bg-electric-purple/90"
+            onMouseDown={showMetrics ? handleDragResize : undefined}
+            className="relative -top-3 flex h-6 w-16 cursor-ns-resize items-center justify-center rounded-full border-2 border-pure-black bg-white text-black shadow-[2px_2px_0_0_#000] transition-colors hover:bg-electric-purple hover:text-white"
           >
             <svg
-              xmlns="http://www.w3.org/2000/svg"
               width="16"
               height="16"
               viewBox="0 0 24 24"
@@ -335,96 +393,97 @@ export default function WorkflowEditorPage() {
           </button>
         </div>
 
-        {/* Metrics panel — ~half screen */}
         {showMetrics && (
-          <div className="h-[45vh] overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4">
+          <div
+            style={{ height: `${panelHeight}vh` }}
+            className="overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4"
+          >
             <div className="grid h-full grid-cols-3 gap-4">
-              {/* Network stats + TX/SEC */}
+              {/* Network stats */}
               <div className="flex flex-col gap-4">
-                <div className="border border-pure-black/20 bg-white p-4">
+                <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                   <div className="mb-3 flex items-center justify-between">
-                    <h4 className="font-mono text-xs font-bold text-white">
+                    <h4 className="font-mono text-xs font-bold text-black">
                       NETWORK (LIVE)
                     </h4>
-                    <span className="flex items-center gap-1 font-mono text-[10px] text-green-700">
+                    <span className="font-mono text-[10px] font-bold text-green-700">
                       ● LIVE
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-mono text-[10px] text-on-surface-variant">
+                      <p className="font-mono text-[10px] text-black/50">
                         NETWORK TPS
                       </p>
-                      <p className="font-mono text-lg font-bold text-white">
+                      <p className="font-mono text-lg font-bold text-black">
                         0
                       </p>
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] text-on-surface-variant">
+                      <p className="font-mono text-[10px] text-black/50">
                         TOTAL ACTIONS
                       </p>
-                      <p className="font-mono text-lg font-bold text-white">
+                      <p className="font-mono text-lg font-bold text-black">
                         3,771,710
                       </p>
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] text-on-surface-variant">
+                      <p className="font-mono text-[10px] text-black/50">
                         ACTIVE TUNNELS
                       </p>
-                      <p className="font-mono text-lg font-bold text-white">
+                      <p className="font-mono text-lg font-bold text-black">
                         289
                       </p>
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] text-on-surface-variant">
+                      <p className="font-mono text-[10px] text-black/50">
                         SETTLED TUNNELS
                       </p>
-                      <p className="font-mono text-lg font-bold text-white">
+                      <p className="font-mono text-lg font-bold text-black">
                         1,804
                       </p>
                     </div>
                   </div>
                 </div>
-                <div className="border border-pure-black/20 bg-white p-4">
+                <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                   <div className="mb-2 flex items-center justify-between">
-                    <h4 className="font-mono text-xs font-bold text-white">
+                    <h4 className="font-mono text-xs font-bold text-black">
                       TRANSACTIONS / SEC
                     </h4>
-                    <span className="flex items-center gap-1 font-mono text-[10px] text-green-700">
+                    <span className="font-mono text-[10px] font-bold text-green-700">
                       ● LIVE
                     </span>
                   </div>
-                  <p className="font-mono text-sm text-on-surface-variant">
-                    <span className="text-lg font-bold text-white">0</span>{" "}
+                  <p className="font-mono text-sm text-black/60">
+                    <span className="text-lg font-bold text-black">0</span>{" "}
                     tx/sec · live
                   </p>
                 </div>
               </div>
 
-              {/* Live transactions with table header */}
-              <div className="border border-pure-black/20 bg-white p-4">
-                <h4 className="mb-2 font-mono text-xs font-bold text-white">
+              {/* Live Transactions */}
+              <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                <h4 className="mb-2 font-mono text-xs font-bold text-black">
                   LIVE TRANSACTIONS
                 </h4>
                 <div className="mb-3 flex gap-2">
-                  <span className="border border-electric-purple bg-electric-purple/20 px-2 py-0.5 font-mono text-[10px] font-bold text-electric-purple">
+                  <span className="border-2 border-electric-purple bg-electric-purple/10 px-2 py-0.5 font-mono text-[10px] font-bold text-black">
                     All
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Walrus
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Harbor
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Sui PTB
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Delegate
                   </span>
                 </div>
-                {/* Table header */}
-                <div className="mb-1 flex items-center justify-between border-b border-pure-black/20 pb-1 font-mono text-[9px] font-bold uppercase text-on-surface-variant">
+                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
                   <span className="w-20">Digest</span>
                   <span className="w-16">Address</span>
                   <span className="w-14">Time</span>
@@ -432,7 +491,6 @@ export default function WorkflowEditorPage() {
                   <span className="w-12">Status</span>
                   <span className="w-16 text-right">Amount</span>
                 </div>
-                {/* Rows */}
                 <div className="space-y-1.5">
                   {[
                     {
@@ -480,17 +538,17 @@ export default function WorkflowEditorPage() {
                       key={tx.digest}
                       className="flex items-center justify-between font-mono text-[10px]"
                     >
-                      <span className="w-20 text-on-surface-variant">{tx.digest}</span>
-                      <span className="w-16 text-on-surface-variant">{tx.addr}</span>
-                      <span className="w-14 text-on-surface-variant">{tx.time}</span>
-                      <span className="w-12 text-on-surface-variant">{tx.type}</span>
+                      <span className="w-20 text-black/60">{tx.digest}</span>
+                      <span className="w-16 text-black/30">{tx.addr}</span>
+                      <span className="w-14 text-black/50">{tx.time}</span>
+                      <span className="w-12 text-black">{tx.type}</span>
                       <span
-                        className={`w-12 ${tx.status === "Settled" ? "text-green-700" : "text-electric-purple"}`}
+                        className={`w-12 font-bold ${tx.status === "Settled" ? "text-green-700" : "text-black"}`}
                       >
                         {tx.status}
                       </span>
                       <span
-                        className={`w-16 text-right ${tx.amount !== "—" ? "text-green-700" : "text-on-surface-variant"}`}
+                        className={`w-16 text-right font-bold ${tx.amount !== "—" ? "text-green-700" : "text-black/30"}`}
                       >
                         {tx.amount}
                       </span>
@@ -499,65 +557,49 @@ export default function WorkflowEditorPage() {
                 </div>
               </div>
 
-              {/* My activity with table header */}
-              <div className="border border-pure-black/20 bg-white p-4">
-                <h4 className="mb-2 font-mono text-xs font-bold text-white">
+              {/* My Activity */}
+              <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                <h4 className="mb-2 font-mono text-xs font-bold text-black">
                   MY ACTIVITY
                 </h4>
                 <div className="mb-3 flex gap-2">
-                  <span className="border border-electric-purple bg-electric-purple/20 px-2 py-0.5 font-mono text-[10px] font-bold text-electric-purple">
+                  <span className="border-2 border-electric-purple bg-electric-purple/10 px-2 py-0.5 font-mono text-[10px] font-bold text-black">
                     All
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Walrus
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Harbor
                   </span>
-                  <span className="cursor-pointer border border-gray-700 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant hover:text-white">
+                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
                     Sui PTB
                   </span>
                 </div>
-                {/* Table header */}
-                <div className="mb-1 flex items-center justify-between border-b border-pure-black/20 pb-1 font-mono text-[9px] font-bold uppercase text-on-surface-variant">
+                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
                   <span className="w-14">Time</span>
                   <span className="w-12">Type</span>
                   <span className="w-12">Status</span>
                   <span className="w-16 text-right">Amount</span>
                 </div>
-                <p className="mt-4 text-center font-mono text-xs italic text-on-surface-variant">
+                <p className="mt-4 text-center font-mono text-xs italic text-black/40">
                   No activity yet.
                 </p>
               </div>
             </div>
           </div>
         )}
-
-        {/* Action buttons removed */}
       </div>
 
-      {/* + button */}
-      <div className="absolute right-6 top-16 z-10">
-        <button
-          type="button"
-          onClick={() => setShowAddMenu(!showAddMenu)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-pure-black bg-white text-xl text-on-surface transition-all hover:border-electric-purple hover:text-electric-purple"
-        >
-          +
-        </button>
-      </div>
-
-      {/* Tools Panel — right side */}
-      {showAddMenu && (
-        <div className="absolute right-0 top-0 z-20 flex h-full w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-2xl">
+      {/* ===== Tools Panel (right side) ===== */}
+      {showTools && (
+        <div className="absolute right-0 top-0 z-20 flex h-full w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-[-4px_0_0_0_#000]">
           <div className="flex items-center justify-between border-b-2 border-pure-black px-4 py-3">
-            <h3 className="font-mono text-sm font-bold text-on-surface">
-              TOOLS
-            </h3>
+            <h3 className="font-mono text-sm font-bold text-black">TOOLS</h3>
             <button
               type="button"
-              onClick={() => setShowAddMenu(false)}
-              className="text-on-surface-variant hover:text-on-surface"
+              onClick={() => setShowTools(false)}
+              className="text-black/50 hover:text-black"
             >
               ✕
             </button>
@@ -565,21 +607,22 @@ export default function WorkflowEditorPage() {
           <div className="border-b border-pure-black/10 px-4 py-3">
             <input
               type="search"
-              placeholder="Search by tags, category..."
-              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs outline-none placeholder:text-on-surface-variant focus:border-electric-purple"
+              placeholder="Search..."
+              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs text-black outline-none placeholder:text-black/40 focus:border-electric-purple"
             />
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="border-b border-pure-black/10 px-4 py-2">
-              <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
+              <p className="font-mono text-[10px] font-bold uppercase text-black/50">
                 In This Workflow ({nodes.length})
               </p>
             </div>
             <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
-              <p className="font-mono text-[10px] font-bold uppercase text-electric-purple">
+              <p className="font-mono text-[10px] font-bold uppercase text-black">
                 All Tools
               </p>
             </div>
+
             <div className="space-y-1 p-2">
               {[
                 {
@@ -588,13 +631,11 @@ export default function WorkflowEditorPage() {
                     { label: "Walrus", subtitle: "Store manifest" },
                     { label: "Memory", subtitle: "Walrus storage" },
                   ],
-                  color: "text-purple-400",
                   count: 2,
                 },
                 {
                   category: "security",
                   tools: [{ label: "Harbor", subtitle: "Seal encrypt" }],
-                  color: "text-electric-purple",
                   count: 1,
                 },
                 {
@@ -603,13 +644,11 @@ export default function WorkflowEditorPage() {
                     { label: "Sui", subtitle: "Execute PTB" },
                     { label: "Delegate", subtitle: "Sub-agent" },
                   ],
-                  color: "text-cyan-400",
                   count: 2,
                 },
                 {
                   category: "triggers",
                   tools: [{ label: "Trigger", subtitle: "Manual start" }],
-                  color: "text-orange-400",
                   count: 1,
                 },
               ].map((cat) => (
@@ -617,7 +656,7 @@ export default function WorkflowEditorPage() {
                   key={cat.category}
                   className="border-2 border-pure-black/20 bg-white"
                 >
-                  <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-on-surface hover:bg-surface-container">
+                  <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-black hover:bg-surface-container">
                     {cat.category}
                     <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
                       {cat.count}
@@ -628,11 +667,10 @@ export default function WorkflowEditorPage() {
                       <div
                         key={tool.label}
                         onClick={() => {
-                          const id = `${tool.label.toLowerCase()}-${Date.now()}`;
                           setNodes((nds) => [
                             ...nds,
                             {
-                              id,
+                              id: `${tool.label.toLowerCase()}-${Date.now()}`,
                               type: "skill",
                               position: {
                                 x: 300 + Math.random() * 200,
@@ -647,16 +685,14 @@ export default function WorkflowEditorPage() {
                         }}
                         className="flex cursor-pointer items-center gap-3 border-2 border-pure-black bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
                       >
-                        <span
-                          className={`font-mono text-lg font-bold ${cat.color}`}
-                        >
+                        <span className="font-mono text-lg font-bold text-black">
                           {tool.label.charAt(0)}
                         </span>
                         <div>
-                          <p className="font-mono text-xs font-bold text-on-surface">
+                          <p className="font-mono text-xs font-bold text-black">
                             {tool.label}
                           </p>
-                          <p className="font-mono text-[10px] text-on-surface-variant">
+                          <p className="font-mono text-[10px] text-black/50">
                             {tool.subtitle}
                           </p>
                         </div>
