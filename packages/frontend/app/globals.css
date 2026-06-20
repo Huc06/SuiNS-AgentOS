@@ -28,6 +28,43 @@
   }
 }
 
+/* Focus-visible ring for keyboard navigation */
+:focus-visible {
+  outline: 3px solid #6800ff;
+  outline-offset: 2px;
+}
+
+/* Reduced motion: disable hover translate + pulse animations */
+@media (prefers-reduced-motion: reduce) {
+  .neo-hover:hover {
+    transform: none;
+  }
+
+  .animate-pulse {
+    animation: none;
+  }
+}
+
+/* Skip to content link */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: #6800ff;
+  color: #faf8f5;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid #000;
+  text-decoration: none;
+}
+
+.skip-to-content:focus {
+  top: 8px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
 }
