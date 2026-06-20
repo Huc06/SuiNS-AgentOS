@@ -11,6 +11,7 @@
   "dependencies": {
     "@agentos/sdk": "workspace:*",
     "@mysten/dapp-kit": "^0.14.0",
+    "@xyflow/react": "^12.11.0",
     "@mysten/enoki": "0.12.15",
     "@mysten/sui": "^1.0.0",
     "@mysten/suins": "0.7.36",
