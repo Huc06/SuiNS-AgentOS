@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AgentCardData } from "../dashboard/agent-card";
 import { AgentCard } from "../dashboard/agent-card";
+import { CreateAgentModal } from "../dashboard/create-agent-modal";
 import { EmptyState, ErrorAlert, SkeletonCard } from "../ui/skeleton";
 
 type FilterNetwork = "all" | "mainnet" | "testnet";
@@ -24,6 +25,7 @@ export function AgentExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [networkFilter, setNetworkFilter] = useState<FilterNetwork>("all");
   const [hasSkillsOnly, setHasSkillsOnly] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const loadAgents = useCallback(async () => {
     setLoading(true);
@@ -73,12 +75,13 @@ export function AgentExplorer() {
               : "Discover AI agents with on-chain passports on the Sui network."}
           </p>
         </div>
-        <a
-          href="/create"
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
           className="mt-1 inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-4 py-2 font-mono text-xs font-bold text-white shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0_0_#000]"
         >
           + Create Agent Passport
-        </a>
+        </button>
       </div>
 
       {/* Filter chips */}
@@ -139,6 +142,16 @@ export function AgentExplorer() {
           description="Try adjusting the network filter or search term."
         />
       )}
+
+      {/* Create Agent Passport Modal */}
+      <CreateAgentModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setCreateOpen(false);
+          void loadAgents();
+        }}
+      />
     </section>
   );
 }
