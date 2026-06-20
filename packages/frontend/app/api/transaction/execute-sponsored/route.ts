@@ -1,6 +1,11 @@
 import { EnokiClient } from '@mysten/enoki';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { loadRootEnv } from '../../../../lib/load-root-env';
+
+// Load repo-root .env secrets (ENOKI_SECRET_KEY) so sponsorship works in dev.
+loadRootEnv();
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

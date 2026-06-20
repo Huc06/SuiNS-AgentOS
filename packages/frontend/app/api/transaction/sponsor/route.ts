@@ -2,6 +2,10 @@ import { EnokiClient } from '@mysten/enoki';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAgentosPackageId, getSuiNetwork } from '../../../../lib/enoki-config';
+import { loadRootEnv } from '../../../../lib/load-root-env';
+
+// Load repo-root .env secrets (ENOKI_SECRET_KEY) so sponsorship works in dev.
+loadRootEnv();
 
 export const dynamic = 'force-dynamic';
 

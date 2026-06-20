@@ -1,0 +1,50 @@
+{
+  // SAMPLE wrangler config for deploying packages/frontend (Next.js 15) to
+  // Cloudflare Workers via @opennextjs/cloudflare. NOT wired up — see
+  // docs/cloudflare-workers-deploy-plan.md. Rename to wrangler.jsonc and fill
+  // in the *_id placeholders after `wrangler kv namespace create` / `d1 create`.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "suins-agentos-frontend",
+  "main": ".open-next/worker.js",
+  // Set to the day you deploy; must be >= 2024-09-23 for nodejs_compat + Next.
+  "compatibility_date": "2026-06-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+
+  // --- Storage bindings that REPLACE the .agentos/*.json filesystem stores ---
+  // registry.json  -> mostly-read structured data; query by slug/suins. D1 fits
+  // best (relational reads, searchAgents LIKE queries). KV is the fallback if
+  // you keep the whole-file blob model (read full JSON, mutate, write back).
+  "d1_databases": [
+    {
+      "binding": "AGENTOS_DB",
+      "database_name": "agentos-registry",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  // runs.json -> append-heavy log, polled by runId. KV (key = runId) is the
+  // simplest fit; or a `runs` table in the same D1 DB. Pick ONE, not both.
+  "kv_namespaces": [
+    {
+      "binding": "AGENTOS_RUNS",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // Non-secret build/runtime vars. NEXT_PUBLIC_* must ALSO be present at BUILD
+  // time (inlined into the client bundle by Next) — set them in Workers Builds
+  // "Build variables", not just here.
+  "vars": {
+    "AGENTOS_PACKAGE_ID": "0x...",
+    "NEXT_PUBLIC_SUI_NETWORK": "testnet",
+    "NEXT_PUBLIC_ENOKI_SPONSOR": "true"
+  }
+
+  // Secrets are NOT declared here. Set them with `wrangler secret put`:
+  //   ENOKI_SECRET_KEY, SUI_PRIVATE_KEY, HARBOR_API_KEY, MEMWAL_API_KEY, ...
+  // (the user must do this against their own authed account).
+}

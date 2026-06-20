@@ -18,7 +18,300 @@ import {
 import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+// ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
+// this client component never imports the Node-only SDK entry) =====
+
+type NodeStatus =
+  | "idle"
+  | "pending"
+  | "running"
+  | "done"
+  | "error"
+  | "skipped";
+
+type WfType =
+  | "trigger"
+  | "walrus"
+  | "harbor"
+  | "sui"
+  | "memory"
+  | "import-agent"
+  | "call-sub-agent"
+  | "delegate"
+  | "attest";
+
+interface SkillNodeData {
+  label: string;
+  subtitle?: string;
+  status?: NodeStatus;
+  txDigest?: string;
+  blobId?: string;
+  // Structured diagnosis carried from the run result (see @agentos/sdk diagnose).
+  error?: string;
+  errorCode?: string;
+  cause?: string;
+  remediation?: string;
+  output?: unknown;
+  // Per-node preflight prediction (fetched before a run).
+  preflight?: PreflightNodeView;
+  // Per-node params edited inline; flow into the run POST body.
+  params?: Record<string, string>;
+  // React Flow node data is an open record; keep this assignable to it.
+  [key: string]: unknown;
+}
+
+interface StepResult {
+  nodeId: string;
+  type: WfType;
+  status: NodeStatus;
+  txDigest?: string;
+  blobId?: string;
+  output?: unknown;
+  error?: string;
+  errorCode?: string;
+  errorHint?: string;
+  cause?: string;
+  remediation?: string;
+}
+
+// ===== Preflight (predicted before a run) =====
+
+type PreflightOutcome = "will-run" | "will-skip" | "will-error";
+
+interface PreflightNodeView {
+  nodeId: string;
+  type: WfType;
+  outcome: PreflightOutcome;
+  reason: string;
+  code: string;
+}
+
+interface PreflightEnvSummary {
+  suiKey: boolean;
+  enokiKey: boolean;
+  memwal: boolean;
+  packageId: boolean;
+  passportOnChain: boolean;
+  network: "mainnet" | "testnet" | "devnet";
+  customWalrusPublisher: boolean;
+}
+
+interface PreflightPayload {
+  env: PreflightEnvSummary;
+  report: { nodes: PreflightNodeView[]; hasHardBlocker: boolean };
+}
+
+interface RunRecord {
+  runId: string;
+  agentSlug?: string;
+  status: "done" | "error";
+  steps: StepResult[];
+  createdAt: string;
+}
+
+// ===== Explorer URLs (testnet/mainnet, mirrors lib/explorer-links.ts) =====
+
+const NETWORK: "mainnet" | "testnet" =
+  process.env.NEXT_PUBLIC_SUI_NETWORK === "mainnet" ? "mainnet" : "testnet";
+
+function suiscanTxUrl(digest: string): string {
+  return `https://suiscan.xyz/${NETWORK}/tx/${digest}`;
+}
+
+function walruscanBlobUrl(blobId: string): string {
+  return `https://walruscan.com/${NETWORK}/blob/${blobId}`;
+}
+
+// Map the canvas node label -> the workflow engine node type.
+const LABEL_TO_TYPE: Record<string, WfType> = {
+  Trigger: "trigger",
+  Walrus: "walrus",
+  Memory: "memory",
+  Harbor: "harbor",
+  Sui: "sui",
+  "Import Agent": "import-agent",
+  Delegate: "delegate",
+  "Call Sub-Agent": "call-sub-agent",
+  Attest: "attest",
+};
+
+const TYPE_LABEL: Record<WfType, string> = {
+  trigger: "Trigger",
+  walrus: "Store",
+  harbor: "Seal",
+  sui: "Exec",
+  memory: "Memory",
+  "import-agent": "Import",
+  delegate: "Delegate",
+  "call-sub-agent": "Sub-Call",
+  attest: "Attest",
+};
+
+// Which param keys are editable per coordinate node type, with a label + the
+// run-POST param key. The values flow straight into the run POST body.
+const NODE_PARAM_FIELDS: Partial<
+  Record<WfType, { key: string; label: string; placeholder: string }[]>
+> = {
+  "import-agent": [
+    { key: "agent", label: "Target agent (.sui)", placeholder: "alice.sui" },
+  ],
+  delegate: [
+    { key: "child", label: "Child agent (.sui / addr)", placeholder: "alice.sui" },
+    { key: "spendLimit", label: "Spend limit", placeholder: "0" },
+    { key: "expiryMs", label: "Expiry (ms epoch, 0 = none)", placeholder: "0" },
+  ],
+  "call-sub-agent": [
+    { key: "skill", label: "Skill (.sui)", placeholder: "alice.sui" },
+    {
+      key: "delegationCapId",
+      label: "Delegation cap id (0x…, optional)",
+      placeholder: "0x… (from Delegate output)",
+    },
+    {
+      key: "subjectPassportId",
+      label: "Subject passport id (0x…, optional)",
+      placeholder: "0x…",
+    },
+    { key: "cost", label: "Cost", placeholder: "0" },
+  ],
+  attest: [
+    {
+      key: "subjectPassportId",
+      label: "Subject passport id (0x…)",
+      placeholder: "0x…",
+    },
+    { key: "kind", label: "Kind", placeholder: "review" },
+    { key: "score", label: "Score (0-100)", placeholder: "100" },
+    { key: "uri", label: "URI (optional)", placeholder: "" },
+  ],
+};
+
+// Tools-panel + coordinate node visual descriptor, keyed by label.
+const COORDINATE_TOOLS: { label: string; subtitle: string }[] = [
+  { label: "Import Agent", subtitle: "Read skill catalog" },
+  { label: "Delegate", subtitle: "Grant cap" },
+  { label: "Call Sub-Agent", subtitle: "Delegated exec" },
+  { label: "Attest", subtitle: "Reputation" },
+];
+
+function statusColor(status?: NodeStatus): string {
+  switch (status) {
+    case "done":
+      return "text-green-700";
+    case "error":
+      return "text-red-600";
+    case "running":
+      return "text-amber-600";
+    case "skipped":
+    case "pending":
+      return "text-black/40";
+    default:
+      return "text-black/60";
+  }
+}
+
+function statusRing(status?: NodeStatus): string {
+  switch (status) {
+    case "running":
+      return "border-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.25)] animate-pulse";
+    case "done":
+      return "border-green-500 shadow-[0_0_0_4px_rgba(34,197,94,0.25)]";
+    case "error":
+      return "border-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.30)]";
+    case "skipped":
+      return "border-dashed border-pure-black/30 opacity-60";
+    case "pending":
+      return "border-pure-black/20 opacity-50";
+    default:
+      return "border-pure-black/30";
+  }
+}
+
+function statusBadge(status?: NodeStatus): string | null {
+  switch (status) {
+    case "running":
+      return "bg-amber-500";
+    case "done":
+      return "bg-green-500";
+    case "error":
+      return "bg-red-500";
+    case "skipped":
+      return "bg-black/30";
+    case "pending":
+      return "bg-black/20";
+    default:
+      return null;
+  }
+}
+
+// Client-side fallback diagnosis for runs persisted before the engine attached
+// a structured `cause` (back-compat). The engine now sets cause/remediation, so
+// this only fires for older runs. Mirrors the SDK rule table at a high level.
+function diagnoseFromError(error?: string): string | undefined {
+  if (!error) return undefined;
+  if (/SUI_PRIVATE_KEY is not set/i.test(error))
+    return "Server key not loaded — add SUI_PRIVATE_KEY (root .env must reach the route).";
+  if (/ENOKI_SECRET_KEY/i.test(error)) return "Enoki sponsor key missing (ENOKI_SECRET_KEY).";
+  if (/memwal not configured/i.test(error))
+    return "Memory relayer not set (skipped, not a failure).";
+  if (/Missing required capability/i.test(error))
+    return "Agent lacks a capability the skill requires.";
+  if (/integrity check failed/i.test(error)) return "Manifest hash mismatch — re-publish.";
+  if (/no (parent )?passport id/i.test(error)) return "Agent has no on-chain passport.";
+  if (/Walrus upload failed/i.test(error)) return "Walrus publisher rejected the upload.";
+  return undefined;
+}
+
+// Short human cause for a step row: prefer the engine's `cause`, then the
+// skipped note, then a client fallback from the raw error.
+function shortCause(s: StepResult): string | undefined {
+  if (s.cause) return s.cause;
+  if (s.status === "skipped") {
+    const note =
+      s.output && typeof s.output === "object" && "note" in s.output
+        ? String((s.output as { note?: unknown }).note ?? "")
+        : "";
+    if (note) return note;
+  }
+  return diagnoseFromError(s.error);
+}
+
+// Distinct colour for pending (blocked-by-upstream) vs skipped (intended).
+function statusLabelColor(status?: NodeStatus): string {
+  if (status === "pending") return "text-black/40 italic";
+  if (status === "skipped") return "text-blue-700/70";
+  return statusColor(status);
+}
+
+function preflightColor(outcome?: PreflightOutcome): string {
+  switch (outcome) {
+    case "will-run":
+      return "border-green-600 bg-green-50 text-green-700";
+    case "will-skip":
+      return "border-blue-500 bg-blue-50 text-blue-700";
+    case "will-error":
+      return "border-red-600 bg-red-50 text-red-700";
+    default:
+      return "border-pure-black/20 bg-white text-black/50";
+  }
+}
+
+function preflightGlyph(outcome?: PreflightOutcome): string {
+  switch (outcome) {
+    case "will-run":
+      return "✓";
+    case "will-skip":
+      return "↩";
+    case "will-error":
+      return "!";
+    default:
+      return "·";
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ===== Custom Skill Node =====
 
@@ -27,9 +320,13 @@ function SkillNode({
   data,
 }: {
   id: string;
-  data: { label: string; subtitle?: string };
+  data: SkillNodeData;
 }) {
   const { setNodes, setEdges } = useReactFlow();
+  const [editing, setEditing] = useState(false);
+
+  const wfType = LABEL_TO_TYPE[data.label];
+  const paramFields = wfType ? NODE_PARAM_FIELDS[wfType] : undefined;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -41,17 +338,44 @@ function SkillNode({
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // TODO: open edit modal
+    setEditing((p) => !p);
   };
 
-  const nodeColor =
-    data.label === "Walrus" || data.label === "Memory"
+  // Persist an edited param value back onto this node's data.
+  const setParam = (key: string, value: string) => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id !== id) return n;
+        const prev = (n.data as SkillNodeData).params ?? {};
+        return {
+          ...n,
+          data: { ...(n.data as SkillNodeData), params: { ...prev, [key]: value } },
+        };
+      }),
+    );
+  };
+
+  const isCoordinate =
+    wfType === "import-agent" ||
+    wfType === "delegate" ||
+    wfType === "call-sub-agent" ||
+    wfType === "attest";
+
+  const nodeColor = isCoordinate
+    ? "group-hover:border-pink-500 group-hover:shadow-[0_0_12px_rgba(236,72,153,0.3)]"
+    : data.label === "Walrus" || data.label === "Memory"
       ? "group-hover:border-purple-500 group-hover:shadow-[0_0_12px_rgba(168,85,247,0.3)]"
       : data.label === "Harbor"
         ? "group-hover:border-blue-500 group-hover:shadow-[0_0_12px_rgba(96,165,250,0.3)]"
         : data.label === "Sui"
           ? "group-hover:border-cyan-500 group-hover:shadow-[0_0_12px_rgba(34,211,238,0.3)]"
           : "group-hover:border-orange-500 group-hover:shadow-[0_0_12px_rgba(249,115,22,0.3)]";
+
+  const hasStatus = !!data.status && data.status !== "idle";
+  const badge = statusBadge(data.status);
+  const boxClass = hasStatus
+    ? `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 bg-white text-black transition-all ${statusRing(data.status)}`
+    : `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black/30 bg-white text-black transition-all ${nodeColor}`;
 
   return (
     <div className="group relative flex flex-col items-center">
@@ -92,9 +416,13 @@ function SkillNode({
       </div>
 
       {/* Node box */}
-      <div
-        className={`flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black/30 bg-white text-black transition-all ${nodeColor}`}
-      >
+      <div className={boxClass}>
+        {badge && (
+          <span
+            className={`absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white ${badge}`}
+            title={data.status}
+          />
+        )}
         {data.label === "Walrus" || data.label === "Memory" ? (
           <img
             src="/images/logos/walrus-memory.svg"
@@ -118,6 +446,57 @@ function SkillNode({
           >
             <path d="M12 2C12 2 5 9 5 14a7 7 0 1014 0c0-5-7-12-7-12z" />
           </svg>
+        ) : wfType === "import-agent" ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M12 15V3" />
+          </svg>
+        ) : wfType === "delegate" ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="9" cy="7" r="3" />
+            <path d="M3 21v-2a4 4 0 014-4h2" />
+            <path d="M16 11l2 2 4-4" />
+          </svg>
+        ) : wfType === "call-sub-agent" ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="6" cy="6" r="3" />
+            <circle cx="18" cy="18" r="3" />
+            <path d="M9 6h6a3 3 0 013 3v6" />
+          </svg>
+        ) : wfType === "attest" ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M9 12l2 2 4-4" />
+            <path d="M12 3l7 4v5c0 4.5-3 7-7 9-4-2-7-4.5-7-9V7z" />
+          </svg>
         ) : (
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="8,5 19,12 8,19" />
@@ -139,11 +518,195 @@ function SkillNode({
           {data.subtitle}
         </p>
       )}
+
+      {/* Explorer links once a node has settled with on-chain / storage output */}
+      {data.status === "done" && (data.txDigest || data.blobId) && (
+        <div className="mt-1 flex items-center gap-2">
+          {data.txDigest && (
+            <a
+              href={suiscanTxUrl(data.txDigest)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="font-mono text-[9px] font-bold text-electric-purple underline hover:opacity-70"
+              title="View transaction on Suiscan"
+            >
+              tx ↗
+            </a>
+          )}
+          {data.blobId && (
+            <a
+              href={walruscanBlobUrl(data.blobId)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="font-mono text-[9px] font-bold text-blue-600 underline hover:opacity-70"
+              title="View blob on Walruscan"
+            >
+              blob ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Pre-run preflight badge (shown only before a result lands) */}
+      {!hasStatus && data.preflight && data.preflight.outcome !== "will-run" && (
+        <div
+          className={`mt-1 max-w-[160px] truncate border px-1.5 py-0.5 font-mono text-[9px] font-bold ${preflightColor(
+            data.preflight.outcome,
+          )}`}
+          title={`${data.preflight.outcome}: ${data.preflight.reason}`}
+        >
+          {preflightGlyph(data.preflight.outcome)}{" "}
+          {data.preflight.outcome === "will-error" ? "will error" : "will skip"}
+        </div>
+      )}
+
+      {/* Per-node error caption — full text on hover */}
+      {data.status === "error" && (data.cause || data.error) && (
+        <p
+          className="mt-1 max-w-[160px] truncate text-center font-mono text-[9px] text-red-600"
+          title={`${data.cause ?? ""}${data.remediation ? ` — ${data.remediation}` : ""}\n\n${data.error ?? ""}`}
+        >
+          {(data.cause ?? data.error ?? "").slice(0, 60)}
+        </p>
+      )}
+
+      {/* Per-node skip note (neutral) / pending (blocked) note */}
+      {data.status === "skipped" && (
+        <p
+          className="mt-1 max-w-[160px] truncate text-center font-mono text-[9px] text-blue-700/70"
+          title={data.cause ?? ""}
+        >
+          skipped{data.cause ? ` — ${data.cause.slice(0, 40)}` : ""}
+        </p>
+      )}
+      {data.status === "pending" && (
+        <p className="mt-1 text-center font-mono text-[9px] italic text-black/40">
+          blocked by upstream
+        </p>
+      )}
+
+      {/* Inline per-node config — edits flow into the run POST body */}
+      {editing && paramFields && (
+        <div
+          className="nodrag absolute left-1/2 top-[110%] z-30 w-60 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 shadow-[3px_3px_0_0_#000]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+            {data.label} config
+          </p>
+          {paramFields.map((f) => (
+            <label key={f.key} className="block">
+              <span className="font-mono text-[9px] text-black/60">
+                {f.label}
+              </span>
+              <input
+                type="text"
+                value={data.params?.[f.key] ?? ""}
+                placeholder={f.placeholder}
+                onChange={(e) => setParam(f.key, e.target.value)}
+                className="mt-0.5 w-full border-2 border-pure-black/30 bg-white px-2 py-1 font-mono text-[10px] text-black outline-none placeholder:text-black/30 focus:border-electric-purple"
+              />
+            </label>
+          ))}
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="w-full border-2 border-pure-black bg-electric-purple px-2 py-1 font-mono text-[10px] font-bold text-white shadow-[2px_2px_0_0_#000]"
+          >
+            Done
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 const nodeTypes: NodeTypes = { skill: SkillNode };
+
+// ===== "Agents import agents" demo flow =====
+// Trigger -> Import Agent -> Delegate -> Call Sub-Agent -> Attest.
+// `selfName` is the current agent's .sui — used as a sensible default target so
+// the graph runs against a real agent out of the box. The user can re-point the
+// target via each node's inline config; values flow into the run POST.
+function demoCoordinateGraph(selfName: string): {
+  nodes: Node[];
+  edges: Edge[];
+} {
+  const target = selfName || "alice.sui";
+  const nodes: Node[] = [
+    {
+      id: "demo-trigger",
+      type: "skill",
+      position: { x: 60, y: 240 },
+      data: { label: "Trigger", subtitle: "Manual start" },
+    },
+    {
+      id: "demo-import",
+      type: "skill",
+      position: { x: 280, y: 240 },
+      data: {
+        label: "Import Agent",
+        subtitle: "Read skill catalog",
+        params: { agent: target },
+      },
+    },
+    {
+      id: "demo-delegate",
+      type: "skill",
+      position: { x: 500, y: 240 },
+      data: {
+        label: "Delegate",
+        subtitle: "Grant cap",
+        params: { child: target, spendLimit: "0", expiryMs: "0" },
+      },
+    },
+    {
+      id: "demo-call",
+      type: "skill",
+      position: { x: 720, y: 240 },
+      data: {
+        label: "Call Sub-Agent",
+        subtitle: "Delegated exec",
+        // delegationCapId left blank: it is produced at runtime by the Delegate
+        // node. Leave empty for a non-delegated run, or paste the cap id from the
+        // Delegate node's output for a true delegated run.
+        params: { skill: target, cost: "0" },
+      },
+    },
+    {
+      id: "demo-attest",
+      type: "skill",
+      position: { x: 940, y: 240 },
+      data: {
+        label: "Attest",
+        subtitle: "Reputation",
+        params: { kind: "review", score: "100", share: "true" },
+      },
+    },
+  ];
+  const edge = (id: string, source: string, target: string, label?: string): Edge => ({
+    id,
+    source,
+    target,
+    type: "smoothstep",
+    style: { stroke: "#ec4899", strokeDasharray: "5 5" },
+    ...(label
+      ? {
+          label,
+          labelStyle: { fill: "#000", fontSize: 9, fontFamily: "monospace" },
+        }
+      : {}),
+  });
+  const edges: Edge[] = [
+    edge("de1", "demo-trigger", "demo-import"),
+    edge("de2", "demo-import", "demo-delegate", "GRANT"),
+    edge("de3", "demo-delegate", "demo-call", "DELEGATED"),
+    edge("de4", "demo-call", "demo-attest", "ATTEST"),
+  ];
+  return { nodes, edges };
+}
 
 // ===== Demo flow =====
 
@@ -222,6 +785,139 @@ const initialEdges: Edge[] = [
   },
 ];
 
+// ===== Logs view (per-node cause + remediation + raw error) =====
+
+function severityStyle(status: NodeStatus): {
+  ring: string;
+  badge: string;
+  label: string;
+} {
+  switch (status) {
+    case "error":
+      return { ring: "border-red-600", badge: "bg-red-600 text-white", label: "ERROR" };
+    case "skipped":
+      return {
+        ring: "border-blue-400",
+        badge: "bg-blue-500 text-white",
+        label: "SKIPPED",
+      };
+    case "pending":
+      return {
+        ring: "border-pure-black/20",
+        badge: "bg-black/40 text-white",
+        label: "BLOCKED",
+      };
+    case "done":
+      return { ring: "border-green-500", badge: "bg-green-500 text-white", label: "DONE" };
+    default:
+      return { ring: "border-pure-black/20", badge: "bg-black/30 text-white", label: status.toUpperCase() };
+  }
+}
+
+function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) {
+  if (steps.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="font-mono text-xs italic text-black/40">
+          No logs yet. Run the workflow to see per-node diagnostics.
+        </p>
+      </div>
+    );
+  }
+  // Errors and skips first, then the rest.
+  const order: Record<NodeStatus, number> = {
+    error: 0,
+    skipped: 1,
+    pending: 2,
+    running: 3,
+    done: 4,
+    idle: 5,
+  };
+  const sorted = [...steps].sort((a, b) => order[a.status] - order[b.status]);
+
+  return (
+    <div className="space-y-2 pb-2">
+      {sorted.map((s) => {
+        const sev = severityStyle(s.status);
+        const cause = shortCause(s);
+        const raw =
+          s.error ??
+          (s.output && typeof s.output === "object"
+            ? JSON.stringify(s.output)
+            : undefined);
+        return (
+          <div
+            key={s.nodeId}
+            className={`border-2 ${sev.ring} bg-white p-3 shadow-[3px_3px_0_0_#000]`}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-1.5 py-0.5 font-mono text-[9px] font-bold ${sev.badge}`}
+              >
+                {sev.label}
+              </span>
+              <span className="font-mono text-xs font-bold text-black">
+                {s.nodeId}
+              </span>
+              <span className="font-mono text-[10px] text-black/40">
+                {TYPE_LABEL[s.type]}
+              </span>
+              {s.errorCode && (
+                <span className="ml-auto font-mono text-[9px] font-bold text-black/40">
+                  {s.errorCode}
+                </span>
+              )}
+              <span className="font-mono text-[9px] text-black/30">{runTime}</span>
+            </div>
+
+            {cause && (
+              <p className="mt-2 font-mono text-[11px] text-black">
+                <span className="font-bold text-black/50">cause: </span>
+                {cause}
+              </p>
+            )}
+            {s.remediation && (
+              <p className="mt-1 font-mono text-[11px] text-green-800">
+                <span className="font-bold text-black/50">fix: </span>
+                {s.remediation}
+              </p>
+            )}
+            {raw && (s.status === "error" || s.status === "skipped") && (
+              <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-all border border-pure-black/10 bg-surface-container px-2 py-1 font-mono text-[9px] text-black/60">
+                {raw}
+              </pre>
+            )}
+            {(s.txDigest || s.blobId) && (
+              <div className="mt-2 flex items-center gap-3">
+                {s.txDigest && (
+                  <a
+                    href={suiscanTxUrl(s.txDigest)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[9px] font-bold text-electric-purple underline"
+                  >
+                    tx ↗
+                  </a>
+                )}
+                {s.blobId && (
+                  <a
+                    href={walruscanBlobUrl(s.blobId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[9px] font-bold text-blue-600 underline"
+                  >
+                    blob ↗
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ===== Page =====
 
 export default function WorkflowEditorPage() {
@@ -233,6 +929,18 @@ export default function WorkflowEditorPage() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [panelHeight, setPanelHeight] = useState(45);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // ===== Run state =====
+  const [runs, setRuns] = useState<RunRecord[]>([]);
+  const [latestRun, setLatestRun] = useState<RunRecord | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [showRuns, setShowRuns] = useState(false);
+  const [txFilter, setTxFilter] = useState<"all" | WfType>("all");
+  // Bottom-panel view: metrics tables vs. the per-node Logs view.
+  const [panelView, setPanelView] = useState<"metrics" | "logs">("metrics");
+  // Preflight (predicted before a run) + the env-presence summary.
+  const [preflight, setPreflight] = useState<PreflightPayload | null>(null);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -248,6 +956,267 @@ export default function WorkflowEditorPage() {
       ),
     [setEdges],
   );
+
+  // Apply a run's step statuses + structured diagnosis onto matching canvas
+  // nodes (by id). Copies error/cause/remediation/output so the node box and the
+  // Logs view can surface WHY a step failed/skipped — not just the word "error".
+  const applySteps = useCallback(
+    (steps: StepResult[]) => {
+      setNodes((nds) =>
+        nds.map((n) => {
+          const step = steps.find((s) => s.nodeId === n.id);
+          if (!step) return n;
+          return {
+            ...n,
+            data: {
+              ...(n.data as SkillNodeData),
+              status: step.status,
+              txDigest: step.txDigest,
+              blobId: step.blobId,
+              error: step.error,
+              errorCode: step.errorCode,
+              cause: step.cause ?? shortCause(step),
+              remediation: step.remediation,
+              output: step.output,
+            },
+          };
+        }),
+      );
+    },
+    [setNodes],
+  );
+
+  // Build the runnable {nodes, edges} graph from the current canvas, mapping
+  // labels -> workflow types and forwarding only non-empty params. Shared by the
+  // run POST and the preflight fetch so both predict/run the same graph.
+  const buildRunnableGraph = useCallback(() => {
+    const runnable: {
+      id: string;
+      type: WfType;
+      label: string;
+      params?: Record<string, string>;
+    }[] = [];
+    for (const n of nodes) {
+      const nodeData = n.data as SkillNodeData;
+      const type = LABEL_TO_TYPE[nodeData.label];
+      if (!type) continue;
+      const params = Object.fromEntries(
+        Object.entries(nodeData.params ?? {}).filter(
+          ([, v]) => typeof v === "string" && v.trim().length > 0,
+        ),
+      );
+      runnable.push({
+        id: n.id,
+        type,
+        label: nodeData.label,
+        ...(Object.keys(params).length > 0 ? { params } : {}),
+      });
+    }
+    const ids = new Set(runnable.map((n) => n.id));
+    const graphEdges = edges
+      .filter((e) => ids.has(e.source) && ids.has(e.target))
+      .map((e) => ({ source: e.source, target: e.target }));
+    return { nodes: runnable, edges: graphEdges };
+  }, [nodes, edges]);
+
+  // Fetch the per-node preflight prediction for the current graph and stamp it
+  // onto each node (so the canvas shows "will error / will skip" BEFORE a run).
+  const runPreflight = useCallback(async () => {
+    const graph = buildRunnableGraph();
+    if (graph.nodes.length === 0) {
+      setPreflight(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/workflows/${encodeURIComponent(slug)}/preflight`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ graph }),
+        },
+      );
+      if (!res.ok) return;
+      const payload = (await res.json()) as PreflightPayload;
+      setPreflight(payload);
+      const byId = new Map(payload.report.nodes.map((n) => [n.nodeId, n]));
+      setNodes((nds) =>
+        nds.map((n) => {
+          const pf = byId.get(n.id);
+          if (!pf) return n;
+          return {
+            ...n,
+            data: { ...(n.data as SkillNodeData), preflight: pf },
+          };
+        }),
+      );
+    } catch {
+      /* preflight is best-effort */
+    }
+  }, [buildRunnableGraph, slug, setNodes]);
+
+  // Load the list of past runs for this agent.
+  const fetchRuns = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/workflows/${encodeURIComponent(slug)}/runs`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      setRuns(Array.isArray(data?.runs) ? data.runs : []);
+    } catch {
+      /* ignore — runs are best-effort */
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    fetchRuns();
+  }, [fetchRuns]);
+
+  // Fetch the preflight prediction on mount and whenever the graph shape changes
+  // (node/edge count). Debounced so dragging a node doesn't spam the endpoint.
+  // Skipped while a run is in flight (the run result drives node status then).
+  useEffect(() => {
+    if (running) return;
+    const t = setTimeout(() => {
+      void runPreflight();
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, nodes.length, edges.length]);
+
+  // Hydrate the canvas + metrics panel from a previously persisted run.
+  const loadRun = useCallback(
+    (run: RunRecord) => {
+      applySteps(run.steps);
+      setLatestRun(run);
+      setShowRuns(false);
+      setShowMetrics(true);
+    },
+    [applySteps],
+  );
+
+  // POST the current graph, then poll the run until it settles.
+  const handleRun = useCallback(async () => {
+    if (running) return;
+    setRunError(null);
+
+    const graph = buildRunnableGraph();
+    if (graph.nodes.length === 0) {
+      setRunError(
+        "Add at least one runnable node (Trigger, Walrus, Harbor, Sui, Memory, Import Agent, Delegate, Call Sub-Agent, Attest).",
+      );
+      return;
+    }
+
+    const runnableIds = new Set(graph.nodes.map((n) => n.id));
+
+    setRunning(true);
+    // Optimistic: mark runnable nodes as running, clear prior results +
+    // diagnosis + preflight stamps (they get re-applied from the run result).
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        data: {
+          ...(n.data as SkillNodeData),
+          status: runnableIds.has(n.id)
+            ? ("running" as NodeStatus)
+            : ("idle" as NodeStatus),
+          txDigest: undefined,
+          blobId: undefined,
+          error: undefined,
+          errorCode: undefined,
+          cause: undefined,
+          remediation: undefined,
+          output: undefined,
+          preflight: undefined,
+        },
+      })),
+    );
+
+    // Only flips nodes that are STILL "running" (never overwrites a status the
+    // server already reported), so a transport failure can't mislabel nodes that
+    // actually settled.
+    const markRunnableError = (message: string) =>
+      setNodes((nds) =>
+        nds.map((n) =>
+          runnableIds.has(n.id) && (n.data as SkillNodeData).status === "running"
+            ? {
+                ...n,
+                data: {
+                  ...(n.data as SkillNodeData),
+                  status: "error" as NodeStatus,
+                  cause: message,
+                },
+              }
+            : n,
+        ),
+      );
+
+    try {
+      const res = await fetch(`/api/workflows/${encodeURIComponent(slug)}/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ graph }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const message = payload?.error ?? `Run failed (${res.status})`;
+        setRunError(message);
+        markRunnableError(message);
+        return;
+      }
+
+      const runId: string = payload.runId;
+      if (Array.isArray(payload.steps)) {
+        applySteps(payload.steps);
+        setLatestRun({
+          runId,
+          status: payload.status,
+          steps: payload.steps,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      setShowMetrics(true);
+
+      // Poll until terminal. The server currently runs synchronously, so this
+      // usually settles on the first read; the loop keeps it correct if the
+      // engine ever becomes async.
+      for (let i = 0; i < 15; i++) {
+        await sleep(600);
+        const r = await fetch(
+          `/api/workflows/${encodeURIComponent(slug)}/runs/${encodeURIComponent(
+            runId,
+          )}`,
+        );
+        if (!r.ok) break;
+        const { run } = await r.json();
+        if (!run) break;
+        applySteps(run.steps);
+        setLatestRun(run);
+        if (run.status === "done" || run.status === "error") break;
+      }
+
+      await fetchRuns();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Run failed";
+      setRunError(message);
+      markRunnableError(message);
+    } finally {
+      setRunning(false);
+    }
+  }, [running, buildRunnableGraph, slug, setNodes, applySteps, fetchRuns]);
+
+  // Load the "Agents import agents" demo graph onto the canvas, seeded with the
+  // current agent's .sui as the default target.
+  const loadDemoGraph = useCallback(() => {
+    const selfName = slug.includes(".") ? slug : `${slug}.sui`;
+    const { nodes: dNodes, edges: dEdges } = demoCoordinateGraph(selfName);
+    setNodes(dNodes);
+    setEdges(dEdges);
+    setLatestRun(null);
+  }, [slug, setNodes, setEdges]);
 
   // Drag to resize bottom panel
   const handleDragResize = useCallback(
@@ -282,6 +1251,41 @@ export default function WorkflowEditorPage() {
       }),
     );
   };
+
+  // ===== Derived metrics from the latest run =====
+  const steps = latestRun?.steps ?? [];
+  const runTime = latestRun
+    ? new Date(latestRun.createdAt).toLocaleTimeString()
+    : "—";
+  const doneCount = steps.filter((s) => s.status === "done").length;
+  const txCount = steps.filter((s) => s.txDigest).length;
+  const blobCount = steps.filter((s) => s.blobId).length;
+  const filteredSteps =
+    txFilter === "all" ? steps : steps.filter((s) => s.type === txFilter);
+
+  // ===== Preflight-derived warnings (shown before a run) =====
+  const env = preflight?.env;
+  const hardBlocker = preflight?.report.hasHardBlocker ?? false;
+  // Env badges: only show the ones that matter (missing key / mainnet Walrus).
+  const envWarnings: { label: string; tone: "error" | "warn" }[] = [];
+  if (env) {
+    if (!env.suiKey)
+      envWarnings.push({ label: "env: SUI_PRIVATE_KEY missing", tone: "error" });
+    if (!env.enokiKey)
+      envWarnings.push({ label: "env: ENOKI_SECRET_KEY missing", tone: "error" });
+    if (env.network === "mainnet" && !env.customWalrusPublisher)
+      envWarnings.push({ label: "mainnet — no public Walrus publisher", tone: "warn" });
+    if (!env.passportOnChain)
+      envWarnings.push({
+        label: "passport not on-chain (sui/delegate may skip)",
+        tone: "warn",
+      });
+  }
+  // The steps shown in the Logs view: errored / skipped / pending first.
+  const logSteps = steps.filter(
+    (s) =>
+      s.status === "error" || s.status === "skipped" || s.status === "pending",
+  );
 
   return (
     <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
@@ -327,20 +1331,142 @@ export default function WorkflowEditorPage() {
           </nav>
         </div>
 
-        {/* Center: ▶ Runs */}
-        <div className="flex-1 text-center">
-          <span className="font-mono text-sm font-bold text-black">▶ Runs</span>
+        {/* Center: ▶ Runs dropdown */}
+        <div className="relative flex-1 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setShowRuns((p) => !p);
+              if (!showRuns) fetchRuns();
+            }}
+            className="font-mono text-sm font-bold text-black transition-colors hover:text-electric-purple"
+          >
+            ▶ Runs ({runs.length})
+          </button>
+          {showRuns && (
+            <div className="absolute left-1/2 top-8 z-30 max-h-80 w-72 -translate-x-1/2 overflow-y-auto border-2 border-pure-black bg-white text-left shadow-[4px_4px_0_0_#000]">
+              <div className="border-b-2 border-pure-black px-3 py-2 font-mono text-[10px] font-bold uppercase text-black/50">
+                Past Runs
+              </div>
+              {runs.length === 0 ? (
+                <p className="px-3 py-4 text-center font-mono text-xs italic text-black/40">
+                  No runs yet.
+                </p>
+              ) : (
+                runs.map((run) => (
+                  <button
+                    key={run.runId}
+                    type="button"
+                    onClick={() => loadRun(run)}
+                    className="flex w-full items-center gap-2 border-b border-pure-black/10 px-3 py-2 text-left hover:bg-surface-container"
+                  >
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${run.status === "done" ? "bg-green-500" : "bg-red-500"}`}
+                    />
+                    <span className="flex-1 font-mono text-xs font-bold text-black">
+                      {run.runId.slice(0, 8)}
+                    </span>
+                    <span className="font-mono text-[10px] text-black/50">
+                      {run.steps.length} steps
+                    </span>
+                    <span className="font-mono text-[10px] text-black/40">
+                      {new Date(run.createdAt).toLocaleTimeString()}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Right: tools toggle */}
-        <button
-          type="button"
-          onClick={() => setShowTools(!showTools)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-lg text-black transition-all hover:border-electric-purple hover:text-electric-purple"
-        >
-          +
-        </button>
+        {/* Right: preflight badges + run + tools */}
+        <div className="flex items-center gap-2">
+          {/* Env preflight badge strip (predicted before a run) */}
+          {envWarnings.length > 0 && (
+            <div className="hidden items-center gap-1 lg:flex">
+              {envWarnings.map((w) => (
+                <span
+                  key={w.label}
+                  className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
+                    w.tone === "error"
+                      ? "border-red-600 bg-red-50 text-red-700"
+                      : "border-amber-500 bg-amber-50 text-amber-700"
+                  }`}
+                  title={w.label}
+                >
+                  {w.tone === "error" ? "✕ " : "⚠ "}
+                  {w.label}
+                </span>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={loadDemoGraph}
+            disabled={running}
+            className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Load the Agents-import-agents coordination demo"
+          >
+            Demo Graph
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // Warn-gate: if an on-chain node will error purely on missing
+              // server env, surface it BEFORE the run instead of as a cryptic
+              // red node. The run still proceeds (user may have a reason).
+              if (hardBlocker && !running) {
+                const missing = !env?.suiKey
+                  ? "SUI_PRIVATE_KEY"
+                  : "ENOKI_SECRET_KEY";
+                setRunError(
+                  `${missing} not set — on-chain steps will error. Add it to packages/frontend/.env.local (or the repo-root .env reaching the route). Running anyway…`,
+                );
+              }
+              void handleRun();
+            }}
+            disabled={running}
+            className={`flex items-center gap-1.5 border-2 border-pure-black px-3 py-1.5 font-mono text-xs font-bold text-white shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+              hardBlocker ? "bg-red-600" : "bg-electric-purple"
+            }`}
+            title={
+              hardBlocker
+                ? "Missing server signing env — on-chain steps will error"
+                : "Run the workflow"
+            }
+          >
+            {running ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                Running…
+              </>
+            ) : (
+              <>▶ Run Workflow</>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTools(!showTools)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-lg text-black transition-all hover:border-electric-purple hover:text-electric-purple"
+          >
+            +
+          </button>
+        </div>
       </div>
+
+      {/* ===== Run error banner ===== */}
+      {runError && (
+        <div className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-3 border-2 border-red-600 bg-red-50 px-4 py-2 font-mono text-xs font-bold text-red-700 shadow-[3px_3px_0_0_#000]">
+          <span>{runError}</span>
+          <button
+            type="button"
+            onClick={() => setRunError(null)}
+            className="text-red-700/60 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ===== Canvas ===== */}
       <div
@@ -398,49 +1524,84 @@ export default function WorkflowEditorPage() {
             style={{ height: `${panelHeight}vh` }}
             className="overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4"
           >
+            {/* Panel view tabs: metrics tables vs. per-node Logs */}
+            <div className="mb-3 flex items-center gap-2">
+              {(
+                [
+                  ["metrics", "METRICS"],
+                  ["logs", "LOGS"],
+                ] as const
+              ).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setPanelView(val)}
+                  className={`border-2 px-3 py-1 font-mono text-[10px] font-bold uppercase ${
+                    panelView === val
+                      ? "border-electric-purple bg-electric-purple text-white shadow-[2px_2px_0_0_#000]"
+                      : "border-pure-black/20 bg-white text-black hover:border-electric-purple"
+                  }`}
+                >
+                  {label}
+                  {val === "logs" && logSteps.length > 0 && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center bg-red-600 px-1 text-[9px] text-white">
+                      {logSteps.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {panelView === "logs" ? (
+              <LogsView steps={steps} runTime={runTime} />
+            ) : (
             <div className="grid h-full grid-cols-3 gap-4">
-              {/* Network stats */}
+              {/* Run summary (real, derived from latest run) */}
               <div className="flex flex-col gap-4">
                 <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                   <div className="mb-3 flex items-center justify-between">
                     <h4 className="font-mono text-xs font-bold text-black">
-                      NETWORK (LIVE)
+                      RUN SUMMARY
                     </h4>
-                    <span className="font-mono text-[10px] font-bold text-green-700">
-                      ● LIVE
+                    <span
+                      className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
+                    >
+                      {running
+                        ? "● RUNNING"
+                        : latestRun
+                          ? `● ${latestRun.status.toUpperCase()}`
+                          : "● IDLE"}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="font-mono text-[10px] text-black/50">
-                        NETWORK TPS
+                        STEPS
                       </p>
                       <p className="font-mono text-lg font-bold text-black">
-                        0
+                        {steps.length}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] text-black/50">DONE</p>
+                      <p className="font-mono text-lg font-bold text-black">
+                        {doneCount}
                       </p>
                     </div>
                     <div>
                       <p className="font-mono text-[10px] text-black/50">
-                        TOTAL ACTIONS
+                        ON-CHAIN TX
                       </p>
                       <p className="font-mono text-lg font-bold text-black">
-                        3,771,710
+                        {txCount}
                       </p>
                     </div>
                     <div>
                       <p className="font-mono text-[10px] text-black/50">
-                        ACTIVE TUNNELS
+                        BLOBS
                       </p>
                       <p className="font-mono text-lg font-bold text-black">
-                        289
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] text-black/50">
-                        SETTLED TUNNELS
-                      </p>
-                      <p className="font-mono text-lg font-bold text-black">
-                        1,804
+                        {blobCount}
                       </p>
                     </div>
                   </div>
@@ -448,145 +1609,202 @@ export default function WorkflowEditorPage() {
                 <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                   <div className="mb-2 flex items-center justify-between">
                     <h4 className="font-mono text-xs font-bold text-black">
-                      TRANSACTIONS / SEC
+                      LAST RUN
                     </h4>
-                    <span className="font-mono text-[10px] font-bold text-green-700">
-                      ● LIVE
+                    <span
+                      className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
+                    >
+                      {running ? "● LIVE" : "○"}
                     </span>
                   </div>
-                  <p className="font-mono text-sm text-black/60">
-                    <span className="text-lg font-bold text-black">0</span>{" "}
-                    tx/sec · live
-                  </p>
+                  {latestRun ? (
+                    <p className="font-mono text-sm text-black/60">
+                      <span className="text-lg font-bold text-black">
+                        {latestRun.runId.slice(0, 8)}
+                      </span>{" "}
+                      · {runTime}
+                    </p>
+                  ) : (
+                    <p className="font-mono text-sm italic text-black/40">
+                      No runs yet. Hit Run Workflow.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Live Transactions */}
+              {/* Live Transactions (real, from run steps) */}
               <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                 <h4 className="mb-2 font-mono text-xs font-bold text-black">
                   LIVE TRANSACTIONS
                 </h4>
-                <div className="mb-3 flex gap-2">
-                  <span className="border-2 border-electric-purple bg-electric-purple/10 px-2 py-0.5 font-mono text-[10px] font-bold text-black">
-                    All
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Walrus
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Harbor
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Sui PTB
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Delegate
-                  </span>
-                </div>
-                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
-                  <span className="w-20">Digest</span>
-                  <span className="w-16">Address</span>
-                  <span className="w-14">Time</span>
-                  <span className="w-12">Type</span>
-                  <span className="w-12">Status</span>
-                  <span className="w-16 text-right">Amount</span>
-                </div>
-                <div className="space-y-1.5">
-                  {[
-                    {
-                      digest: "5avtT8...ef6K",
-                      addr: "—",
-                      time: "22:52:22",
-                      type: "Store",
-                      status: "Opened",
-                      amount: "—",
-                    },
-                    {
-                      digest: "yXLUjx...mm9V",
-                      addr: "—",
-                      time: "22:31:58",
-                      type: "Exec",
-                      status: "Settled",
-                      amount: "0.01 SUI",
-                    },
-                    {
-                      digest: "BRnV7p...ZzKH",
-                      addr: "—",
-                      time: "22:31:58",
-                      type: "Store",
-                      status: "Opened",
-                      amount: "—",
-                    },
-                    {
-                      digest: "9osc3z...He9B",
-                      addr: "—",
-                      time: "22:31:57",
-                      type: "Seal",
-                      status: "Opened",
-                      amount: "—",
-                    },
-                    {
-                      digest: "4hX1eN...1qkC",
-                      addr: "—",
-                      time: "22:31:35",
-                      type: "Exec",
-                      status: "Settled",
-                      amount: "0.01 SUI",
-                    },
-                  ].map((tx) => (
-                    <div
-                      key={tx.digest}
-                      className="flex items-center justify-between font-mono text-[10px]"
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["walrus", "Walrus"],
+                      ["harbor", "Harbor"],
+                      ["sui", "Sui PTB"],
+                      ["memory", "Memory"],
+                      ["import-agent", "Import"],
+                      ["delegate", "Delegate"],
+                      ["call-sub-agent", "Sub-Call"],
+                      ["attest", "Attest"],
+                    ] as const
+                  ).map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setTxFilter(val)}
+                      className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
+                        txFilter === val
+                          ? "border-electric-purple bg-electric-purple/10 text-black"
+                          : "border-pure-black/20 text-black hover:border-electric-purple"
+                      }`}
                     >
-                      <span className="w-20 text-black/60">{tx.digest}</span>
-                      <span className="w-16 text-black/30">{tx.addr}</span>
-                      <span className="w-14 text-black/50">{tx.time}</span>
-                      <span className="w-12 text-black">{tx.type}</span>
-                      <span
-                        className={`w-12 font-bold ${tx.status === "Settled" ? "text-green-700" : "text-black"}`}
-                      >
-                        {tx.status}
-                      </span>
-                      <span
-                        className={`w-16 text-right font-bold ${tx.amount !== "—" ? "text-green-700" : "text-black/30"}`}
-                      >
-                        {tx.amount}
-                      </span>
-                    </div>
+                      {label}
+                    </button>
                   ))}
                 </div>
+                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
+                  <span className="flex-1">Node</span>
+                  <span className="w-16">Type</span>
+                  <span className="w-16">Status</span>
+                  <span className="w-14 text-right">Link</span>
+                </div>
+                {filteredSteps.length === 0 ? (
+                  <p className="mt-4 text-center font-mono text-xs italic text-black/40">
+                    No transactions yet. Run the workflow.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {filteredSteps.map((s) => {
+                      const cause = shortCause(s);
+                      return (
+                        <div key={s.nodeId} className="font-mono text-[10px]">
+                          <div className="flex items-center justify-between">
+                            <span className="flex-1 truncate text-black/60">
+                              {s.nodeId}
+                            </span>
+                            <span className="w-16 text-black">
+                              {TYPE_LABEL[s.type]}
+                            </span>
+                            <span
+                              className={`w-16 font-bold ${statusLabelColor(s.status)}`}
+                            >
+                              {s.status === "pending" ? "blocked" : s.status}
+                            </span>
+                            <span className="w-14 text-right">
+                              {s.txDigest ? (
+                                <a
+                                  href={suiscanTxUrl(s.txDigest)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-electric-purple underline"
+                                >
+                                  tx ↗
+                                </a>
+                              ) : s.blobId ? (
+                                <a
+                                  href={walruscanBlobUrl(s.blobId)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-blue-600 underline"
+                                >
+                                  blob ↗
+                                </a>
+                              ) : (
+                                <span className="text-black/30">—</span>
+                              )}
+                            </span>
+                          </div>
+                          {(s.status === "error" || s.status === "skipped") &&
+                            cause && (
+                              <p
+                                className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
+                                title={`${cause}${s.remediation ? ` — ${s.remediation}` : ""}`}
+                              >
+                                ↳ {cause}
+                              </p>
+                            )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* My Activity */}
+              {/* My Activity (real, from run steps) */}
               <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
                 <h4 className="mb-2 font-mono text-xs font-bold text-black">
                   MY ACTIVITY
                 </h4>
-                <div className="mb-3 flex gap-2">
-                  <span className="border-2 border-electric-purple bg-electric-purple/10 px-2 py-0.5 font-mono text-[10px] font-bold text-black">
-                    All
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Walrus
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Harbor
-                  </span>
-                  <span className="cursor-pointer border-2 border-pure-black/20 px-2 py-0.5 font-mono text-[10px] text-black hover:border-electric-purple">
-                    Sui PTB
-                  </span>
-                </div>
                 <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
-                  <span className="w-14">Time</span>
-                  <span className="w-12">Type</span>
-                  <span className="w-12">Status</span>
-                  <span className="w-16 text-right">Amount</span>
+                  <span className="w-16">Time</span>
+                  <span className="flex-1">Type</span>
+                  <span className="w-16">Status</span>
+                  <span className="w-14 text-right">Link</span>
                 </div>
-                <p className="mt-4 text-center font-mono text-xs italic text-black/40">
-                  No activity yet.
-                </p>
+                {steps.length === 0 ? (
+                  <p className="mt-4 text-center font-mono text-xs italic text-black/40">
+                    No activity yet.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {steps.map((s) => {
+                      const cause = shortCause(s);
+                      return (
+                        <div key={s.nodeId} className="font-mono text-[10px]">
+                          <div className="flex items-center justify-between">
+                            <span className="w-16 text-black/50">{runTime}</span>
+                            <span className="flex-1 text-black">
+                              {TYPE_LABEL[s.type]}
+                            </span>
+                            <span
+                              className={`w-16 font-bold ${statusLabelColor(s.status)}`}
+                            >
+                              {s.status === "pending" ? "blocked" : s.status}
+                            </span>
+                            <span className="w-14 text-right">
+                              {s.txDigest ? (
+                                <a
+                                  href={suiscanTxUrl(s.txDigest)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-electric-purple underline"
+                                >
+                                  tx ↗
+                                </a>
+                              ) : s.blobId ? (
+                                <a
+                                  href={walruscanBlobUrl(s.blobId)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-blue-600 underline"
+                                >
+                                  blob ↗
+                                </a>
+                              ) : (
+                                <span className="text-black/30">—</span>
+                              )}
+                            </span>
+                          </div>
+                          {(s.status === "error" || s.status === "skipped") &&
+                            cause && (
+                              <p
+                                className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
+                                title={cause}
+                              >
+                                ↳ {cause}
+                              </p>
+                            )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
+            )}
           </div>
         )}
       </div>
@@ -640,11 +1858,13 @@ export default function WorkflowEditorPage() {
                 },
                 {
                   category: "blockchain",
-                  tools: [
-                    { label: "Sui", subtitle: "Execute PTB" },
-                    { label: "Delegate", subtitle: "Sub-agent" },
-                  ],
-                  count: 2,
+                  tools: [{ label: "Sui", subtitle: "Execute PTB" }],
+                  count: 1,
+                },
+                {
+                  category: "coordination",
+                  tools: COORDINATE_TOOLS,
+                  count: COORDINATE_TOOLS.length,
                 },
                 {
                   category: "triggers",
@@ -670,7 +1890,7 @@ export default function WorkflowEditorPage() {
                           setNodes((nds) => [
                             ...nds,
                             {
-                              id: `${tool.label.toLowerCase()}-${Date.now()}`,
+                              id: `${tool.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
                               type: "skill",
                               position: {
                                 x: 300 + Math.random() * 200,

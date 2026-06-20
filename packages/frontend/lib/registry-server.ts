@@ -36,22 +36,29 @@ function ensureVercelRegistry(targetPath: string): void {
   }
 }
 
-export function getRegistry(): LocalRegistry {
+/**
+ * Resolve the registry JSON path the same way for every surface (the registry
+ * itself + any `AgentOSClient` constructed server-side), so they all read/write
+ * the one shared `.agentos/registry.json`.
+ */
+export function getRegistryPath(): string {
   const cwd = process.cwd();
   const config = loadConfig(cwd);
   const repoRoot = join(cwd, "../..");
 
-  let registryPath: string;
   if (process.env.AGENTOS_REGISTRY_PATH) {
-    registryPath = process.env.AGENTOS_REGISTRY_PATH;
-  } else if (process.env.VERCEL) {
+    return process.env.AGENTOS_REGISTRY_PATH;
+  }
+  if (process.env.VERCEL) {
     // Vercel serverless: filesystem is read-only except /tmp.
     // Copy the bundled seed registry to /tmp on first request.
-    registryPath = join(tmpdir(), ".agentos", "registry.json");
+    const registryPath = join(tmpdir(), ".agentos", "registry.json");
     ensureVercelRegistry(registryPath);
-  } else {
-    registryPath = resolveRegistryPath(config, repoRoot);
+    return registryPath;
   }
+  return resolveRegistryPath(config, repoRoot);
+}
 
-  return LocalRegistry.open(registryPath);
+export function getRegistry(): LocalRegistry {
+  return LocalRegistry.open(getRegistryPath());
 }

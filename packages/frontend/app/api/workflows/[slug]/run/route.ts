@@ -1,0 +1,265 @@
+import { randomUUID } from 'node:crypto';
+
+import {
+  AgentOSClient,
+  contracts,
+  memwalFromEnv,
+  runWorkflow,
+  serializeManifest,
+  validateManifest,
+  WalrusClient,
+  type RunBuildBundle,
+  type RunResolveBundle,
+  type SkillManifest,
+  type RunContext,
+  type WorkflowGraph,
+} from '@agentos/sdk/node';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+import { getAgentosPackageId, getSuiNetwork } from '../../../../../lib/enoki-config';
+import { loadRootEnv } from '../../../../../lib/load-root-env';
+import { getRegistry, getRegistryPath } from '../../../../../lib/registry-server';
+import { appendRun } from '../../../../../lib/runs-store';
+import { sponsoredExecuteServer } from '../../../../../lib/sponsored-execute';
+
+// Belt-and-suspenders: ensure repo-root .env secrets (SUI_PRIVATE_KEY /
+// ENOKI_SECRET_KEY / MEMWAL_*) are loaded even if the next.config.ts load was
+// skipped. Idempotent; never logs values.
+loadRootEnv();
+
+export const dynamic = 'force-dynamic';
+
+type RouteContext = { params: Promise<{ slug: string }> };
+
+const nodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum([
+    'trigger',
+    'walrus',
+    'harbor',
+    'sui',
+    'memory',
+    'import-agent',
+    'call-sub-agent',
+    'delegate',
+    'attest',
+  ]),
+  label: z.string().min(1),
+  params: z.record(z.unknown()).optional(),
+});
+
+const bodySchema = z.object({
+  graph: z
+    .object({
+      nodes: z.array(nodeSchema).min(1),
+      edges: z.array(z.object({ source: z.string(), target: z.string() })),
+    })
+    .optional(),
+  params: z.record(z.unknown()).optional(),
+});
+
+/**
+ * The default workflow rendered in the editor:
+ *   Trigger -> Walrus -> { Harbor, Sui } -> Memory
+ * The Sui node carries the agent's passport id + package id so it can record an
+ * execution on-chain.
+ */
+function defaultGraph(
+  passportId: string | undefined,
+  packageId: string | undefined,
+): WorkflowGraph {
+  return {
+    nodes: [
+      { id: 'trigger', type: 'trigger', label: 'Trigger' },
+      { id: 'walrus', type: 'walrus', label: 'Walrus' },
+      { id: 'harbor', type: 'harbor', label: 'Harbor' },
+      {
+        id: 'sui',
+        type: 'sui',
+        label: 'Sui',
+        params: {
+          ...(passportId ? { passportId } : {}),
+          ...(packageId ? { packageId } : {}),
+        },
+      },
+      { id: 'memory', type: 'memory', label: 'Memory' },
+    ],
+    edges: [
+      { source: 'trigger', target: 'walrus' },
+      { source: 'walrus', target: 'harbor' },
+      { source: 'walrus', target: 'sui' },
+      { source: 'harbor', target: 'memory' },
+      { source: 'sui', target: 'memory' },
+    ],
+  };
+}
+
+function isManifest(value: unknown): value is SkillManifest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { manifestType?: unknown }).manifestType === 'sui-agent-skill/v1'
+  );
+}
+
+/**
+ * Execute a workflow for an agent, fully gasless. The engine itself is
+ * signer-agnostic: we inject `execute = sponsoredExecuteServer` (Enoki-sponsored
+ * server keypair) and a Walrus-backed `uploadManifest`. The run is persisted so
+ * it can be polled via the `runs` routes.
+ */
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { slug } = await context.params;
+  const key = decodeURIComponent(slug).trim();
+  if (!key) {
+    return NextResponse.json({ error: 'slug is required' }, { status: 400 });
+  }
+
+  const raw = await request.json().catch(() => ({}));
+  const parsed = bodySchema.safeParse(raw ?? {});
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? 'Invalid request body' },
+      { status: 400 },
+    );
+  }
+
+  const registry = getRegistry();
+  const resolved = registry.resolveAgent(key);
+  if (!resolved) {
+    return NextResponse.json(
+      { error: `Agent not found: ${key}` },
+      { status: 404 },
+    );
+  }
+  const agent = resolved.agent;
+
+  const packageId = getAgentosPackageId();
+  const graph =
+    parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
+
+  const suiClient = new SuiClient({ url: getFullnodeUrl(getSuiNetwork()) });
+
+  // Walrus-backed uploader (the SDK's storage client). Serializes a real
+  // manifest, otherwise uploads JSON/bytes verbatim.
+  const uploadManifest = async (
+    payload?: unknown,
+  ): Promise<{ blobId: string }> => {
+    const walrus = new WalrusClient();
+    let bytes: Uint8Array;
+    if (isManifest(payload)) {
+      validateManifest(payload);
+      bytes = serializeManifest(payload);
+    } else if (payload instanceof Uint8Array) {
+      bytes = payload;
+    } else {
+      bytes = new TextEncoder().encode(JSON.stringify(payload ?? {}));
+    }
+    return walrus.uploadBlob(bytes);
+  };
+
+  // Walrus-backed agent memory. `null` when MEMWAL_RELAYER_URL / MEMWAL_API_KEY
+  // are unset → the memory step skips gracefully (never crashes the run).
+  const memory = memwalFromEnv();
+
+  // A server-side AgentOSClient backs the read-only `resolve` bundle and the
+  // unsigned-PTB `build` bundle. It shares the one registry file with the rest
+  // of the surfaces and never signs/submits — every on-chain commit still flows
+  // through `execute` (sponsoredExecuteServer) below.
+  const agentClient = new AgentOSClient({
+    client: suiClient as never,
+    registryPath: getRegistryPath(),
+    ...(packageId ? { packageId } : {}),
+  });
+
+  const resolve: RunResolveBundle = {
+    resolveAgent: (name) => agentClient.resolveAgent(name),
+    resolveSkill: (nameOrId, agentName) =>
+      agentClient.resolveSkill(nameOrId, agentName),
+    listSkills: (agentName) => agentClient.listSkills(agentName),
+    downloadManifest: (blobId, expectedHash, options) =>
+      agentClient.downloadManifest(blobId, expectedHash, options),
+  };
+
+  const build: RunBuildBundle = {
+    buildCallSubAgentTx: async (options) => {
+      const built = await agentClient.buildExecuteSkillTx(options);
+      return {
+        transaction: built.transaction,
+        manifestHash: built.manifestHash,
+        verified: built.verified,
+      };
+    },
+    buildDelegateTx: (options) => {
+      const tx = new Transaction();
+      const cap = tx.add(
+        contracts.delegation.grant({
+          parentPassport: tx.object(options.parentPassportId),
+          childAgent: options.childAgent,
+          allowedSkills: options.allowedSkills,
+          allowedCapabilities: options.allowedCapabilities,
+          spendLimit: BigInt(options.spendLimit),
+          expiryMs: BigInt(options.expiryMs),
+          ...(packageId ? { packageId } : {}),
+        }),
+      );
+      // Transfer the produced cap to the child so the PTB never dangles.
+      tx.transferObjects([cap], options.childAgent);
+      return tx;
+    },
+    buildAttestTx: (options) => {
+      const tx = new Transaction();
+      tx.add(
+        contracts.attestation.attest({
+          subjectPassport: tx.object(options.subjectPassportId),
+          kind: options.kind,
+          score: options.score,
+          uri: options.uri,
+          ...(options.recipient
+            ? { recipient: options.recipient }
+            : { share: true }),
+          ...(packageId ? { packageId } : {}),
+        }),
+      );
+      return tx;
+    },
+  };
+
+  const ctx: RunContext = {
+    agentName: agent.suinsName,
+    passport: {
+      id: agent.passportId,
+      suinsName: agent.suinsName,
+      // Anchor memory to the .sui name (matches the on-chain default).
+      memoryNamespace: agent.suinsName,
+    },
+    ...(parsed.data.params ? { params: parsed.data.params } : {}),
+    client: suiClient,
+    execute: (tx: unknown) => sponsoredExecuteServer(tx as Transaction),
+    uploadManifest,
+    resolve,
+    build,
+    ...(memory ? { memory } : {}),
+  };
+
+  try {
+    const { steps, status } = await runWorkflow(graph, ctx);
+    const runId = randomUUID();
+    appendRun({
+      runId,
+      agentSlug: agent.slug,
+      status,
+      steps,
+      createdAt: new Date().toISOString(),
+    });
+    return NextResponse.json({ runId, steps, status });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'workflow run failed' },
+      { status: 500 },
+    );
+  }
+}
