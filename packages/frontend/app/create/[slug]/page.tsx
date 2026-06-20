@@ -336,86 +336,139 @@ export default function WorkflowEditorPage() {
         </button>
       </div>
 
-      {/* Add node FAB — dropdown menu */}
-      <div className="absolute right-6 top-16 z-10 flex flex-col items-end gap-2">
+      {/* + button */}
+      <div className="absolute right-6 top-16 z-10">
         <button
           type="button"
           onClick={() => setShowAddMenu(!showAddMenu)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-pure-black bg-white text-xl text-on-surface shadow-neo transition-all hover:border-electric-purple hover:text-electric-purple"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-pure-black bg-white text-xl text-on-surface transition-all hover:border-electric-purple hover:text-electric-purple"
         >
           +
         </button>
-
-        {showAddMenu && (
-          <div className="w-48 overflow-hidden rounded-xl border-2 border-pure-black bg-white shadow-neo-lg">
-            <p className="border-b border-pure-black/10 px-3 py-2 font-mono text-[10px] font-bold uppercase text-on-surface-variant">
-              Add Node
-            </p>
-            {[
-              {
-                label: "Walrus",
-                subtitle: "Store manifest",
-                color: "text-purple-400",
-              },
-              {
-                label: "Harbor",
-                subtitle: "Seal encrypt",
-                color: "text-blue-400",
-              },
-              { label: "Sui", subtitle: "Execute PTB", color: "text-cyan-400" },
-              {
-                label: "Memory",
-                subtitle: "Walrus storage",
-                color: "text-purple-400",
-              },
-              {
-                label: "Trigger",
-                subtitle: "Manual start",
-                color: "text-orange-400",
-              },
-              {
-                label: "Delegate",
-                subtitle: "Sub-agent",
-                color: "text-green-400",
-              },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  const id = `${item.label.toLowerCase()}-${Date.now()}`;
-                  setNodes((nds) => [
-                    ...nds,
-                    {
-                      id,
-                      type: "skill",
-                      position: {
-                        x: 300 + Math.random() * 200,
-                        y: 200 + Math.random() * 150,
-                      },
-                      data: { label: item.label, subtitle: item.subtitle },
-                    },
-                  ]);
-                  setShowAddMenu(false);
-                }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-container"
-              >
-                <span className={`font-mono text-sm font-bold ${item.color}`}>
-                  {item.label.charAt(0)}
-                </span>
-                <div>
-                  <p className="font-mono text-xs font-bold text-on-surface">
-                    {item.label}
-                  </p>
-                  <p className="font-mono text-[10px] text-on-surface-variant">
-                    {item.subtitle}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Tools Panel — right side */}
+      {showAddMenu && (
+        <div className="absolute right-0 top-0 z-20 flex h-full w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-2xl">
+          <div className="flex items-center justify-between border-b-2 border-pure-black px-4 py-3">
+            <h3 className="font-mono text-sm font-bold text-on-surface">
+              TOOLS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowAddMenu(false)}
+              className="text-on-surface-variant hover:text-on-surface"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="border-b border-pure-black/10 px-4 py-3">
+            <input
+              type="search"
+              placeholder="Search by tags, category..."
+              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs outline-none placeholder:text-on-surface-variant focus:border-electric-purple"
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="border-b border-pure-black/10 px-4 py-2">
+              <p className="font-mono text-[10px] font-bold uppercase text-on-surface-variant">
+                In This Workflow ({nodes.length})
+              </p>
+            </div>
+            <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
+              <p className="font-mono text-[10px] font-bold uppercase text-electric-purple">
+                All Tools
+              </p>
+            </div>
+            <div className="space-y-1 p-2">
+              {[
+                {
+                  category: "storage",
+                  tools: [
+                    { label: "Walrus", subtitle: "Store manifest" },
+                    { label: "Memory", subtitle: "Walrus storage" },
+                  ],
+                  color: "text-purple-400",
+                  count: 2,
+                },
+                {
+                  category: "security",
+                  tools: [{ label: "Harbor", subtitle: "Seal encrypt" }],
+                  color: "text-blue-400",
+                  count: 1,
+                },
+                {
+                  category: "blockchain",
+                  tools: [
+                    { label: "Sui", subtitle: "Execute PTB" },
+                    { label: "Delegate", subtitle: "Sub-agent" },
+                  ],
+                  color: "text-cyan-400",
+                  count: 2,
+                },
+                {
+                  category: "triggers",
+                  tools: [{ label: "Trigger", subtitle: "Manual start" }],
+                  color: "text-orange-400",
+                  count: 1,
+                },
+              ].map((cat) => (
+                <details
+                  key={cat.category}
+                  className="border-2 border-pure-black/20 bg-white"
+                >
+                  <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-on-surface hover:bg-surface-container">
+                    {cat.category}
+                    <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
+                      {cat.count}
+                    </span>
+                  </summary>
+                  <div className="space-y-1 border-t border-pure-black/10 p-2">
+                    {cat.tools.map((tool) => (
+                      <div
+                        key={tool.label}
+                        onClick={() => {
+                          const id = `${tool.label.toLowerCase()}-${Date.now()}`;
+                          setNodes((nds) => [
+                            ...nds,
+                            {
+                              id,
+                              type: "skill",
+                              position: {
+                                x: 300 + Math.random() * 200,
+                                y: 200 + Math.random() * 150,
+                              },
+                              data: {
+                                label: tool.label,
+                                subtitle: tool.subtitle,
+                              },
+                            },
+                          ]);
+                        }}
+                        className="flex cursor-pointer items-center gap-3 border-2 border-pure-black bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
+                      >
+                        <span
+                          className={`font-mono text-lg font-bold ${cat.color}`}
+                        >
+                          {tool.label.charAt(0)}
+                        </span>
+                        <div>
+                          <p className="font-mono text-xs font-bold text-on-surface">
+                            {tool.label}
+                          </p>
+                          <p className="font-mono text-[10px] text-on-surface-variant">
+                            {tool.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
