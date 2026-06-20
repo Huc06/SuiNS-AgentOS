@@ -92,6 +92,8 @@ export class LocalRegistry {
     network?: "mainnet" | "testnet";
     passportVersion?: string;
     description?: string;
+    /** Real on-chain AgentPassport object id, when minted. Falls back to a synthetic id. */
+    passportId?: string;
   }): RegistryAgentRecord {
     const suinsName = normalizeSuinsName(input.suinsName);
     if (!suinsName.endsWith(".sui")) {
@@ -103,7 +105,8 @@ export class LocalRegistry {
     }
 
     const slug = slugFromSuins(suinsName);
-    const passportId = `0x${randomBytes(20).toString("hex")}`;
+    const passportId =
+      input.passportId?.trim() || `0x${randomBytes(20).toString("hex")}`;
     const record: RegistryAgentRecord = {
       slug,
       suinsName,

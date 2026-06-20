@@ -115,6 +115,9 @@ function createMockSuiClient(executeResult?: ExecuteResult) {
   };
 }
 
+const TEST_PACKAGE_ID =
+  "0x0000000000000000000000000000000000000000000000000000000000000abc";
+
 function createMockSigner() {
   return {
     toSuiAddress: () =>
@@ -548,5 +551,64 @@ describe("skill lifecycle integration", () => {
         { sealPolicyId },
       ),
     ).rejects.toThrow(`Access denied: not a member of group ${groupId}`);
+  });
+
+  // -------------------------------------------------------------------------
+  // createAgent — on-chain mint records the real AgentPassport object id
+  // -------------------------------------------------------------------------
+  it("createAgent mints on-chain and records the real passport object id", async () => {
+    const onChainId =
+      "0x00000000000000000000000000000000000000000000000000000000000000c1";
+    const mockClient = createMockSuiClient({
+      digest: "tx_create_agent",
+      effects: { status: { status: "success" } },
+      objectChanges: [
+        {
+          type: "created",
+          objectId: onChainId,
+          objectType: `${TEST_PACKAGE_ID}::agent_passport::AgentPassport`,
+        },
+      ],
+    });
+
+    const client = new AgentOSClient({
+      client: mockClient as never,
+      packageId: TEST_PACKAGE_ID,
+      registryPath: tempRegistryPath(),
+    });
+
+    const passport = await client.createAgent({
+      signer: createMockSigner() as never,
+      name: "minted.sui",
+      runtimeWallet:
+        "0x0000000000000000000000000000000000000000000000000000000000000009",
+    });
+
+    expect(mockClient.executeTransactionBlock).toHaveBeenCalled();
+    expect(passport.id).toBe(onChainId);
+  });
+
+  it("createAgent falls back to a registry id when execution is unavailable", async () => {
+    // Mock client without executeTransactionBlock → on-chain path is a no-op.
+    const mockClient = {
+      resolveNameServiceAddress: vi.fn().mockResolvedValue(null),
+      getObject: vi.fn().mockResolvedValue({ data: undefined }),
+    };
+
+    const client = new AgentOSClient({
+      client: mockClient as never,
+      packageId: TEST_PACKAGE_ID,
+      registryPath: tempRegistryPath(),
+    });
+
+    const passport = await client.createAgent({
+      signer: createMockSigner() as never,
+      name: "fallback.sui",
+      runtimeWallet:
+        "0x0000000000000000000000000000000000000000000000000000000000000009",
+    });
+
+    // A synthetic id is generated; it must be a 0x address but not a real mint.
+    expect(passport.id).toMatch(/^0x[0-9a-f]+$/);
   });
 });

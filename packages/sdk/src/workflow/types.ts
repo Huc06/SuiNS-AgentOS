@@ -1,0 +1,230 @@
+/**
+ * Workflow engine types.
+ *
+ * A workflow is a small DAG of nodes (the node kinds rendered in the dashboard
+ * editor) connected by edges. The engine ({@link ./run.ts}) topo-sorts the
+ * nodes and runs one {@link ./executors.ts} StepExecutor per node, threading a
+ * {@link RunContext}.
+ *
+ * The SDK side is **signer-agnostic**: it never imports Enoki or reads env.
+ * Whoever runs the workflow (e.g. a Next.js API route) injects an
+ * `execute(tx)` function (gas sponsorship / signing lives there) plus the
+ * storage/memory helpers, the read-only `resolve` bundle, and the unsigned-PTB
+ * `build` bundle. On-chain commits ALWAYS go through `execute` — the resolve
+ * and build helpers never sign or submit anything.
+ */
+
+/**
+ * The node kinds supported by the editor canvas:
+ * - storage / security / memory: `walrus`, `harbor`, `memory`
+ * - blockchain: `sui`
+ * - triggers: `trigger`
+ * - coordinate (multi-agent): `import-agent` (read-only catalog),
+ *   `delegate` (grant a DelegationCap), `call-sub-agent` (delegated atomic
+ *   skill execution), `attest` (write a reputation attestation).
+ */
+export type WorkflowNodeType =
+  | "trigger"
+  | "walrus"
+  | "harbor"
+  | "sui"
+  | "memory"
+  | "import-agent"
+  | "call-sub-agent"
+  | "delegate"
+  | "attest";
+
+/** A single node in the workflow graph. */
+export interface WorkflowNode {
+  id: string;
+  type: WorkflowNodeType;
+  label: string;
+  params?: Record<string, unknown>;
+}
+
+/** A directed edge `source -> target` between two node ids. */
+export interface WorkflowEdge {
+  source: string;
+  target: string;
+}
+
+/** The full workflow graph: nodes + edges. */
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
+/** Lifecycle status of a single step. */
+export type StepStatus = "pending" | "running" | "done" | "error" | "skipped";
+
+/** The result of executing a single node. */
+export interface StepResult {
+  nodeId: string;
+  type: WorkflowNodeType;
+  status: StepStatus;
+  output?: unknown;
+  txDigest?: string;
+  blobId?: string;
+  /** Raw error message (kept for back-compat). */
+  error?: string;
+  /**
+   * Stable classification of the error/skip (see {@link ./diagnose.ts}
+   * `StepErrorCode`). Set by the engine for errored/skipped steps.
+   */
+  errorCode?: string;
+  /** Short, human-readable hint derived from the raw error. */
+  errorHint?: string;
+  /** One-line explanation of WHY the step errored/skipped. */
+  cause?: string;
+  /** One-line, actionable remediation. */
+  remediation?: string;
+}
+
+/**
+ * A resolved agent passport (subset of the SDK `AgentPassport`) returned by
+ * the injected `resolve.resolveAgent`. Kept structural to avoid coupling the
+ * workflow types to the full client type graph.
+ */
+export interface ResolvedAgent {
+  id?: string;
+  suinsName?: string;
+  runtimeWallet?: string;
+  owner?: string;
+  /** "active" gates the agent as runnable; anything else is treated as inactive. */
+  status?: string;
+}
+
+/** A resolved skill descriptor (subset) returned by `resolve.resolveSkill`/`listSkills`. */
+export interface ResolvedSkill {
+  skillId: string;
+  walrusManifestBlob: string;
+  manifestHash: string;
+  version: string;
+  requiredCapabilities: string[];
+  dependencies?: string[];
+  sealPolicyId?: string;
+}
+
+/** A downloaded + hash-verified skill manifest (subset) returned by `resolve.downloadManifest`. */
+export interface ResolvedManifest {
+  name: string;
+  version: string;
+  sui: {
+    movePackage: string;
+    entry: string;
+    policyRequired: string[];
+  };
+  dependencies?: string[];
+}
+
+/**
+ * Read-only resolver bundle injected by the host. Every member is a pure read
+ * (chain-first, registry fallback inside the SDK client) — none of them sign or
+ * submit a transaction. The coordinate executors use this to look up other
+ * agents/skills before delegating to / calling them.
+ */
+export interface RunResolveBundle {
+  resolveAgent: (suinsName: string) => Promise<ResolvedAgent>;
+  resolveSkill: (
+    suinsNameOrSkillId: string,
+    agentName?: string,
+  ) => Promise<ResolvedSkill>;
+  listSkills: (agentName: string) => Promise<ResolvedSkill[]>;
+  downloadManifest: (
+    blobId: string,
+    expectedHash: string,
+    options?: { sealPolicyId?: string },
+  ) => Promise<ResolvedManifest>;
+}
+
+/** Options for the injected delegated-skill PTB builder. */
+export interface BuildCallSubAgentOptions {
+  suinsName: string;
+  params?: Record<string, unknown>;
+  agentCapabilities?: string[];
+  delegationCapId?: string;
+  cost?: bigint | number;
+  subjectPassportId?: string;
+}
+
+/** Result of the injected delegated-skill PTB builder (an unsigned Transaction). */
+export interface BuildCallSubAgentResult {
+  /** The unsigned PTB, ready to hand to `ctx.execute`. Typed `unknown` to avoid coupling. */
+  transaction: unknown;
+  manifestHash: string;
+  verified: boolean;
+}
+
+/** Options for the injected delegation-grant PTB builder. */
+export interface BuildDelegateOptions {
+  parentPassportId: string;
+  childAgent: string;
+  allowedSkills: string[];
+  allowedCapabilities: string[];
+  spendLimit: bigint | number;
+  expiryMs: bigint | number;
+}
+
+/** Options for the injected attestation PTB builder. */
+export interface BuildAttestOptions {
+  subjectPassportId: string;
+  kind: string;
+  score: number;
+  uri: string;
+  /** Address to receive the produced Attestation. Mutually exclusive with `share`. */
+  recipient?: string;
+  /** When true (and no `recipient`), share the Attestation instead of transferring it. */
+  share?: boolean;
+}
+
+/**
+ * Unsigned-PTB builder bundle injected by the host. Each member returns a
+ * built-but-unsigned transaction (plus metadata); the executor then commits it
+ * via `ctx.execute`. Nothing here signs or submits — that stays in `execute`.
+ */
+export interface RunBuildBundle {
+  /** Build the delegated atomic skill PTB (assert_valid → entry → consume → record). */
+  buildCallSubAgentTx: (
+    options: BuildCallSubAgentOptions,
+  ) => Promise<BuildCallSubAgentResult>;
+  /** Build a `delegation::grant` PTB returning a DelegationCap (transferred to the child). */
+  buildDelegateTx: (options: BuildDelegateOptions) => unknown;
+  /** Build an `attestation::attest` PTB (transfers or shares the produced Attestation). */
+  buildAttestTx: (options: BuildAttestOptions) => unknown;
+}
+
+/**
+ * Everything an executor needs to run, injected by the host (CLI / API route).
+ *
+ * `execute` is the only on-chain primitive: it accepts a built transaction and
+ * returns its digest (the host handles signing + gas sponsorship). The SDK
+ * itself stays free of Enoki/env coupling.
+ *
+ * `resolve` (read-only) and `build` (unsigned PTBs) are injected by the host so
+ * the coordinate executors can look up + build for other agents/skills WITHOUT
+ * the workflow engine taking a hard dependency on `AgentOSClient`. On-chain
+ * commits still flow exclusively through `execute`.
+ */
+export interface RunContext {
+  agentName: string;
+  passport?: {
+    id?: string;
+    suinsName?: string;
+    memoryNamespace?: string;
+  };
+  params?: Record<string, unknown>;
+  /** Opaque Sui client (e.g. `SuiClient`); typed `unknown` to avoid coupling. */
+  client: unknown;
+  /** Build->sponsor->sign->execute a transaction. Returns at least a digest. */
+  execute: (tx: unknown) => Promise<{ digest: string; objectChanges?: unknown }>;
+  /** Optional Memwal-style memory writer (wired in a later phase). */
+  memory?: {
+    remember: (ns: string, text: string) => Promise<unknown>;
+  };
+  /** Optional manifest/blob uploader (defaults to a Walrus upload host-side). */
+  uploadManifest?: (...a: unknown[]) => Promise<{ blobId: string }>;
+  /** Read-only resolver bundle (chain-first, registry fallback). Required by the coordinate executors. */
+  resolve?: RunResolveBundle;
+  /** Unsigned-PTB builder bundle. Required by the coordinate executors. */
+  build?: RunBuildBundle;
+}
