@@ -38,23 +38,17 @@ export default async function AgentPortfolioPage({ params }: Props) {
   });
 
   return (
-    <div className="min-h-screen bg-off-white">
-      {/* Minimal top bar */}
-      <header className="border-b border-pure-black/10 bg-off-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <Link
-            href="/explore"
-            className="font-mono text-xs font-bold text-black/50 hover:text-black"
-          >
-            ← Back to Portfolio
-          </Link>
-          <Link href="/" className="font-mono text-sm font-bold text-black">
-            AGENTOS
-          </Link>
-        </div>
-      </header>
-
+    <div className="bg-off-white py-6">
       <div className="mx-auto max-w-3xl px-4">
+        {/* Breadcrumb */}
+        <nav className="mb-6 flex items-center gap-2 font-mono text-xs text-black/50">
+          <Link href="/explore" className="hover:text-black">
+            Portfolio
+          </Link>
+          <span>/</span>
+          <span className="font-bold text-black">@{agent.slug}</span>
+        </nav>
+
         {/* ===== Profile Header ===== */}
         <section className="border-x border-pure-black/10 py-8">
           <div className="flex items-center gap-5 px-6">

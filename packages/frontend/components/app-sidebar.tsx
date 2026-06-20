@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 
 export function AppSidebar() {
   const pathname = usePathname();
-  if (pathname.startsWith("/agent/")) return null;
 
   return (
     <aside className="fixed left-0 top-0 z-50 flex h-screen w-16 flex-col border-r-2 border-pure-black bg-off-white py-4 md:w-56">
