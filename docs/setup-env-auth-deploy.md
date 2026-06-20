@@ -14,6 +14,32 @@
 | Enoki + auth         | Yes (for zkLogin)          | 2 Enoki API keys + frontend vars                  |
 | Cloudflare Pages     | Yes (when deploying UI)    | Env + domain                                      |
 
+### Where server routes read secrets from (single source of truth)
+
+`next dev` / `next build` / `next start` run with `cwd = packages/frontend`, and
+Next.js only auto-loads `.env*` files from **that** directory. The repo keeps a
+single `.env` at the **repo root** (`SUI_PRIVATE_KEY`, `ENOKI_SECRET_KEY`,
+`MEMWAL_*`, `NEXT_PUBLIC_*`). Without help, those would be invisible to the API
+routes — which is what caused the workflow-run bug
+*"SUI_PRIVATE_KEY is not set — required to sign sponsored transactions"*.
+
+The fix loads the repo-root `.env` into the Node process **before any route is
+evaluated**, with `override: false` so a real `packages/frontend/.env(.local)`
+still wins:
+
+- `packages/frontend/next.config.ts` runs `dotenv` on `../../.env` at config
+  time — this covers **every** server route (run, preflight, sponsor, …).
+- `packages/frontend/lib/load-root-env.ts` (`loadRootEnv()`) is a
+  belt-and-suspenders helper imported at the top of the workflow-run, preflight,
+  and sponsor routes, so the vars are present even outside `next.config.ts`
+  evaluation. It is idempotent and **never logs values**.
+
+So you keep **one** `.env` at the repo root for local dev. On Vercel the root
+`.env` is absent and platform env vars are used instead (the dotenv load is
+inert). A presence-only preflight (`GET`/`POST /api/workflows/<slug>/preflight`)
+reports whether `SUI_PRIVATE_KEY` / `ENOKI_SECRET_KEY` / `MEMWAL_*` are set
+(**booleans, never values**) so the canvas can warn before a run.
+
 ---
 
 ## 2. Enoki + auth (Passkey / zkLogin + sponsor gas)
