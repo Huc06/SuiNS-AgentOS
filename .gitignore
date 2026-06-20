@@ -12,3 +12,6 @@ packages/contracts/build/
 packages/contracts/publish.json
 packages/contracts/publish-testnet.json
 .DS_Store
+
+# runtime workflow run records (generated)
+.agentos/runs.json

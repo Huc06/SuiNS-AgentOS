@@ -1,0 +1,72 @@
+// SAMPLE Wrangler config for deploying packages/frontend to Cloudflare Workers
+// via @opennextjs/cloudflare (OpenNext Workers adapter).
+//
+// This is a REFERENCE ONLY — do not deploy with it until:
+//   1. You have created the KV namespace + D1 database and pasted their real IDs below.
+//   2. You have set secrets with `wrangler secret put <NAME>` (NOT in this file).
+//   3. You have run `opennextjs-cloudflare build` and confirmed the gzipped worker
+//      is under the script-size limit (3 MiB free / 10 MiB paid).
+//
+// Place the real file at packages/frontend/wrangler.jsonc when implementing.
+{
+  "name": "suins-agentos-frontend",
+  "main": ".open-next/worker.js",
+
+  // Must be 2025-09-01 or later so node:fs resolves; nodejs_compat is mandatory
+  // for the @agentos/sdk/node + sponsored-execute (node:crypto, Buffer, @mysten/*) code.
+  // nodejs_compat_populate_process_env lets existing process.env.X reads (sponsored-execute,
+  // config.ts) resolve from Worker vars/secrets with no code change.
+  "compatibility_date": "2026-06-05",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // Paid plan recommended. The workflow run route fans out to Sui + Walrus + Enoki +
+  // Harbor + memwal — the free plan's 50-external-subrequest cap is too low.
+  "limits": {
+    "cpu_ms": 60000
+    // "subrequests": 10000  // paid default is already 10,000; raise only if needed
+  },
+
+  // --- Persistence (replaces the ephemeral .agentos/*.json fs stores) ---
+  // RECOMMENDATION: ONE D1 database for BOTH stores (single binding, one consistency model).
+  // Registry needs read-after-write consistency (register-then-immediately-list) and
+  // cross-record queries (findAgentBySuins, listSkills-by-agent, searchAgents, removeAgent
+  // cascade) -> D1, NOT KV (KV is eventually consistent, up to ~60s, no transactions).
+  // Runs: append-heavy log -> one INSERT per run kills the whole-file read-modify-write race.
+  // Tables: agents, skills, delegations, runs.
+  "d1_databases": [
+    {
+      "binding": "AGENTOS_DB",
+      "database_name": "agentos",
+      "database_id": "<REPLACE_WITH_D1_DATABASE_ID>"
+    }
+  ],
+
+  // OPTIONAL KV — only if you keep the registry as a least-effort KV STOPGAP (accepts stale
+  // reads), or for the OpenNext incremental cache / a hot read-cache. Omit if going all-D1.
+  // "kv_namespaces": [
+  //   { "binding": "REGISTRY", "id": "<REPLACE_WITH_KV_NAMESPACE_ID>" }
+  // ],
+
+  // Non-secret runtime vars. Secrets (ENOKI_SECRET_KEY, SUI_PRIVATE_KEY, HARBOR_API_KEY,
+  // MEMWAL_API_KEY) go via `wrangler secret put` and MUST NOT appear here.
+  "vars": {
+    "NEXT_PUBLIC_SUI_NETWORK": "testnet"
+    // "AGENTOS_PACKAGE_ID": "0x...",
+    // "HARBOR_BASE_URL": "https://...",
+    // "HARBOR_SPACE_ID": "...",
+    // "HARBOR_BUCKET_ID": "default",
+    // "MEMWAL_RELAYER_URL": "https://..."
+  }
+
+  // NEXT_PUBLIC_* are build-time inlined, not runtime vars — supply them as Build
+  // variables in Workers Builds (or in the shell for local `opennextjs-cloudflare build`).
+}
