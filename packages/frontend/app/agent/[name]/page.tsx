@@ -39,7 +39,7 @@ export default async function AgentProfilePage({ params }: Props) {
       <SiteHeader activeHref="/explore" />
 
       {/* Header — neo-brutalist, consistent with app */}
-      <div className="border-b-2 border-pure-black bg-off-white">
+      <div className="bg-off-white">
         <div className="mx-auto max-w-container px-margin py-6">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center border-2 border-pure-black bg-electric-purple font-display text-lg font-bold text-off-white neo-shadow">
@@ -64,7 +64,7 @@ export default async function AgentProfilePage({ params }: Props) {
             </div>
           </div>
           {/* Network tab */}
-          <div className="mt-4 border-b-2 border-pure-black/10">
+          <div className="mt-4 border-b border-pure-black/5">
             <span className="inline-block border-b-2 border-electric-purple px-1 pb-2 font-mono text-xs font-bold uppercase text-electric-purple">
               {agent.network}
             </span>
@@ -75,7 +75,7 @@ export default async function AgentProfilePage({ params }: Props) {
       {/* Three-column layout */}
       <div className="mx-auto flex max-w-container min-h-[60vh]">
         {/* Left sidebar */}
-        <aside className="hidden w-48 shrink-0 border-r-2 border-pure-black py-6 lg:block">
+        <aside className="hidden w-48 shrink-0 py-6 lg:block">
           <nav className="space-y-1 px-4">
             <a
               href="#overview"
@@ -114,7 +114,7 @@ export default async function AgentProfilePage({ params }: Props) {
         </aside>
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 border-r-2 border-pure-black px-6 py-6 lg:px-10">
+        <main className="min-w-0 flex-1 px-6 py-6 lg:px-10">
           <section id="overview" className="mb-10">
             <h2 className="mb-4 font-display text-lg font-bold">Overview</h2>
             {agent.description ? (
