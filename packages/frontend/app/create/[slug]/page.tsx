@@ -12,13 +12,29 @@ import {
   type Node,
   type Edge,
   type NodeTypes,
+  type ReactFlowInstance,
   Handle,
   Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  nodeOutputSummary,
+  nodeOutputDetail,
+  suiscanObjectLink,
+  type DetailField,
+} from "../../../lib/node-output";
+import { TEMPLATES } from "../../../lib/workflow-templates";
 
 // ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
 // this client component never imports the Node-only SDK entry) =====
@@ -37,6 +53,7 @@ type WfType =
   | "harbor"
   | "sui"
   | "memory"
+  | "memory-recall"
   | "import-agent"
   | "call-sub-agent"
   | "delegate"
@@ -129,6 +146,7 @@ const LABEL_TO_TYPE: Record<string, WfType> = {
   Trigger: "trigger",
   Walrus: "walrus",
   Memory: "memory",
+  "Memory Recall": "memory-recall",
   Harbor: "harbor",
   Sui: "sui",
   "Import Agent": "import-agent",
@@ -143,17 +161,47 @@ const TYPE_LABEL: Record<WfType, string> = {
   harbor: "Seal",
   sui: "Exec",
   memory: "Memory",
+  "memory-recall": "Recall",
   "import-agent": "Import",
   delegate: "Delegate",
   "call-sub-agent": "Sub-Call",
   attest: "Attest",
 };
 
-// Which param keys are editable per coordinate node type, with a label + the
-// run-POST param key. The values flow straight into the run POST body.
-const NODE_PARAM_FIELDS: Partial<
-  Record<WfType, { key: string; label: string; placeholder: string }[]>
-> = {
+// Which param keys are editable per node type, with a label + the run-POST
+// param key. The values flow straight into the run POST body. A field flagged
+// `kind: "namespace"` renders a registry-derived namespace picker (datalist).
+interface NodeParamField {
+  key: string;
+  label: string;
+  placeholder: string;
+  /** "namespace" → render the agent's known-namespaces picker (datalist). */
+  kind?: "namespace";
+}
+const NODE_PARAM_FIELDS: Partial<Record<WfType, NodeParamField[]>> = {
+  memory: [
+    {
+      key: "namespace",
+      label: "Namespace",
+      placeholder: "agent.sui (default)",
+      kind: "namespace",
+    },
+    {
+      key: "text",
+      label: "Text to remember (optional)",
+      placeholder: "defaults to a run digest",
+    },
+  ],
+  "memory-recall": [
+    {
+      key: "namespace",
+      label: "Namespace",
+      placeholder: "agent.sui (default)",
+      kind: "namespace",
+    },
+    { key: "query", label: "Query", placeholder: "what did I store?" },
+    { key: "limit", label: "Limit (optional)", placeholder: "5" },
+  ],
   "import-agent": [
     { key: "agent", label: "Target agent (.sui)", placeholder: "alice.sui" },
   ],
@@ -187,6 +235,12 @@ const NODE_PARAM_FIELDS: Partial<
     { key: "uri", label: "URI (optional)", placeholder: "" },
   ],
 };
+
+// Known Walrus-memory namespaces for this agent, derived client-side from the
+// registry (/api/namespaces). The memory nodes' namespace picker consumes this;
+// the default (the agent's `.sui` name) is always element 0. Empty until the
+// fetch lands. Memwal has NO list-namespaces endpoint, so this is registry-only.
+const NamespacesContext = createContext<string[]>([]);
 
 // Tools-panel + coordinate node visual descriptor, keyed by label.
 const COORDINATE_TOOLS: { label: string; subtitle: string }[] = [
@@ -313,6 +367,201 @@ function preflightGlyph(outcome?: PreflightOutcome): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Resolve a DetailField link to a concrete explorer URL (network from module
+// NETWORK). Returns undefined when the field is not a link.
+function detailFieldHref(field: DetailField): string | undefined {
+  if (!field.link) return undefined;
+  switch (field.link.kind) {
+    case "tx":
+      return suiscanTxUrl(field.link.ref);
+    case "blob":
+      return walruscanBlobUrl(field.link.ref);
+    case "object":
+      return suiscanObjectLink(field.link.ref, NETWORK);
+  }
+}
+
+// ===== Per-node output detail popover =====
+// Renders the structured decode from nodeOutputDetail(): labelled fields (with
+// explorer links), an import-agent catalog table, sui objectChanges, a memory
+// recall list when present, plus the Raw JSON with a copy button.
+function NodeOutputDetailPopover({
+  label,
+  detail,
+  rawOutput,
+  onClose,
+}: {
+  label: string;
+  detail: ReturnType<typeof nodeOutputDetail>;
+  rawOutput: unknown;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const raw = (() => {
+    try {
+      return JSON.stringify(rawOutput ?? {}, null, 2);
+    } catch {
+      return String(rawOutput);
+    }
+  })();
+
+  const copyRaw = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(raw);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }
+    } catch {
+      /* clipboard unavailable — no-op */
+    }
+  };
+
+  return (
+    <div
+      className="nodrag nowheel absolute left-1/2 top-[110%] z-40 w-72 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 text-left shadow-[3px_3px_0_0_#000]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+          {label} output
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="font-mono text-xs font-bold text-black/40 hover:text-black"
+          title="Close"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* Labelled fields */}
+      {detail.fields.length > 0 && (
+        <div className="space-y-1">
+          {detail.fields.map((f) => {
+            const href = detailFieldHref(f);
+            return (
+              <div
+                key={`${f.label}:${f.value}`}
+                className="flex items-start justify-between gap-2"
+              >
+                <span className="font-mono text-[9px] uppercase text-black/40">
+                  {f.label}
+                </span>
+                {href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="max-w-[170px] truncate font-mono text-[9px] font-bold text-electric-purple underline"
+                    title={f.value}
+                  >
+                    {f.value}
+                  </a>
+                ) : (
+                  <span
+                    className={`max-w-[170px] truncate text-right text-[9px] text-black ${
+                      f.mono ? "font-mono" : ""
+                    }`}
+                    title={f.value}
+                  >
+                    {f.value}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* import-agent: skill catalog table */}
+      {detail.catalog && detail.catalog.length > 0 && (
+        <div className="border-t border-pure-black/10 pt-1.5">
+          <p className="mb-1 font-mono text-[9px] uppercase text-black/40">
+            catalog
+          </p>
+          <div className="max-h-32 space-y-1 overflow-auto">
+            {detail.catalog.map((c, i) => (
+              <div
+                key={`${c.name}:${i}`}
+                className="flex items-center justify-between gap-2 font-mono text-[9px]"
+              >
+                <span className="flex-1 truncate text-black" title={c.name}>
+                  {c.name}
+                  {c.version ? (
+                    <span className="text-black/40"> v{c.version}</span>
+                  ) : null}
+                </span>
+                <span
+                  className={`font-bold ${c.verified ? "text-green-700" : "text-red-600"}`}
+                  title={c.error ?? (c.verified ? "hash verified" : "unverified")}
+                >
+                  {c.verified ? "✓ verified" : "✗ unverified"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* sui: objectChanges summary */}
+      {detail.objectChanges && (
+        <div className="border-t border-pure-black/10 pt-1.5 font-mono text-[9px] text-black/60">
+          objectChanges:{" "}
+          <span className="font-bold text-black">
+            {detail.objectChanges.created} created
+          </span>{" "}
+          / {detail.objectChanges.total} total
+        </div>
+      )}
+
+      {/* memory: recall list (when present) */}
+      {detail.recall && detail.recall.length > 0 && (
+        <div className="border-t border-pure-black/10 pt-1.5">
+          <p className="mb-1 font-mono text-[9px] uppercase text-black/40">
+            recall
+          </p>
+          <div className="max-h-32 space-y-1 overflow-auto">
+            {detail.recall.map((r, i) => (
+              <div
+                key={i}
+                className="flex items-start justify-between gap-2 font-mono text-[9px]"
+              >
+                <span className="flex-1 truncate text-black" title={r.text}>
+                  {r.text}
+                </span>
+                {r.score !== undefined && (
+                  <span className="text-black/40">{r.score.toFixed(2)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Raw JSON + copy */}
+      <div className="border-t border-pure-black/10 pt-1.5">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="font-mono text-[9px] uppercase text-black/40">
+            raw json
+          </p>
+          <button
+            type="button"
+            onClick={copyRaw}
+            className="border border-pure-black/30 px-1.5 py-0.5 font-mono text-[9px] font-bold text-black hover:border-electric-purple"
+          >
+            {copied ? "copied" : "copy"}
+          </button>
+        </div>
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all bg-surface-container px-2 py-1 font-mono text-[9px] text-black/70">
+          {raw}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ===== Custom Skill Node =====
 
 function SkillNode({
@@ -324,6 +573,10 @@ function SkillNode({
 }) {
   const { setNodes, setEdges } = useReactFlow();
   const [editing, setEditing] = useState(false);
+  // Expandable per-node output detail popover (toggled from the hover toolbar).
+  const [showDetail, setShowDetail] = useState(false);
+  // Known memory namespaces (registry-derived) for the namespace picker.
+  const knownNamespaces = useContext(NamespacesContext);
 
   const wfType = LABEL_TO_TYPE[data.label];
   const paramFields = wfType ? NODE_PARAM_FIELDS[wfType] : undefined;
@@ -363,7 +616,9 @@ function SkillNode({
 
   const nodeColor = isCoordinate
     ? "group-hover:border-pink-500 group-hover:shadow-[0_0_12px_rgba(236,72,153,0.3)]"
-    : data.label === "Walrus" || data.label === "Memory"
+    : data.label === "Walrus" ||
+        data.label === "Memory" ||
+        data.label === "Memory Recall"
       ? "group-hover:border-purple-500 group-hover:shadow-[0_0_12px_rgba(168,85,247,0.3)]"
       : data.label === "Harbor"
         ? "group-hover:border-blue-500 group-hover:shadow-[0_0_12px_rgba(96,165,250,0.3)]"
@@ -373,6 +628,16 @@ function SkillNode({
 
   const hasStatus = !!data.status && data.status !== "idle";
   const badge = statusBadge(data.status);
+
+  // Human chip + structured detail for a settled DONE node (data already
+  // carries step.output). Skipped/error stay on their dedicated captions below.
+  const isDone = data.status === "done";
+  const outputSummary =
+    isDone && wfType ? nodeOutputSummary(wfType, data.output) : undefined;
+  const outputDetail =
+    isDone && wfType && showDetail
+      ? nodeOutputDetail(wfType, data.output)
+      : undefined;
   const boxClass = hasStatus
     ? `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 bg-white text-black transition-all ${statusRing(data.status)}`
     : `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black/30 bg-white text-black transition-all ${nodeColor}`;
@@ -405,6 +670,33 @@ function SkillNode({
             <path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
+        {isDone && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetail((p) => !p);
+            }}
+            className={`flex h-7 w-7 items-center justify-center border-2 border-pure-black text-xs ${
+              showDetail
+                ? "bg-electric-purple text-white"
+                : "bg-white text-black hover:bg-surface-container"
+            }`}
+            title="View output"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={handleDelete}
@@ -497,6 +789,18 @@ function SkillNode({
             <path d="M9 12l2 2 4-4" />
             <path d="M12 3l7 4v5c0 4.5-3 7-7 9-4-2-7-4.5-7-9V7z" />
           </svg>
+        ) : wfType === "memory-recall" ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
         ) : (
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="8,5 19,12 8,19" />
@@ -549,6 +853,33 @@ function SkillNode({
         </div>
       )}
 
+      {/* Inline output chip — WHAT this node produced (DONE nodes only). Click
+          to expand the structured detail popover. */}
+      {outputSummary && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDetail((p) => !p);
+          }}
+          title="Click to view full output"
+          className="nodrag mt-1 max-w-[160px] truncate border border-green-600/40 bg-green-50 px-1.5 py-0.5 font-mono text-[9px] font-bold text-green-800 hover:border-green-600"
+        >
+          {outputSummary}
+        </button>
+      )}
+
+      {/* Expandable output detail popover (structured fields + catalog/
+          objectChanges/recall + raw JSON with copy). */}
+      {outputDetail && (
+        <NodeOutputDetailPopover
+          label={data.label}
+          detail={outputDetail}
+          rawOutput={data.output}
+          onClose={() => setShowDetail(false)}
+        />
+      )}
+
       {/* Pre-run preflight badge (shown only before a result lands) */}
       {!hasStatus && data.preflight && data.preflight.outcome !== "will-run" && (
         <div
@@ -596,20 +927,38 @@ function SkillNode({
           <p className="font-mono text-[10px] font-bold uppercase text-black/50">
             {data.label} config
           </p>
-          {paramFields.map((f) => (
-            <label key={f.key} className="block">
-              <span className="font-mono text-[9px] text-black/60">
-                {f.label}
-              </span>
-              <input
-                type="text"
-                value={data.params?.[f.key] ?? ""}
-                placeholder={f.placeholder}
-                onChange={(e) => setParam(f.key, e.target.value)}
-                className="mt-0.5 w-full border-2 border-pure-black/30 bg-white px-2 py-1 font-mono text-[10px] text-black outline-none placeholder:text-black/30 focus:border-electric-purple"
-              />
-            </label>
-          ))}
+          {paramFields.map((f) => {
+            const isNamespace = f.kind === "namespace";
+            const listId = isNamespace ? `ns-${id}-${f.key}` : undefined;
+            return (
+              <label key={f.key} className="block">
+                <span className="font-mono text-[9px] text-black/60">
+                  {f.label}
+                </span>
+                <input
+                  type="text"
+                  value={data.params?.[f.key] ?? ""}
+                  placeholder={f.placeholder}
+                  list={listId}
+                  onChange={(e) => setParam(f.key, e.target.value)}
+                  className="mt-0.5 w-full border-2 border-pure-black/30 bg-white px-2 py-1 font-mono text-[10px] text-black outline-none placeholder:text-black/30 focus:border-electric-purple"
+                />
+                {isNamespace && knownNamespaces.length > 0 && (
+                  <>
+                    <datalist id={listId}>
+                      {knownNamespaces.map((ns) => (
+                        <option key={ns} value={ns} />
+                      ))}
+                    </datalist>
+                    <span className="mt-0.5 block font-mono text-[8px] text-black/40">
+                      default {knownNamespaces[0]} · {knownNamespaces.length}{" "}
+                      known
+                    </span>
+                  </>
+                )}
+              </label>
+            );
+          })}
           <button
             type="button"
             onClick={() => setEditing(false)}
@@ -840,10 +1189,12 @@ function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) 
       {sorted.map((s) => {
         const sev = severityStyle(s.status);
         const cause = shortCause(s);
+        const summary =
+          s.status === "done" ? nodeOutputSummary(s.type, s.output) : undefined;
         const raw =
           s.error ??
           (s.output && typeof s.output === "object"
-            ? JSON.stringify(s.output)
+            ? JSON.stringify(s.output, null, 2)
             : undefined);
         return (
           <div
@@ -882,7 +1233,13 @@ function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) 
                 {s.remediation}
               </p>
             )}
-            {raw && (s.status === "error" || s.status === "skipped") && (
+            {summary && (
+              <p className="mt-2 font-mono text-[11px] text-green-800">
+                <span className="font-bold text-black/50">output: </span>
+                {summary}
+              </p>
+            )}
+            {raw && (
               <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-all border border-pure-black/10 bg-surface-container px-2 py-1 font-mono text-[9px] text-black/60">
                 {raw}
               </pre>
@@ -929,6 +1286,12 @@ export default function WorkflowEditorPage() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [panelHeight, setPanelHeight] = useState(45);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Templates dropdown (pick-and-run library) open state.
+  const [showTemplates, setShowTemplates] = useState(false);
+  // React Flow instance, captured on init so off-canvas handlers (load demo /
+  // template) can re-center the view via `fitView` (the `fitView` prop only
+  // fits on mount).
+  const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null);
 
   // ===== Run state =====
   const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -941,6 +1304,9 @@ export default function WorkflowEditorPage() {
   const [panelView, setPanelView] = useState<"metrics" | "logs">("metrics");
   // Preflight (predicted before a run) + the env-presence summary.
   const [preflight, setPreflight] = useState<PreflightPayload | null>(null);
+  // Known Walrus-memory namespaces (registry-derived) for the memory-node
+  // namespace picker. Element 0 is the default (the agent's `.sui` name).
+  const [namespaces, setNamespaces] = useState<string[]>([]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -1069,9 +1435,26 @@ export default function WorkflowEditorPage() {
     }
   }, [slug]);
 
+  // Load the agent's known memory namespaces (registry-derived; default first).
+  // Memwal has no list-namespaces endpoint — this comes entirely from the
+  // registry via /api/namespaces.
+  const fetchNamespaces = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/namespaces?agent=${encodeURIComponent(slug)}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data?.namespaces)) setNamespaces(data.namespaces);
+    } catch {
+      /* best-effort — the picker still accepts free-text */
+    }
+  }, [slug]);
+
   useEffect(() => {
     fetchRuns();
-  }, [fetchRuns]);
+    fetchNamespaces();
+  }, [fetchRuns, fetchNamespaces]);
 
   // Fetch the preflight prediction on mount and whenever the graph shape changes
   // (node/edge count). Debounced so dragging a node doesn't spam the endpoint.
@@ -1199,6 +1582,9 @@ export default function WorkflowEditorPage() {
       }
 
       await fetchRuns();
+      // A `memory` (remember) step may have recorded a new namespace — refresh
+      // the picker list so the canvas offers it next time.
+      await fetchNamespaces();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Run failed";
       setRunError(message);
@@ -1206,17 +1592,51 @@ export default function WorkflowEditorPage() {
     } finally {
       setRunning(false);
     }
-  }, [running, buildRunnableGraph, slug, setNodes, applySteps, fetchRuns]);
+  }, [
+    running,
+    buildRunnableGraph,
+    slug,
+    setNodes,
+    applySteps,
+    fetchRuns,
+    fetchNamespaces,
+  ]);
 
   // Load the "Agents import agents" demo graph onto the canvas, seeded with the
   // current agent's .sui as the default target.
+  // Recenter the view after a graph swap. `<ReactFlow fitView>` only fits on
+  // mount, so off-canvas handlers re-fit via the captured instance once React
+  // Flow has measured the new nodes.
+  const fitViewNextTick = useCallback(() => {
+    requestAnimationFrame(() => {
+      rfInstance.current?.fitView({ padding: 0.2, duration: 300 });
+    });
+  }, []);
+
   const loadDemoGraph = useCallback(() => {
     const selfName = slug.includes(".") ? slug : `${slug}.sui`;
     const { nodes: dNodes, edges: dEdges } = demoCoordinateGraph(selfName);
     setNodes(dNodes);
     setEdges(dEdges);
     setLatestRun(null);
-  }, [slug, setNodes, setEdges]);
+    fitViewNextTick();
+  }, [slug, setNodes, setEdges, fitViewNextTick]);
+
+  // Load a ready-made template graph onto the canvas (same path as Demo Graph),
+  // seeded with the current agent's `.sui` name.
+  const loadTemplate = useCallback(
+    (templateId: string) => {
+      const tpl = TEMPLATES.find((t) => t.id === templateId);
+      if (!tpl) return;
+      const { nodes: tNodes, edges: tEdges } = tpl.build(slug);
+      setNodes(tNodes);
+      setEdges(tEdges);
+      setLatestRun(null);
+      setShowTemplates(false);
+      fitViewNextTick();
+    },
+    [slug, setNodes, setEdges, fitViewNextTick],
+  );
 
   // Drag to resize bottom panel
   const handleDragResize = useCallback(
@@ -1262,6 +1682,12 @@ export default function WorkflowEditorPage() {
   const blobCount = steps.filter((s) => s.blobId).length;
   const filteredSteps =
     txFilter === "all" ? steps : steps.filter((s) => s.type === txFilter);
+  // Per-tab counts for the LIVE TRANSACTIONS filter badges. `all` is the total.
+  const txTypeCount = (val: "all" | WfType): number =>
+    val === "all" ? steps.length : steps.filter((s) => s.type === val).length;
+  // A run produced steps (used to distinguish "no run yet" from "this filter is
+  // empty" in the LIVE TRANSACTIONS panel — mirrors MY ACTIVITY's steps.length).
+  const hasRun = steps.length > 0;
 
   // ===== Preflight-derived warnings (shown before a run) =====
   const env = preflight?.env;
@@ -1288,6 +1714,7 @@ export default function WorkflowEditorPage() {
   );
 
   return (
+    <NamespacesContext.Provider value={namespaces}>
     <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
       {/* ===== Top bar ===== */}
       <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
@@ -1400,6 +1827,57 @@ export default function WorkflowEditorPage() {
               ))}
             </div>
           )}
+          {/* Templates: pick-and-run library of ready-made workflows. */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              disabled={running}
+              aria-haspopup="menu"
+              aria-expanded={showTemplates}
+              className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-electric-purple disabled:cursor-not-allowed disabled:opacity-60"
+              title="Load a ready-made workflow template"
+            >
+              Templates
+              <span className="text-[10px]">{showTemplates ? "▲" : "▼"}</span>
+            </button>
+            {showTemplates && (
+              <>
+                {/* Click-away backdrop. */}
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowTemplates(false)}
+                />
+                <div
+                  role="menu"
+                  className="absolute right-0 z-40 mt-2 w-80 border-2 border-pure-black bg-white shadow-[4px_4px_0_0_#000]"
+                >
+                  <div className="border-b-2 border-pure-black bg-electric-purple px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide text-white">
+                    Templates
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {TEMPLATES.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => loadTemplate(tpl.id)}
+                        title={tpl.demonstrates}
+                        className="block w-full border-b border-pure-black/10 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-container"
+                      >
+                        <div className="font-mono text-xs font-bold text-black">
+                          {tpl.name}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[10px] leading-snug text-black/55">
+                          {tpl.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={loadDemoGraph}
@@ -1479,6 +1957,9 @@ export default function WorkflowEditorPage() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onInit={(instance) => {
+            rfInstance.current = instance;
+          }}
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode={["Backspace", "Delete"]}
@@ -1645,25 +2126,41 @@ export default function WorkflowEditorPage() {
                       ["harbor", "Harbor"],
                       ["sui", "Sui PTB"],
                       ["memory", "Memory"],
+                      ["memory-recall", "Recall"],
                       ["import-agent", "Import"],
                       ["delegate", "Delegate"],
                       ["call-sub-agent", "Sub-Call"],
                       ["attest", "Attest"],
                     ] as const
-                  ).map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setTxFilter(val)}
-                      className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
-                        txFilter === val
-                          ? "border-electric-purple bg-electric-purple/10 text-black"
-                          : "border-pure-black/20 text-black hover:border-electric-purple"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  ).map(([val, label]) => {
+                    const count = txTypeCount(val);
+                    const zero = hasRun && count === 0;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setTxFilter(val)}
+                        className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
+                          txFilter === val
+                            ? "border-electric-purple bg-electric-purple/10 text-black"
+                            : zero
+                              ? "border-pure-black/10 text-black/30 hover:border-electric-purple"
+                              : "border-pure-black/20 text-black hover:border-electric-purple"
+                        }`}
+                      >
+                        {label}
+                        {hasRun && (
+                          <span
+                            className={
+                              zero ? "ml-1 text-black/20" : "ml-1 text-black/40"
+                            }
+                          >
+                            ({count})
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
                   <span className="flex-1">Node</span>
@@ -1671,11 +2168,28 @@ export default function WorkflowEditorPage() {
                   <span className="w-16">Status</span>
                   <span className="w-14 text-right">Link</span>
                 </div>
-                {filteredSteps.length === 0 ? (
+                {!hasRun ? (
+                  // (a) No run yet — keyed on the FULL steps array, like MY ACTIVITY.
                   <p className="mt-4 text-center font-mono text-xs italic text-black/40">
                     No transactions yet. Run the workflow.
                   </p>
+                ) : filteredSteps.length === 0 ? (
+                  // (b) A run happened, but this filter matched nothing.
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <p className="text-center font-mono text-xs italic text-black/40">
+                      No {txFilter === "all" ? "" : `${TYPE_LABEL[txFilter]} `}
+                      steps in this run.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setTxFilter("all")}
+                      className="border-2 border-pure-black bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-black shadow-[2px_2px_0_0_#000] hover:bg-surface-container"
+                    >
+                      Show All ({steps.length})
+                    </button>
+                  </div>
                 ) : (
+                  // (c) Rows.
                   <div className="space-y-1.5">
                     {filteredSteps.map((s) => {
                       const cause = shortCause(s);
@@ -1726,6 +2240,18 @@ export default function WorkflowEditorPage() {
                                 ↳ {cause}
                               </p>
                             )}
+                          {s.status === "done" &&
+                            (() => {
+                              const summary = nodeOutputSummary(s.type, s.output);
+                              return summary ? (
+                                <p
+                                  className="mt-0.5 truncate text-[9px] text-green-700"
+                                  title={summary}
+                                >
+                                  ↳ {summary}
+                                </p>
+                              ) : null;
+                            })()}
                         </div>
                       );
                     })}
@@ -1847,9 +2373,10 @@ export default function WorkflowEditorPage() {
                   category: "storage",
                   tools: [
                     { label: "Walrus", subtitle: "Store manifest" },
-                    { label: "Memory", subtitle: "Walrus storage" },
+                    { label: "Memory", subtitle: "Remember (write)" },
+                    { label: "Memory Recall", subtitle: "Semantic recall" },
                   ],
-                  count: 2,
+                  count: 3,
                 },
                 {
                   category: "security",
@@ -1926,5 +2453,6 @@ export default function WorkflowEditorPage() {
         </div>
       )}
     </div>
+    </NamespacesContext.Provider>
   );
 }

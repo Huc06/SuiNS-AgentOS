@@ -42,6 +42,7 @@ const nodeSchema = z.object({
     'harbor',
     'sui',
     'memory',
+    'memory-recall',
     'import-agent',
     'call-sub-agent',
     'delegate',
@@ -162,8 +163,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
   };
 
   // Walrus-backed agent memory. `null` when MEMWAL_RELAYER_URL / MEMWAL_API_KEY
-  // are unset → the memory step skips gracefully (never crashes the run).
-  const memory = memwalFromEnv();
+  // are unset → the memory steps skip gracefully (never crash the run). We wrap
+  // the client so a successful `remember` also persists its namespace into the
+  // local registry — memwal has no list-namespaces endpoint, so this registry
+  // ledger is the only way the canvas can later offer known namespaces. `recall`
+  // passes straight through.
+  const memwal = memwalFromEnv();
+  const memory = memwal
+    ? {
+        remember: async (ns: string, text: string) => {
+          const result = await memwal.remember(ns, text);
+          try {
+            getRegistry().recordMemoryNamespace(agent.suinsName, ns);
+          } catch {
+            // Namespace bookkeeping is best-effort; never fail the run for it.
+          }
+          return result;
+        },
+        recall: (ns: string, query: string, limit?: number) =>
+          memwal.recall(ns, query, limit),
+      }
+    : null;
 
   // A server-side AgentOSClient backs the read-only `resolve` bundle and the
   // unsigned-PTB `build` bundle. It shares the one registry file with the rest

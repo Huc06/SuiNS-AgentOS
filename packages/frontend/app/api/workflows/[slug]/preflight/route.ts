@@ -22,6 +22,7 @@ const nodeSchema = z.object({
     'harbor',
     'sui',
     'memory',
+    'memory-recall',
     'import-agent',
     'call-sub-agent',
     'delegate',
