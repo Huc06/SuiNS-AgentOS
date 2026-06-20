@@ -1993,7 +1993,7 @@ export default function WorkflowEditorPage() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={`transition-transform ${showMetrics ? "rotate-180" : ""}`}
+              className={`transition-transform ${showMetrics ? "" : "rotate-180"}`}
             >
               <path d="m6 9 6 6 6-6" />
             </svg>
