@@ -210,7 +210,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
               apiKey: harborApiKey,
               ...(harborBaseUrl ? { baseUrl: harborBaseUrl } : {}),
             });
-            const { blobId } = await client.uploadBlob(
+            const { blobId, fileId } = await client.uploadBlob(
               harborSpaceId,
               harborBucketId,
               content,
@@ -221,8 +221,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
             ).replace(/\/+$/, '');
             return {
               blobId,
-              fileId: blobId,
-              url: `${base}/api/v1/blobs/${blobId}`,
+              fileId,
+              // Harbor streams file content from the bucket file download route.
+              url: `${base}/api/v1/buckets/${harborBucketId}/files/${fileId}/download`,
             };
           },
         }
@@ -321,6 +322,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // gracefully (instead of hard-erroring on the MVR placeholder).
     ...(packageId ? { packageId } : {}),
     client: suiClient,
+    // `sponsoredExecuteServer` derives the Enoki sponsor allowlist per-call from
+    // each PTB (every Move-call target it invokes — incl. a skill's arbitrary
+    // movePackage target and the framework `public_share_object` share call —
+    // plus every transfer recipient, incl. non-sender ones like a delegate child
+    // or an attest recipient), so call-sub-agent / delegate / attest-to-recipient
+    // / attest-share are all sponsorable without a static per-flow list here.
     execute: (tx: unknown) => sponsoredExecuteServer(tx as Transaction),
     uploadManifest,
     resolve,

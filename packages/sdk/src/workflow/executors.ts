@@ -119,20 +119,46 @@ const walrus: StepExecutor = async (node, ctx) => {
 };
 
 /**
- * Harbor: for private skills, Seal-encrypt the payload and store the ciphertext
- * in the user's Walrus Harbor account. For public skills there is nothing to
- * encrypt, so skip.
+ * Store the (already Seal-encrypted) ciphertext via the SAME working Walrus
+ * upload the `walrus` executor uses: the host's generic `ctx.uploadManifest`
+ * (Walrus-backed) when injected, otherwise a direct Walrus `PUT`. This is the
+ * resilience net for the Harbor node — when the real Harbor API is unavailable
+ * (or unconfigured) we still land the bytes on a Walrus publisher that is known
+ * to work on this network, so the node ends DONE and Memory runs.
+ */
+async function storeEncryptedOnWalrus(
+  ctx: RunContext,
+  encrypted: Uint8Array,
+  sealPolicyId: string,
+): Promise<string | undefined> {
+  if (ctx.uploadManifest) {
+    const r = await ctx.uploadManifest({
+      encrypted: Array.from(encrypted),
+      sealPolicyId,
+    });
+    return r.blobId;
+  }
+  const r = await new WalrusClient().uploadBlob(encrypted);
+  return r.blobId;
+}
+
+/**
+ * Harbor: for private skills, Seal-encrypt the payload and store the ciphertext.
+ * For public skills there is nothing to encrypt, so skip.
  *
- * Upload backend precedence:
- *   1. `ctx.harbor.upload` — the REAL Harbor uploader injected by the host
+ * Upload backend precedence (the node ends DONE on the FIRST that works):
+ *   1. `ctx.harbor.upload` — the REAL Harbor API uploader injected by the host
  *      (HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID). The encrypted blob
- *      lands in the user's Harbor space and we surface the real fileId + URL.
- *   2. `ctx.uploadManifest` — host's generic uploader (Walrus blob).
- *   3. a direct Walrus upload (no host wiring at all).
+ *      lands in the user's Harbor bucket and we surface the real fileId + URL.
+ *      If this THROWS (e.g. the Harbor endpoint 404s / the account is down) we
+ *      DO NOT hard-error — we fall through to (2).
+ *   2. Walrus fallback — the exact same working Walrus upload the `walrus`
+ *      executor uses (`ctx.uploadManifest`, else a direct Walrus `PUT`). Returns
+ *      `{ storage: "walrus", note: "stored on Walrus (Harbor API unavailable)" }`.
  *
- * When HARBOR_API_KEY is unset the host injects no `ctx.harbor`, so a private
- * skill still uploads (to Walrus) and never crashes — the blob just does not
- * land in a Harbor account.
+ * Only when BOTH the Harbor API and the Walrus fallback genuinely fail does the
+ * node error. When HARBOR_API_KEY is unset the host injects no `ctx.harbor`, so
+ * a private skill goes straight to the Walrus fallback and never crashes.
  */
 const harbor: StepExecutor = async (node, ctx) => {
   const isPrivate = Boolean(node.params?.private);
@@ -160,48 +186,65 @@ const harbor: StepExecutor = async (node, ctx) => {
   // real Seal threshold-encrypt before production.
   const encrypted = await sealEncrypt(toBytes(pickPayload(node, ctx)), sealPolicyId);
 
-  // 1. Real Harbor: store the ciphertext in the user's Walrus Harbor account.
+  // 1. Real Harbor: store the ciphertext in the user's Walrus Harbor bucket.
+  //    A Harbor-API failure (404/auth/outage) must NOT block the run — we catch
+  //    it and fall back to the working Walrus upload below.
+  let harborError: string | undefined;
   if (ctx.harbor) {
     const filename =
       strParam(node, "filename") ?? `${sealPolicyId}-${Date.now()}.seal`;
-    const r = await ctx.harbor.upload(encrypted, filename);
+    try {
+      const r = await ctx.harbor.upload(encrypted, filename);
+      if (r.blobId) {
+        return {
+          status: "done",
+          blobId: r.blobId,
+          output: {
+            blobId: r.blobId,
+            sealPolicyId,
+            encryptedBytes: encrypted.length,
+            storage: "harbor",
+            ...(r.fileId ? { fileId: r.fileId } : {}),
+            ...(r.url ? { url: r.url } : {}),
+          },
+        };
+      }
+      // Harbor accepted the upload but returned no blob id → treat as a soft
+      // failure and fall back to Walrus rather than surface an empty blob.
+      harborError = "Harbor upload returned no blobId";
+    } catch (err) {
+      harborError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  // 2. Walrus fallback: the same working upload the `walrus` executor uses. This
+  //    is the safety net that keeps the Harbor node DONE so Memory can run.
+  try {
+    const blobId = await storeEncryptedOnWalrus(ctx, encrypted, sealPolicyId);
     return {
       status: "done",
-      blobId: r.blobId,
+      blobId,
       output: {
-        blobId: r.blobId,
+        blobId,
         sealPolicyId,
         encryptedBytes: encrypted.length,
-        storage: "harbor",
-        ...(r.fileId ? { fileId: r.fileId } : {}),
-        ...(r.url ? { url: r.url } : {}),
+        storage: "walrus",
+        ...(harborError
+          ? { note: "stored on Walrus (Harbor API unavailable)", harborError }
+          : {}),
       },
     };
+  } catch (walrusErr) {
+    // Only here do we genuinely error: BOTH Harbor and Walrus failed.
+    const walrusMsg =
+      walrusErr instanceof Error ? walrusErr.message : String(walrusErr);
+    return {
+      status: "error",
+      error: harborError
+        ? `Harbor upload failed (${harborError}); Walrus fallback also failed: ${walrusMsg}`
+        : walrusMsg,
+    };
   }
-
-  // 2/3. Fallback: host uploader or a direct Walrus put (no Harbor account).
-  let blobId: string | undefined;
-  if (ctx.uploadManifest) {
-    const r = await ctx.uploadManifest({
-      encrypted: Array.from(encrypted),
-      sealPolicyId,
-    });
-    blobId = r.blobId;
-  } else {
-    const r = await new WalrusClient().uploadBlob(encrypted);
-    blobId = r.blobId;
-  }
-
-  return {
-    status: "done",
-    blobId,
-    output: {
-      blobId,
-      sealPolicyId,
-      encryptedBytes: encrypted.length,
-      storage: "walrus",
-    },
-  };
 };
 
 /**
