@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useRef, useMemo } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 export interface SquircleShiftProps {
@@ -22,6 +20,7 @@ export interface SquircleShiftProps {
   centerX?: number;
   centerY?: number;
   colorTint?: string;
+  /** Background fill. `lightBackground` is kept for API compat; `darkBackground` wins when both are set. */
   lightBackground?: string;
   darkBackground?: string;
   brightness?: number;
@@ -117,109 +116,11 @@ void main() {
 }
 `;
 
-interface ShaderPlaneProps {
-  speed: number;
-  colorLayers: number;
-  gridFrequency: number;
-  gridIntensity: number;
-  waveSpeed: number;
-  waveIntensity: number;
-  spiralIntensity: number;
-  lineThickness: number;
-  falloff: number;
-  centerX: number;
-  centerY: number;
-  colorTint: string;
-  backgroundColor: string;
-  brightness: number;
-  phaseOffset: number;
-}
-
-const ShaderPlane: React.FC<ShaderPlaneProps> = ({
-  speed,
-  colorLayers,
-  gridFrequency,
-  gridIntensity,
-  waveSpeed,
-  waveIntensity,
-  spiralIntensity,
-  lineThickness,
-  falloff,
-  centerX,
-  centerY,
-  colorTint,
-  backgroundColor,
-  brightness,
-  phaseOffset,
-}) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.ShaderMaterial>(null);
-  const { viewport } = useThree();
-
-  const uniforms = useMemo(
-    () => ({
-      u_time: { value: 0 },
-      u_resolution: {
-        value: new THREE.Vector2(viewport.width * 100, viewport.height * 100),
-      },
-      u_speed: { value: speed },
-      u_colorLayers: { value: colorLayers },
-      u_gridFrequency: { value: gridFrequency },
-      u_gridIntensity: { value: gridIntensity },
-      u_waveSpeed: { value: waveSpeed },
-      u_waveIntensity: { value: waveIntensity },
-      u_spiralIntensity: { value: spiralIntensity },
-      u_lineThickness: { value: lineThickness },
-      u_falloff: { value: falloff },
-      u_centerX: { value: centerX },
-      u_centerY: { value: centerY },
-      u_colorTint: { value: new THREE.Color(colorTint) },
-      u_backgroundColor: { value: new THREE.Color(backgroundColor) },
-      u_brightness: { value: brightness },
-      u_phaseOffset: { value: phaseOffset },
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  useFrame((state) => {
-    if (materialRef.current) {
-      materialRef.current.uniforms.u_time.value = state.clock.elapsedTime;
-      materialRef.current.uniforms.u_resolution.value.set(
-        viewport.width * 100,
-        viewport.height * 100,
-      );
-      materialRef.current.uniforms.u_speed.value = speed;
-      materialRef.current.uniforms.u_colorLayers.value = colorLayers;
-      materialRef.current.uniforms.u_gridFrequency.value = gridFrequency;
-      materialRef.current.uniforms.u_gridIntensity.value = gridIntensity;
-      materialRef.current.uniforms.u_waveSpeed.value = waveSpeed;
-      materialRef.current.uniforms.u_waveIntensity.value = waveIntensity;
-      materialRef.current.uniforms.u_spiralIntensity.value = spiralIntensity;
-      materialRef.current.uniforms.u_lineThickness.value = lineThickness;
-      materialRef.current.uniforms.u_falloff.value = falloff;
-      materialRef.current.uniforms.u_centerX.value = centerX;
-      materialRef.current.uniforms.u_centerY.value = centerY;
-      materialRef.current.uniforms.u_colorTint.value.set(colorTint);
-      materialRef.current.uniforms.u_backgroundColor.value.set(backgroundColor);
-      materialRef.current.uniforms.u_brightness.value = brightness;
-      materialRef.current.uniforms.u_phaseOffset.value = phaseOffset;
-    }
-  });
-
-  return (
-    <mesh ref={meshRef} scale={[viewport.width, viewport.height, 1]}>
-      <planeGeometry args={[1, 1]} />
-      <shaderMaterial
-        ref={materialRef}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-      />
-    </mesh>
-  );
-};
-
+/**
+ * Morphing squircle shader, rendered with RAW three.js (no @react-three/fiber)
+ * so it stays compatible with the app's React/Next version — mirroring the
+ * RadialLiquid / Portal components. All WebGL work runs inside useEffect.
+ */
 const SquircleShift: React.FC<SquircleShiftProps> = ({
   width = "100%",
   height = "100%",
@@ -241,45 +142,150 @@ const SquircleShift: React.FC<SquircleShiftProps> = ({
   brightness = 1.5,
   phaseOffset = 10,
 }) => {
-  const { resolvedTheme } = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const backgroundColor = darkBackground ?? lightBackground;
 
-  const backgroundColor =
-    resolvedTheme === "dark" ? darkBackground : lightBackground;
+  // Latest prop values for the render loop without re-initializing WebGL.
+  const propsRef = useRef({
+    speed,
+    colorLayers,
+    gridFrequency,
+    gridIntensity,
+    waveSpeed,
+    waveIntensity,
+    spiralIntensity,
+    lineThickness,
+    falloff,
+    centerX,
+    centerY,
+    colorTint,
+    backgroundColor,
+    brightness,
+    phaseOffset,
+  });
+  propsRef.current = {
+    speed,
+    colorLayers,
+    gridFrequency,
+    gridIntensity,
+    waveSpeed,
+    waveIntensity,
+    spiralIntensity,
+    lineThickness,
+    falloff,
+    centerX,
+    centerY,
+    colorTint,
+    backgroundColor,
+    brightness,
+    phaseOffset,
+  };
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    let animationFrameId: number;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    const uniforms = {
+      u_time: { value: 0 },
+      u_resolution: { value: new THREE.Vector2(1, 1) },
+      u_speed: { value: speed },
+      u_colorLayers: { value: colorLayers },
+      u_gridFrequency: { value: gridFrequency },
+      u_gridIntensity: { value: gridIntensity },
+      u_waveSpeed: { value: waveSpeed },
+      u_waveIntensity: { value: waveIntensity },
+      u_spiralIntensity: { value: spiralIntensity },
+      u_lineThickness: { value: lineThickness },
+      u_falloff: { value: falloff },
+      u_centerX: { value: centerX },
+      u_centerY: { value: centerY },
+      u_colorTint: { value: new THREE.Color(colorTint) },
+      u_backgroundColor: { value: new THREE.Color(backgroundColor) },
+      u_brightness: { value: brightness },
+      u_phaseOffset: { value: phaseOffset },
+    };
+
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader,
+      fragmentShader,
+    });
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    const resize = () => {
+      const { width: w, height: h } = container.getBoundingClientRect();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(w, h, false);
+      uniforms.u_resolution.value.set(
+        Math.max(1, w),
+        Math.max(1, h),
+      );
+    };
+
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(container);
+    resize();
+
+    const start = performance.now();
+    const render = (now: number) => {
+      const p = propsRef.current;
+      uniforms.u_time.value = (now - start) * 0.001;
+      uniforms.u_speed.value = p.speed;
+      uniforms.u_colorLayers.value = p.colorLayers;
+      uniforms.u_gridFrequency.value = p.gridFrequency;
+      uniforms.u_gridIntensity.value = p.gridIntensity;
+      uniforms.u_waveSpeed.value = p.waveSpeed;
+      uniforms.u_waveIntensity.value = p.waveIntensity;
+      uniforms.u_spiralIntensity.value = p.spiralIntensity;
+      uniforms.u_lineThickness.value = p.lineThickness;
+      uniforms.u_falloff.value = p.falloff;
+      uniforms.u_centerX.value = p.centerX;
+      uniforms.u_centerY.value = p.centerY;
+      uniforms.u_colorTint.value.set(p.colorTint);
+      uniforms.u_backgroundColor.value.set(p.backgroundColor);
+      uniforms.u_brightness.value = p.brightness;
+      uniforms.u_phaseOffset.value = p.phaseOffset;
+      renderer.render(scene, camera);
+      animationFrameId = requestAnimationFrame(render);
+    };
+    animationFrameId = requestAnimationFrame(render);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      resizeObserver.disconnect();
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const widthStyle = typeof width === "number" ? `${width}px` : width;
   const heightStyle = typeof height === "number" ? `${height}px` : height;
 
   return (
     <div
+      ref={containerRef}
       className={cn("relative overflow-hidden", className)}
-      style={{
-        width: widthStyle,
-        height: heightStyle,
-      }}
+      style={{ width: widthStyle, height: heightStyle, backgroundColor }}
     >
-      <Canvas
-        className="absolute inset-0 h-full w-full"
-        gl={{ antialias: true, alpha: false }}
-        camera={{ position: [0, 0, 1], fov: 75 }}
-      >
-        <ShaderPlane
-          speed={speed}
-          colorLayers={colorLayers}
-          gridFrequency={gridFrequency}
-          gridIntensity={gridIntensity}
-          waveSpeed={waveSpeed}
-          waveIntensity={waveIntensity}
-          spiralIntensity={spiralIntensity}
-          lineThickness={lineThickness}
-          falloff={falloff}
-          centerX={centerX}
-          centerY={centerY}
-          colorTint={colorTint}
-          backgroundColor={backgroundColor}
-          brightness={brightness}
-          phaseOffset={phaseOffset}
-        />
-      </Canvas>
+      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
     </div>
   );
 };

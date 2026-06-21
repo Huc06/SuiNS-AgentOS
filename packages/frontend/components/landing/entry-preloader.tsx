@@ -23,7 +23,7 @@ export function EntryPreloader({ children }: { children: React.ReactNode }) {
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    const hold = prefersReduced ? 700 : 1800;
+    const hold = prefersReduced ? 1200 : 3200;
     const timer = setTimeout(() => setLoading(false), hold);
     return () => clearTimeout(timer);
   }, []);
@@ -34,9 +34,9 @@ export function EntryPreloader({ children }: { children: React.ReactNode }) {
       variant="curtain"
       position="fixed"
       zIndex={9999}
-      duration={1800}
+      duration={3200}
       bgColor="#6800FF"
-      loadingText="AGENTOS"
+      loadingText="AGENTOS · Sui-native identity for AI agents"
       textClassName="font-display uppercase tracking-tight text-off-white"
       respectReducedMotion
       reducedMotionFallback="fade"
