@@ -66,6 +66,17 @@ describe("classifyError", () => {
     ).toBe("HOST_MISCONFIG");
   });
 
+  it("classifies an Enoki passport-ownership mismatch as SPONSOR_REJECTED", () => {
+    const c = classifyError(
+      "dry_run_failed: Transaction was not signed by the correct sender: " +
+        "Object 0xpassport is owned by account address " +
+        "0x616c70686172756e74696d6577616c6c657400000000000000000000000000000000 " +
+        "but given owner/signer address is 0xfa5bbfd7",
+    );
+    expect(c.code).toBe("SPONSOR_REJECTED");
+    expect(c.hint).toMatch(/owned by a different address/i);
+  });
+
   it("falls back to UNKNOWN with the raw message as the hint", () => {
     const c = classifyError("something totally unexpected happened");
     expect(c.code).toBe("UNKNOWN");
@@ -144,6 +155,52 @@ describe("diagnoseStep", () => {
     expect(d.remediation).toMatch(/portal\.enoki\.mystenlabs\.com/);
     expect(d.remediation).toMatch(/move-call targets/i);
     expect(d.remediation).toMatch(/testnet/i);
+  });
+
+  it("SPONSOR_REJECTED: a passport-ownership mismatch gets its OWN re-seed remediation (not the allowlist copy)", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "delegate",
+        status: "error",
+        error:
+          "dry_run_failed: Transaction was not signed by the correct sender: " +
+          "Object 0xpassport is owned by account address " +
+          "0x616c70686172756e74696d6577616c6c657400000000000000000000000000000000 " +
+          "(ascii 'alpharuntimewallet'), but given owner/signer address is 0xfa5bbfd7",
+      }),
+    );
+    expect(d.code).toBe("SPONSOR_REJECTED");
+    expect(d.severity).toBe("error");
+    // The cause names the root issue: passport owned by a synthetic placeholder.
+    expect(d.cause).toMatch(/owned by a different address|placeholder/i);
+    // The remediation is the re-seed/transfer fix, NOT the generic Enoki
+    // allowlist copy.
+    expect(d.remediation).toMatch(/re-seed|transfer/i);
+    expect(d.remediation).toMatch(/runtime signer|SUI_PRIVATE_KEY/i);
+    expect(d.remediation).not.toMatch(/portal\.enoki\.mystenlabs\.com/);
+    // Surfaces BOTH addresses the Enoki error exposed: the placeholder owner
+    // (a normal 32-byte address is 64 hex; we cap at that) and the runtime
+    // signer that the sponsored tx actually used.
+    expect(d.remediation).toContain(
+      "0x616c70686172756e74696d6577616c6c65740000000000000000000000000000",
+    );
+    expect(d.remediation).toContain("0xfa5bbfd7");
+  });
+
+  it("SPONSOR_REJECTED: passport-ownership remediation still works when only the owner address is present", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "delegate",
+        status: "error",
+        error:
+          "dry_run_failed: Transaction was not signed by the correct sender: " +
+          "Object 0xpassport is owned by account address 0xabc123 (incorrect sender)",
+      }),
+    );
+    expect(d.code).toBe("SPONSOR_REJECTED");
+    expect(d.remediation).toContain("0xabc123");
+    expect(d.remediation).toMatch(/re-seed|transfer/i);
+    expect(d.remediation).not.toMatch(/portal\.enoki\.mystenlabs\.com/);
   });
 
   it("SPONSOR_REJECTED: falls back to SUI_PRIVATE_KEY when no address in error", () => {

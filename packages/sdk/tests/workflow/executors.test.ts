@@ -159,6 +159,97 @@ describe("harbor executor", () => {
     const magic = new TextDecoder().decode(bytes.slice(0, 7));
     expect(magic).toBe("AOSEAL1");
   });
+
+  it("falls back to the Walrus upload and ends DONE when ctx.harbor THROWS (404)", async () => {
+    // Real Harbor 404s (the exact production failure). The node must NOT
+    // hard-error — it falls back to the working Walrus upload and ends DONE so
+    // the downstream Memory node runs.
+    const upload = vi.fn(async () => {
+      throw new Error("Harbor upload failed: 404 Not Found");
+    });
+    const uploadManifest = vi.fn(async () => ({ blobId: "WALRUS_SAVED" }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        manifest: { secret: "hi" },
+      }),
+      makeCtx({ harbor: { upload }, uploadManifest }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("WALRUS_SAVED");
+    expect(upload).toHaveBeenCalledOnce();
+    // Walrus fallback DID run after Harbor threw.
+    expect(uploadManifest).toHaveBeenCalledOnce();
+
+    const out = r.output as { storage: string; note?: string; harborError?: string };
+    expect(out.storage).toBe("walrus");
+    expect(out.note).toMatch(/Harbor API unavailable/);
+    expect(out.harborError).toMatch(/404/);
+  });
+
+  it("falls back to a direct Walrus PUT (no uploadManifest) when ctx.harbor 404s", async () => {
+    const upload = vi.fn(async () => {
+      throw new Error("Harbor upload failed: 404 Not Found");
+    });
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ newlyCreated: { blobObject: { blobId: "W_DIRECT" } } }),
+    }));
+    vi.stubGlobal("fetch", mockFetch);
+
+    const r = await executors.harbor(
+      node("harbor", { private: true, sealPolicyId: "0xpolicy" }),
+      makeCtx({ harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("W_DIRECT");
+    expect((r.output as { storage: string }).storage).toBe("walrus");
+    // The direct Walrus publisher PUT was used as the fallback.
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to Walrus when ctx.harbor returns no blobId", async () => {
+    // Harbor accepted the upload but surfaced no blob id (async timed out): we
+    // must not return an empty blob — fall back to Walrus instead.
+    const upload = vi.fn(async () => ({ blobId: "", fileId: "f1" }));
+    const uploadManifest = vi.fn(async () => ({ blobId: "WALRUS_SAVED" }));
+
+    const r = await executors.harbor(
+      node("harbor", { private: true, sealPolicyId: "0xpolicy" }),
+      makeCtx({ harbor: { upload }, uploadManifest }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("WALRUS_SAVED");
+    expect((r.output as { storage: string }).storage).toBe("walrus");
+  });
+
+  it("errors only when BOTH Harbor and the Walrus fallback fail", async () => {
+    const upload = vi.fn(async () => {
+      throw new Error("Harbor upload failed: 500 boom");
+    });
+    const uploadManifest = vi.fn(async () => {
+      throw new Error("Walrus upload failed: 503 down");
+    });
+
+    const r = await executors.harbor(
+      node("harbor", { private: true, sealPolicyId: "0xpolicy" }),
+      makeCtx({ harbor: { upload }, uploadManifest }),
+      [],
+    );
+
+    expect(r.status).toBe("error");
+    expect(r.error).toMatch(/Harbor upload failed.*500/);
+    expect(r.error).toMatch(/Walrus fallback also failed.*503/);
+  });
 });
 
 describe("sui executor", () => {
