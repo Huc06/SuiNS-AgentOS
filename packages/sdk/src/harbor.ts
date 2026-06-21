@@ -168,9 +168,10 @@ export class HarborClient {
     fileId: string,
     options: { attempts?: number; intervalMs?: number } = {},
   ): Promise<{ state?: string; blobId?: string }> {
-    const attempts = options.attempts ?? 30;
+    const attempts = options.attempts ?? 600; // 10 minutes default (600 × 1s)
     const intervalMs = options.intervalMs ?? 1000;
     const statusUrl = `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/status`;
+    const startTime = Date.now();
 
     for (let i = 0; i < attempts; i += 1) {
       const res = await fetch(statusUrl, {
@@ -183,7 +184,11 @@ export class HarborClient {
       }
       const status = (await res.json()) as HarborUploadStatus;
       const state = status.state;
+      const elapsed = Date.now() - startTime;
       if (state === "completed") {
+        console.log(
+          `[Harbor] Upload completed after ${elapsed}ms (attempt ${i + 1}/${attempts})`,
+        );
         const blobId =
           status.data?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
         return { state, ...(blobId ? { blobId } : {}) };
@@ -192,6 +197,11 @@ export class HarborClient {
         throw new Error(`Harbor upload failed: job ${fileId} reported failed`);
       }
       // queued / active → wait and retry.
+      if ((i + 1) % 10 === 0) {
+        console.log(
+          `[Harbor] Upload still ${state} after ${elapsed}ms (attempt ${i + 1}/${attempts})`,
+        );
+      }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
     // Timed out waiting; return without a blob id (caller decides what to do).

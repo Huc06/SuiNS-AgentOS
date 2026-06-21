@@ -216,7 +216,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
               harborBucketId,
               content,
               filename,
-              { attempts: 60, intervalMs: 1000 }, // 60 seconds timeout
+              // Use SDK default timeout (600 attempts = 10 minutes)
             );
             const base = (
               harborBaseUrl ?? 'https://api.testnet.harbor.walrus.xyz'
