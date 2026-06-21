@@ -123,7 +123,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
               <MetaRow icon="terminal" label="Install in" value="AgentOS" />
               <MetaRow
                 icon="user"
-                label="Owner"
+                label="Made by"
                 value={
                   agent.runtimeWallet && agent.runtimeWallet !== "0x0"
                     ? shortObjectId(agent.runtimeWallet)
@@ -134,6 +134,11 @@ export default async function AgentPortfolioPage({ params }: Props) {
                     ? agent.runtimeWallet
                     : agent.passportId
                 }
+              />
+              <MetaRow
+                icon="download"
+                label="Skills"
+                value={String(skills.length)}
               />
             </div>
           </div>
