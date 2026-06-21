@@ -153,6 +153,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
             name={name}
             explorerUrl={explorerObjectUrl(agent.network, agent.passportId)}
             description={agent.description || ""}
+            skills={skills}
           />
         </section>
 

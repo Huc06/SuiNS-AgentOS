@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import type { AgentSkillRow } from "../../../lib/agent-types";
 import { EditPanel } from "./edit-panel";
 
 interface ActionBarProps {
@@ -10,6 +11,7 @@ interface ActionBarProps {
   name: string;
   explorerUrl: string;
   description: string;
+  skills: AgentSkillRow[];
 }
 
 export function ActionBar({
@@ -17,12 +19,13 @@ export function ActionBar({
   name,
   explorerUrl,
   description,
+  skills,
 }: ActionBarProps) {
   const [editOpen, setEditOpen] = useState(false);
 
   return (
     <>
-      {/* Center content between sidebar (left) and edit panel (right) */}
+      {/* Center content between sidebar and edit panel */}
       <style>
         {editOpen
           ? `main[data-portfolio] { margin-right: 320px; max-width: none; transition: margin-right 0.2s ease; }`
@@ -69,6 +72,7 @@ export function ActionBar({
         onClose={() => setEditOpen(false)}
         agentSlug={agentSlug}
         initialDescription={description}
+        skills={skills}
       />
     </>
   );
