@@ -38,7 +38,7 @@ sui client gas                # confirm it has SUI for gas
 The current published package id (from `.agentos/config.json`) is:
 
 ```
-0x7febcab96302fc0917b3f0443e2b29779ca8fc802a6407edfa857604fa6ad9ef
+0xb6fcc783987f8bf72f9c9f817da3308cb9df2d6808921cdc8b5374a9d1e97387
 ```
 
 ## 1. Build + test locally first (no gas)
