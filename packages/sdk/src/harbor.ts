@@ -14,6 +14,22 @@ export interface HarborUploadResult {
 }
 
 /**
+ * Result of a Harbor file upload: the Harbor `fileId` (always present) and the
+ * underlying Walrus `blobId` (populated once the async upload job certifies the
+ * blob; may still be empty if we returned before completion). The default
+ * {@link HarborClient.uploadBlob} polls the upload job to completion, so both
+ * are normally present.
+ */
+export interface HarborFileUploadResult {
+  /** Harbor file id (a uuid). Stable immediately after the 202 accept. */
+  fileId: string;
+  /** Underlying Walrus blob id, once the upload job certifies it. */
+  blobId: string;
+  /** Terminal/last-seen Harbor upload job state. */
+  state?: string;
+}
+
+/**
  * Options for constructing a {@link HarborClient}.
  */
 export interface HarborClientOptions {
@@ -24,11 +40,32 @@ export interface HarborClientOptions {
 }
 
 /**
- * Minimal shape of the Harbor upload response. Harbor returns additional
- * fields (e.g. `size`) which we ignore.
+ * Minimal shape of a Harbor `FileSummary` (the `data` envelope of an upload /
+ * file-metadata response). Harbor returns additional fields (e.g. `size`,
+ * `created_at`) which we ignore. `blob_id` is null until the async upload job
+ * certifies the Walrus blob.
  */
-interface HarborUploadResponse {
-  blobId: string;
+interface HarborFileSummary {
+  id: string;
+  blob_id?: string | null;
+  status?: string;
+  name?: string;
+}
+
+/** The `{ data: FileSummary }` envelope Harbor wraps single-object responses in. */
+interface HarborFileEnvelope {
+  data?: HarborFileSummary;
+}
+
+/**
+ * Shape of the Harbor upload-job status response
+ * (`GET …/files/{fileId}/status`). `state` is the job lifecycle; `completed`
+ * means the Walrus blob is certified.
+ */
+interface HarborUploadStatus {
+  state?: "queued" | "active" | "completed" | "failed" | string;
+  progress?: number;
+  data?: HarborFileSummary;
 }
 
 /**
@@ -47,37 +84,132 @@ export class HarborClient {
   }
 
   /**
-   * Upload a blob to a Walrus bucket via Harbor. POSTs the raw content to
-   * `/api/v1/spaces/{spaceId}/buckets/{bucketId}/files` and returns the
-   * resulting `blobId`.
+   * Upload a blob to a bucket via Harbor and return the underlying Walrus
+   * `blobId` plus the Harbor `fileId`.
    *
-   * @throws if Harbor responds with a non-2xx status.
+   * Harbor's real upload endpoint is `POST /api/v1/buckets/{bucketId}/files`
+   * with a `multipart/form-data` body (field name `file`). It is **async**: the
+   * POST returns `202 { data: FileSummary }` with the file `id` immediately, but
+   * `blob_id` is null until the background job certifies the Walrus blob. We
+   * therefore poll `…/files/{fileId}/status` until the job reports `completed`
+   * (then read back `blob_id`), so callers get a real Walrus blob id.
+   *
+   * The legacy first argument is the `spaceId`; it is accepted for backwards
+   * compatibility but the real path is keyed by bucket id only.
+   *
+   * @throws "Harbor upload failed: …" if Harbor responds with a non-2xx status
+   *   or the upload job fails. (Distinct from "Walrus upload failed:" so a
+   *   Harbor-API failure is never mislabelled as a public-Walrus failure.)
    */
   async uploadBlob(
     spaceId: string,
     bucketId: string,
     content: Uint8Array,
     filename: string,
-  ): Promise<{ blobId: string }> {
-    const url = `${this.baseUrl}/api/v1/spaces/${spaceId}/buckets/${bucketId}/files`;
+    pollOptions: { attempts?: number; intervalMs?: number } = {},
+  ): Promise<HarborFileUploadResult> {
+    void spaceId; // legacy arg — the real upload path is keyed by bucket id only.
+    const url = `${this.baseUrl}/api/v1/buckets/${bucketId}/files`;
+
+    const form = new FormData();
+    // Copy into a standalone ArrayBuffer-backed view so Blob never sees a
+    // SharedArrayBuffer (which `BlobPart` does not accept under strict TS).
+    const bytes = new Uint8Array(content.length);
+    bytes.set(content);
+    form.append(
+      "file",
+      new Blob([bytes], { type: "application/octet-stream" }),
+      filename,
+    );
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/octet-stream",
-        "X-Filename": filename,
-      },
-      body: Buffer.from(content),
+      // NOTE: do NOT set Content-Type — fetch derives the multipart boundary.
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form,
     });
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Walrus upload failed: ${response.status} ${body}`);
+      throw new Error(`Harbor upload failed: ${response.status} ${body}`);
     }
 
-    const result = (await response.json()) as HarborUploadResponse;
-    return { blobId: result.blobId };
+    const summary = ((await response.json()) as HarborFileEnvelope).data;
+    const fileId = summary?.id;
+    if (!fileId) {
+      throw new Error(
+        `Harbor upload failed: response missing file id (${JSON.stringify(summary ?? {})})`,
+      );
+    }
+
+    // Fast path: the blob id is already present (sync/cached upload).
+    if (summary.blob_id) {
+      return { fileId, blobId: summary.blob_id, state: summary.status };
+    }
+
+    // Async path: poll the upload job to completion, then read back blob_id.
+    const { state, blobId } = await this.waitForUpload(
+      bucketId,
+      fileId,
+      pollOptions,
+    );
+    return { fileId, blobId: blobId ?? "", state };
+  }
+
+  /**
+   * Poll a Harbor upload job until it reaches a terminal state. On `completed`
+   * we re-read the file metadata to surface the certified Walrus `blob_id`.
+   *
+   * @throws "Harbor upload failed: …" if the job reports `failed`.
+   */
+  private async waitForUpload(
+    bucketId: string,
+    fileId: string,
+    options: { attempts?: number; intervalMs?: number } = {},
+  ): Promise<{ state?: string; blobId?: string }> {
+    const attempts = options.attempts ?? 30;
+    const intervalMs = options.intervalMs ?? 1000;
+    const statusUrl = `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/status`;
+
+    for (let i = 0; i < attempts; i += 1) {
+      const res = await fetch(statusUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Harbor upload failed: ${res.status} ${body}`);
+      }
+      const status = (await res.json()) as HarborUploadStatus;
+      const state = status.state;
+      if (state === "completed") {
+        const blobId =
+          status.data?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
+        return { state, ...(blobId ? { blobId } : {}) };
+      }
+      if (state === "failed") {
+        throw new Error(`Harbor upload failed: job ${fileId} reported failed`);
+      }
+      // queued / active → wait and retry.
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    // Timed out waiting; return without a blob id (caller decides what to do).
+    return { state: "active" };
+  }
+
+  /** Read a file's metadata and return its certified Walrus `blob_id` (or undefined). */
+  private async getFileBlobId(
+    bucketId: string,
+    fileId: string,
+  ): Promise<string | undefined> {
+    const url = `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) return undefined;
+    const summary = ((await res.json()) as HarborFileEnvelope).data;
+    return summary?.blob_id ?? undefined;
   }
 
   /**
@@ -103,7 +235,7 @@ export class HarborClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Walrus download failed: ${response.status} ${body}`);
+      throw new Error(`Harbor download failed: ${response.status} ${body}`);
     }
 
     const buffer = await response.arrayBuffer();

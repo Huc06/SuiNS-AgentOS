@@ -80,10 +80,13 @@ describe("AgentOSClient skill lifecycle", () => {
 
   describe("publishSkill", () => {
     it("creates a new skill descriptor when no existing record in registry", async () => {
-      // Mock Harbor upload
+      // Mock Harbor upload (202 { data: FileSummary } with blob_id present).
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ blobId: "blob-new-123" }),
+        status: 202,
+        json: async () => ({
+          data: { id: "file-new-123", blob_id: "blob-new-123", status: "completed" },
+        }),
       });
 
       const mockClient = createMockSuiClient();
@@ -137,7 +140,10 @@ describe("AgentOSClient skill lifecycle", () => {
     it("includes sealPolicyId in result when private option set", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ blobId: "blob-private" }),
+        status: 202,
+        json: async () => ({
+          data: { id: "file-private", blob_id: "blob-private", status: "completed" },
+        }),
       });
 
       const mockClient = createMockSuiClient();
