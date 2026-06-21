@@ -76,10 +76,18 @@ export interface AgentReputation {
   isActive: boolean;
 }
 
-/** Result of buildExecuteSkillTx — separates build from sign+execute. */
+/**
+ * Result of buildExecuteSkillTx — separates build from sign+execute.
+ *
+ * `descriptor`/`manifest` are `null` in the degraded delegated path: when the
+ * requested skill does not resolve but a DelegationCap is present, the builder
+ * still produces a valid PTB carrying only the delegation accounting (no skill
+ * move-call), so the Call ends as a real on-chain tx. `manifestHash` is `""` and
+ * `descriptor === null` signals that degraded path.
+ */
 export interface BuildExecuteSkillTxResult {
-  descriptor: SkillDescriptor;
-  manifest: SkillManifest;
+  descriptor: SkillDescriptor | null;
+  manifest: SkillManifest | null;
   transaction: unknown; // Transaction from @mysten/sui/transactions
   manifestHash: string;
   verified: boolean;
