@@ -37,10 +37,12 @@ import {
 import {
   fieldsForLabel,
   validateNodeParams,
+  formNoteForLabel,
   LABEL_FIELD_KEY,
   type NodeParamField,
 } from "../../../lib/node-config";
 import { TEMPLATES } from "../../../lib/workflow-templates";
+import { defaultGraphForSlug } from "../../../lib/agent-workflows";
 
 // ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
 // this client component never imports the Node-only SDK entry) =====
@@ -657,6 +659,9 @@ function SkillNode({
   // Editable fields for this node type (shared schema). A field whose key is
   // LABEL_FIELD_KEY ("label") writes to the node's display label, not params.
   const paramFields = fieldsForLabel(data.label);
+  // Optional one-line "what this node does" note shown at the top of the config
+  // form (carries the honest DEMO-encryption caveat for Harbor).
+  const formNote = formNoteForLabel(data.label);
   // Per-field validation errors for the current values (inline hints below).
   const fieldErrors = validateNodeParams(data.label, data.params);
 
@@ -1052,6 +1057,11 @@ function SkillNode({
               &times;
             </button>
           </div>
+          {formNote && (
+            <p className="border-l-2 border-electric-purple bg-surface-container px-2 py-1 font-mono text-[9px] leading-relaxed text-black/60">
+              {formNote}
+            </p>
+          )}
           {paramFields.map((f) => (
             <NodeConfigField
               key={f.key}
@@ -1186,7 +1196,7 @@ const initialNodes: Node[] = [
     id: "harbor-seal",
     type: "skill",
     position: { x: 560, y: 150 },
-    data: { label: "Harbor", subtitle: "Seal encrypt" },
+    data: { label: "Harbor", subtitle: "Encrypt (DEMO)" },
   },
   {
     id: "sui-exec",
@@ -1402,6 +1412,10 @@ export default function WorkflowEditorPage() {
   // template) can re-center the view via `fitView` (the `fitView` prop only
   // fits on mount).
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null);
+  // Tracks which slug we've already seeded the canvas for, so the per-agent
+  // default graph loads exactly ONCE per agent on mount — it never clobbers
+  // later user edits, a loaded template, or the Demo Graph.
+  const seededSlug = useRef<string | null>(null);
 
   // ===== Run state =====
   const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -1565,6 +1579,25 @@ export default function WorkflowEditorPage() {
     fetchRuns();
     fetchNamespaces();
   }, [fetchRuns, fetchNamespaces]);
+
+  // Seed the canvas with this agent's DISTINCT default workflow on first load
+  // (once per slug). Each known demo agent (@alpha, @beta-agent, @walrus-bot,
+  // @defi-rebalancer, @sui-indexer) opens with an on-brand starter graph;
+  // unknown slugs keep the generic default (initialNodes/initialEdges). The
+  // Templates dropdown and Demo Graph button still override afterwards — this
+  // guard only fires once per slug, so it never clobbers later edits.
+  useEffect(() => {
+    if (!slug || seededSlug.current === slug) return;
+    seededSlug.current = slug;
+    const graph = defaultGraphForSlug(slug);
+    if (!graph) return; // unknown agent — leave the generic default in place.
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+    setLatestRun(null);
+    requestAnimationFrame(() => {
+      rfInstance.current?.fitView({ padding: 0.2, duration: 300 });
+    });
+  }, [slug, setNodes, setEdges]);
 
   // Fetch the preflight prediction on mount and whenever the graph shape changes
   // (node/edge count). Debounced so dragging a node doesn't spam the endpoint.
