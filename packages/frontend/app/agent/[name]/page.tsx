@@ -94,8 +94,8 @@ export default async function AgentPortfolioPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Overview row */}
-          <div className="grid grid-cols-2 gap-4 px-6 py-4 sm:grid-cols-4">
+          {/* Overview + Plugin info — single unified card */}
+          <div className="grid grid-cols-2 gap-4 border-t border-pure-black/10 px-6 py-4 sm:grid-cols-4">
             <OverviewItem label="Version" value={agent.passportVersion} />
             <OverviewItem label="Network" value={agent.network} />
             <OverviewItem label="Skills" value={String(skills.length)} />
@@ -104,57 +104,19 @@ export default async function AgentPortfolioPage({ params }: Props) {
               value={String(agent.delegations?.length ?? 0)}
             />
           </div>
-        </section>
 
-        <Separator />
-
-        {/* ===== Social Links ===== */}
-        <section className="border-x border-pure-black/10 px-6 py-4">
-          <div className="flex flex-wrap gap-2">
-            <SocialButton
-              href={explorerObjectUrl(agent.network, agent.passportId)}
-              label="Suiscan"
-              icon="chain"
-            />
-            <SocialButton
-              href={`/agent/${name}/skills`}
-              label="Skills"
-              icon="code"
-              internal
-            />
-            <SocialButton
-              href={`/agent/${name}/delegate`}
-              label="Delegate"
-              icon="delegate"
-              internal
-            />
-            <SocialButton
-              href={`/agent/${name}/manage`}
-              label="Console"
-              icon="terminal"
-              internal
-            />
-          </div>
-        </section>
-
-        <Separator />
-
-        {/* ===== Plugin Card (dark, like Claude plugins) ===== */}
-        <section className="border-x border-pure-black/10">
-          <div className="flex flex-col gap-6 bg-[#1a1a1a] px-6 py-8 sm:flex-row sm:items-start sm:justify-between">
-            {/* Left: name + description */}
+          {/* Agent description + metadata row */}
+          <div className="flex flex-col gap-6 border-t border-pure-black/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-md">
-              <h2 className="font-display text-2xl font-bold text-white">
+              <h2 className="text-lg font-bold text-black">
                 {agent.suinsName}
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-white/60">
+              <p className="mt-1 text-sm leading-relaxed text-black/60">
                 {agent.description ||
                   `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
               </p>
             </div>
-
-            {/* Right: metadata */}
-            <div className="flex shrink-0 flex-col gap-3 sm:items-end">
+            <div className="flex shrink-0 flex-col gap-2.5 sm:items-end">
               <MetaRow icon="terminal" label="Install in" value="AgentOS" />
               <MetaRow
                 icon="user"
@@ -178,19 +140,46 @@ export default async function AgentPortfolioPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Code snippet below the dark card */}
-          <div className="border-t border-white/10 bg-[#111] px-6 py-4">
+          {/* Quick Start code */}
+          <div className="border-t border-pure-black/10 bg-black/[0.02] px-6 py-4">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] font-bold uppercase text-white/30">
+              <span className="font-mono text-[10px] font-bold uppercase text-black/40">
                 Quick Start
               </span>
               <CopyButton
                 text={`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}
               />
             </div>
-            <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed text-white/70">
+            <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed text-black/70">
               <code>{`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}</code>
             </pre>
+          </div>
+
+          {/* Social Links */}
+          <div className="flex flex-wrap gap-2 border-t border-pure-black/10 px-6 py-4">
+            <SocialButton
+              href={explorerObjectUrl(agent.network, agent.passportId)}
+              label="Suiscan"
+              icon="chain"
+            />
+            <SocialButton
+              href={`/agent/${name}/skills`}
+              label="Skills"
+              icon="code"
+              internal
+            />
+            <SocialButton
+              href={`/agent/${name}/delegate`}
+              label="Delegate"
+              icon="delegate"
+              internal
+            />
+            <SocialButton
+              href={`/agent/${name}/manage`}
+              label="Console"
+              icon="terminal"
+              internal
+            />
           </div>
         </section>
 
@@ -670,7 +659,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/40"
+        className="text-black/30"
       >
         <polyline points="4 17 10 11 4 5" />
         <line x1="12" y1="19" x2="20" y2="19" />
@@ -684,7 +673,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/40"
+        className="text-black/30"
       >
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
         <circle cx="12" cy="7" r="4" />
@@ -698,7 +687,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/40"
+        className="text-black/30"
       >
         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
@@ -711,9 +700,9 @@ function MetaRow({
     <div className="flex items-center gap-3">
       {icons[icon]}
       <div>
-        <p className="font-mono text-[10px] text-white/40">{label}</p>
+        <p className="font-mono text-[10px] text-black/40">{label}</p>
         <div className="flex items-center gap-1.5">
-          <p className="font-mono text-sm font-bold text-white">{value}</p>
+          <p className="font-mono text-sm font-bold text-black">{value}</p>
           {copyText && <CopyButton text={copyText} />}
         </div>
       </div>
