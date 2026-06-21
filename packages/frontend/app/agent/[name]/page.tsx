@@ -7,6 +7,7 @@ import { explorerObjectUrl } from "../../../lib/explorer-links";
 import { ActionBar } from "./action-bar";
 import { CopyButton } from "./copy-button";
 import { PortfolioBorder } from "./portfolio-border";
+import { PortfolioTopbar } from "./portfolio-topbar";
 
 interface Props {
   params: Promise<{ name: string }>;
@@ -53,14 +54,8 @@ export default async function AgentPortfolioPage({ params }: Props) {
         data-portfolio
         className="mx-auto max-w-3xl px-4 transition-all duration-200"
       >
-        {/* Breadcrumb */}
-        <nav className="mb-4 flex items-center gap-1.5 font-mono text-xs text-black/50">
-          <Link href="/explore" className="hover:text-black">
-            Portfolio
-          </Link>
-          <span className="text-black/30">/</span>
-          <span className="font-bold text-black">@{agent.slug}</span>
-        </nav>
+        {/* Breadcrumb + expand */}
+        <PortfolioTopbar slug={agent.slug} />
 
         {/* ===== Profile Header ===== */}
         <PortfolioBorder>
