@@ -5,6 +5,7 @@ import "@mysten/dapp-kit/dist/index.css";
 
 import { AppSidebar } from "../components/app-sidebar";
 import { GlobalBg } from "../components/global-bg";
+import { OnboardingModal } from "../components/onboarding-modal";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -55,6 +56,7 @@ export default function RootLayout({
         </a>
         <Providers>
           <GlobalBg />
+          <OnboardingModal />
           <div className="relative z-10 flex min-h-screen">
             <AppSidebar />
             <div id="main-content" className="ml-16 flex-1 md:ml-56">
