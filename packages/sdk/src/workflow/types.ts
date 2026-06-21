@@ -164,6 +164,13 @@ export interface BuildCallSubAgentResult {
   transaction: unknown;
   manifestHash: string;
   verified: boolean;
+  /**
+   * False when the requested skill did NOT resolve (a saved canvas graph passed
+   * the agent name instead of a real skill). In that case the PTB carries only
+   * the delegation accounting — no skill move-call. `undefined`/true means the
+   * skill resolved normally. Lets the executor surface a clear degraded note.
+   */
+  skillResolved?: boolean;
 }
 
 /** Options for the injected delegation-grant PTB builder. */

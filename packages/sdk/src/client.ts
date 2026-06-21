@@ -770,8 +770,8 @@ export class AgentOSClient {
    * Steps: resolve skill → download manifest → verify hash → check capabilities → build PTB.
    */
   async buildExecuteSkillTx(options: BuildExecuteSkillTxOptions): Promise<{
-    descriptor: SkillDescriptor;
-    manifest: SkillManifest;
+    descriptor: SkillDescriptor | null;
+    manifest: SkillManifest | null;
     transaction: Transaction;
     manifestHash: string;
     verified: boolean;
@@ -785,54 +785,75 @@ export class AgentOSClient {
       subjectPassportId,
     } = options;
 
-    // 1. Resolve skill by SuiNS name
-    const descriptor = await this.resolveSkill(suinsName);
-
-    // 2. Download manifest from Walrus
-    let manifest: SkillManifest;
-    let verified = true;
+    // 1. Resolve skill by SuiNS name.
+    //
+    // Saved/older canvas graphs sometimes put the AGENT name (e.g. `alpha.sui`)
+    // in the Call node's `skill` param instead of a real skill — so resolve can
+    // throw "Skill not found". When a DelegationCap is present upstream the
+    // on-chain value of the Call is the delegation accounting (assert_valid →
+    // consume → record_subagent_execution), NOT an arbitrary skill move-call. So
+    // we DO NOT abort: we proceed with no descriptor/manifest and skip the
+    // skill's own entry call entirely. Only when there is ALSO no cap (genuine
+    // misuse — nothing to execute) do we re-throw the original error.
+    let descriptor: SkillDescriptor | null = null;
     try {
-      manifest = await this.downloadManifest(
-        descriptor.walrusManifestBlob,
-        descriptor.manifestHash,
-        descriptor.sealPolicyId
-          ? { sealPolicyId: descriptor.sealPolicyId }
-          : undefined,
-      );
+      descriptor = await this.resolveSkill(suinsName);
     } catch (err) {
-      if (
-        err instanceof Error &&
-        err.message.includes("integrity check failed")
-      ) {
-        verified = false;
+      if (!delegationCapId) {
+        throw err; // No cap + unresolvable skill = genuine misuse. Re-throw.
+      }
+      // Degraded delegated path: keep descriptor === null, run accounting only.
+      descriptor = null;
+    }
+
+    // 2. Download + hash-verify the manifest (only when we have a descriptor).
+    let manifest: SkillManifest | null = null;
+    let verified = true;
+    if (descriptor) {
+      try {
+        manifest = await this.downloadManifest(
+          descriptor.walrusManifestBlob,
+          descriptor.manifestHash,
+          descriptor.sealPolicyId
+            ? { sealPolicyId: descriptor.sealPolicyId }
+            : undefined,
+        );
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.message.includes("integrity check failed")
+        ) {
+          verified = false;
+          throw err;
+        }
         throw err;
       }
-      throw err;
-    }
 
-    // 3. Resolve dependencies (if any)
-    if (manifest.dependencies && manifest.dependencies.length > 0) {
-      const depResolver = new DependencyResolver(this);
-      await depResolver.resolve(manifest);
-    }
+      // 3. Resolve dependencies (if any)
+      if (manifest.dependencies && manifest.dependencies.length > 0) {
+        const depResolver = new DependencyResolver(this);
+        await depResolver.resolve(manifest);
+      }
 
-    // 4. Verify agent has required capabilities
-    const requiredPolicies = manifest.sui.policyRequired ?? [];
-    if (requiredPolicies.length > 0) {
-      const capabilities = agentCapabilities ?? [];
-      for (const required of requiredPolicies) {
-        if (!capabilities.includes(required)) {
-          throw new Error(`Missing required capability: ${required}`);
+      // 4. Verify agent has required capabilities
+      const requiredPolicies = manifest.sui.policyRequired ?? [];
+      if (requiredPolicies.length > 0) {
+        const capabilities = agentCapabilities ?? [];
+        for (const required of requiredPolicies) {
+          if (!capabilities.includes(required)) {
+            throw new Error(`Missing required capability: ${required}`);
+          }
         }
       }
     }
 
-    // 5. Build PTB from manifest's sui.movePackage + sui.entry
+    // 5. Build PTB from manifest's sui.movePackage + sui.entry.
+    // With no manifest (degraded delegated path) there is no entry to parse;
+    // the skill's own move-call is omitted and only the accounting runs.
     const transaction = new Transaction();
-    const [packageAddr, module, func] = this.#parseEntry(
-      manifest.sui.movePackage,
-      manifest.sui.entry,
-    );
+    const [packageAddr, module, func] = manifest
+      ? this.#parseEntry(manifest.sui.movePackage, manifest.sui.entry)
+      : [undefined, "", ""];
 
     // Many seeded/imported skills carry a PLACEHOLDER move target (a non-`0x`
     // package such as `0xYOUR_NFT_PACKAGE`, a named MVR package, OR the AgentOS
@@ -842,11 +863,12 @@ export class AgentOSClient {
     // callable entry we OMIT the skill's own entry call but still run the
     // delegation accounting (assert_valid → consume → record_subagent_execution),
     // so a delegated Call completes as a real on-chain tx instead of erroring.
-    const skillEntryCallable = isCallableSkillEntry(
-      packageAddr,
-      module,
-      this.#packageId,
-    );
+    // A missing manifest (unresolved skill) is never callable — there is no
+    // entry to emit, so `skillEntryCallable` is false and only the accounting
+    // runs. Guard the descriptor/manifest access so a null never crashes.
+    const skillEntryCallable = manifest
+      ? isCallableSkillEntry(packageAddr, module, this.#packageId)
+      : false;
     const moveCallArgs = skillEntryCallable
       ? this.#bindParams(transaction, params)
       : [];
@@ -856,11 +878,16 @@ export class AgentOSClient {
       ? transaction.object(delegationCapId)
       : undefined;
     if (cap) {
+      // `assert_valid` only needs the cap + Clock + a skill string (vector<u8>).
+      // Prefer the resolved descriptor's skillId; when the skill did not resolve
+      // (degraded path) fall back to the requested name so the cap's allowed-skill
+      // check still runs against a meaningful identifier instead of crashing on a
+      // null descriptor.
       transaction.add(
         contracts.delegation.assertValid({
           cap,
           clock: transaction.object(SUI_CLOCK_OBJECT_ID),
-          skillId: descriptor.skillId,
+          skillId: descriptor?.skillId ?? suinsName,
           packageId: this.#packageId,
         }),
       );
@@ -905,10 +932,14 @@ export class AgentOSClient {
     // A placeholder skill target with no delegation cap would leave the PTB empty
     // (no commands) — there is nothing to execute. Fail loudly instead of
     // submitting an empty tx. (Delegated calls always have accounting commands.)
+    // NOTE: an unresolved skill with no cap was already re-thrown at step 1, so
+    // reaching here without a cap implies `manifest` resolved.
     if (!skillEntryCallable && !cap) {
+      const targetNote = manifest
+        ? `has a placeholder move target (${manifest.sui.movePackage})`
+        : `did not resolve`;
       throw new Error(
-        `buildExecuteSkillTx: skill "${suinsName}" has a placeholder move target ` +
-          `(${manifest.sui.movePackage}) and no delegationCapId — nothing to execute. ` +
+        `buildExecuteSkillTx: skill "${suinsName}" ${targetNote} and no delegationCapId — nothing to execute. ` +
           `Provide a delegationCapId (delegated exec) or a skill with a real 0x movePackage.`,
       );
     }
@@ -917,7 +948,7 @@ export class AgentOSClient {
       descriptor,
       manifest,
       transaction,
-      manifestHash: descriptor.manifestHash,
+      manifestHash: descriptor?.manifestHash ?? "",
       verified,
     };
   }

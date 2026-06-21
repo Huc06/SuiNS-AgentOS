@@ -272,6 +272,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         transaction: built.transaction,
         manifestHash: built.manifestHash,
         verified: built.verified,
+        // descriptor === null ⇒ the skill did not resolve and the builder ran
+        // the delegation accounting only (degraded path).
+        skillResolved: built.descriptor !== null,
       };
     },
     buildDelegateTx: (options) => {

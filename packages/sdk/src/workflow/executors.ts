@@ -683,6 +683,11 @@ const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
   });
 
   const result = await ctx.execute(built.transaction);
+  // When the skill did NOT resolve (an older/saved canvas graph passed the agent
+  // name instead of a real skill) the builder ran the delegation accounting only
+  // — no skill move-call. Surface a clear note so the degraded run is legible,
+  // but still report `done`: a real on-chain tx (the accounting) was committed.
+  const skillResolved = built.skillResolved !== false;
   return {
     status: "done",
     txDigest: result.digest,
@@ -692,6 +697,12 @@ const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
       manifestHash: built.manifestHash,
       verified: built.verified,
       delegated: Boolean(delegationCapId),
+      ...(skillResolved
+        ? {}
+        : {
+            skillResolved: false,
+            note: `skill "${suinsName}" did not resolve — ran delegation accounting only`,
+          }),
     },
   };
 };

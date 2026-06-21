@@ -332,6 +332,84 @@ describe("buildExecuteSkillTx — delegated path", () => {
     // And there is a pure input for the numeric param.
     expect(inputs.some((i) => i.$kind === "Pure")).toBe(true);
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Resilient Call: an UNRESOLVABLE skill must not abort a delegated Call.
+  //
+  // Saved/older canvas graphs sometimes pass the AGENT name (e.g. `alpha.sui`)
+  // as the Call node's skill — `resolveSkill` then throws "Skill not found". The
+  // on-chain value of the coordinate flow is the delegation accounting, so a
+  // present DelegationCap means the Call should still build a real tx.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * A client whose `resolveSkill(suinsName)` ALWAYS throws "Skill not found":
+   * the SuiNS name does not resolve on-chain (resolveAddress=null) and there is
+   * NO local registry, so the registry fallback also throws.
+   */
+  function clientWithUnresolvableSkill() {
+    const mockClient = createMockSuiClient({ resolveAddress: null });
+    // No registryPath ⇒ no LocalRegistry ⇒ resolveSkill's fallback throws.
+    return new AgentOSClient({ client: mockClient as never, packageId: PKG });
+  }
+
+  it("builds a delegation-accounting tx (no skill move-call) for an UNRESOLVABLE skill WHEN a delegationCapId is present — does not throw", async () => {
+    const client = clientWithUnresolvableSkill();
+
+    const built = await client.buildExecuteSkillTx({
+      suinsName: "alpha.sui", // an AGENT name, not a real skill
+      delegationCapId: CAP_ID,
+      cost: 250n,
+      subjectPassportId: PASSPORT_ID,
+    });
+
+    // The skill never resolved → no descriptor/manifest, no skill move-call.
+    expect(built.descriptor).toBeNull();
+    expect(built.manifest).toBeNull();
+    expect(built.manifestHash).toBe("");
+    // Only the 3 delegation accounting calls, in order — a real on-chain tx.
+    expect(moveCallOrder(built.transaction)).toEqual([
+      "delegation::assert_valid",
+      "delegation::consume",
+      "delegation::record_subagent_execution",
+    ]);
+    // assert_valid still references the cap + Clock; record bumps the passport.
+    const objectIds = objectInputIds(built.transaction);
+    expect(objectIds).toContain(CAP_ID);
+    expect(objectIds).toContain(CLOCK_ID);
+    expect(objectIds).toContain(PASSPORT_ID);
+  });
+
+  it("RE-THROWS the original 'Skill not found' for an UNRESOLVABLE skill with NO delegationCapId (genuine misuse)", async () => {
+    const client = clientWithUnresolvableSkill();
+
+    await expect(
+      client.buildExecuteSkillTx({ suinsName: "alpha.sui" }),
+    ).rejects.toThrow(/Skill not found/);
+  });
+
+  it("leaves the RESOLVABLE skill path unchanged (descriptor + entry call present)", async () => {
+    const client = await setupClient(validManifest());
+
+    const built = await client.buildExecuteSkillTx({
+      suinsName: "trade.alpha.sui",
+      delegationCapId: CAP_ID,
+      cost: 0,
+      subjectPassportId: PASSPORT_ID,
+    });
+
+    // Descriptor + manifest resolved; the skill's own entry call is emitted
+    // between the accounting calls — exactly the pre-fix behaviour.
+    expect(built.descriptor).not.toBeNull();
+    expect(built.manifest).not.toBeNull();
+    expect(built.manifestHash).not.toBe("");
+    expect(moveCallOrder(built.transaction)).toEqual([
+      "delegation::assert_valid",
+      "mod::run",
+      "delegation::consume",
+      "delegation::record_subagent_execution",
+    ]);
+  });
 });
 
 describe("delegateSubAgent — child resolution & skill scoping", () => {

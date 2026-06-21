@@ -360,6 +360,58 @@ describe("call-sub-agent executor", () => {
     expect(execute).toHaveBeenCalledWith(built.transaction);
   });
 
+  it("surfaces a degraded note (skill did not resolve) but still reports done when the builder ran accounting only", async () => {
+    // The builder signals the degraded delegated path with skillResolved: false
+    // (an older/saved canvas graph passed the agent name as the skill).
+    const built = {
+      transaction: { __tx: "accounting-only" },
+      manifestHash: "",
+      verified: true,
+      skillResolved: false,
+    };
+    const build = makeBuild({
+      buildCallSubAgentTx: vi.fn(async () => built),
+    });
+    const execute = vi.fn(async () => ({ digest: "0xDEGRADED" }));
+    const ctx = makeCtx({ build, execute });
+
+    const r = await executors["call-sub-agent"](
+      node("call-sub-agent", {
+        skill: "alpha.sui", // agent name, not a real skill
+        delegationCapId: CAP_ID,
+        subjectPassportId: SUBJECT_ID,
+      }),
+      ctx,
+      [],
+    );
+
+    // Still a real on-chain tx (the delegation accounting) → done.
+    expect(r.status).toBe("done");
+    expect(r.txDigest).toBe("0xDEGRADED");
+    const out = r.output as { skillResolved?: boolean; note?: string };
+    expect(out.skillResolved).toBe(false);
+    expect(out.note).toMatch(/did not resolve/);
+    expect(execute).toHaveBeenCalledWith(built.transaction);
+  });
+
+  it("emits NO degraded note when the skill resolves normally (skillResolved omitted ⇒ resolved)", async () => {
+    const build = makeBuild(); // default builder omits skillResolved
+    const ctx = makeCtx({ build });
+    const r = await executors["call-sub-agent"](
+      node("call-sub-agent", {
+        skill: "trade.alpha.sui",
+        delegationCapId: CAP_ID,
+        subjectPassportId: SUBJECT_ID,
+      }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("done");
+    const out = r.output as { skillResolved?: boolean; note?: string };
+    expect(out.skillResolved).toBeUndefined();
+    expect(out.note).toBeUndefined();
+  });
+
   it("defaults subjectPassportId to ctx.passport.id when delegating without an explicit subject", async () => {
     const build = makeBuild();
     const ctx = makeCtx({ build });
