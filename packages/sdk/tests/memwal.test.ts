@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MemwalClient, memwalFromEnv } from "../src/memwal.js";
+import {
+  DEFAULT_MEMWAL_RELAYER_URL,
+  MemwalClient,
+  memwalFromEnv,
+} from "../src/memwal.js";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -118,22 +122,58 @@ describe("memwalFromEnv", () => {
     else process.env.MEMWAL_API_KEY = prevKey;
   });
 
-  it("returns null when MEMWAL_RELAYER_URL is unset", () => {
-    delete process.env.MEMWAL_RELAYER_URL;
-    process.env.MEMWAL_API_KEY = "k";
-    expect(memwalFromEnv()).toBeNull();
+  it("exposes the public staging relayer as the default URL", () => {
+    expect(DEFAULT_MEMWAL_RELAYER_URL).toBe(
+      "https://relayer-staging.memory.walrus.xyz",
+    );
   });
 
-  it("returns null when MEMWAL_API_KEY is unset", () => {
+  it("returns a MemwalClient when ONLY the API key is set (URL defaults)", async () => {
+    delete process.env.MEMWAL_RELAYER_URL;
+    process.env.MEMWAL_API_KEY = "k";
+    const client = memwalFromEnv();
+    expect(client).toBeInstanceOf(MemwalClient);
+
+    // The default staging relayer URL is the one actually used for requests.
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    await client!.remember("ns", "t");
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      `${DEFAULT_MEMWAL_RELAYER_URL}/remember`,
+    );
+  });
+
+  it("returns null when MEMWAL_API_KEY is unset (even with a URL)", () => {
     process.env.MEMWAL_RELAYER_URL = "https://relayer.memwal.test";
     delete process.env.MEMWAL_API_KEY;
     expect(memwalFromEnv()).toBeNull();
   });
 
-  it("returns a MemwalClient when both are set", () => {
+  it("MEMWAL_RELAYER_URL overrides the default when both are set", async () => {
     process.env.MEMWAL_RELAYER_URL = "https://relayer.memwal.test";
     process.env.MEMWAL_API_KEY = "memwal_key";
     const client = memwalFromEnv();
     expect(client).toBeInstanceOf(MemwalClient);
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    await client!.remember("ns", "t");
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      "https://relayer.memwal.test/remember",
+    );
+  });
+
+  it("falls back to the default when MEMWAL_RELAYER_URL is blank", () => {
+    process.env.MEMWAL_RELAYER_URL = "   ";
+    process.env.MEMWAL_API_KEY = "k";
+    expect(memwalFromEnv()).toBeInstanceOf(MemwalClient);
   });
 });

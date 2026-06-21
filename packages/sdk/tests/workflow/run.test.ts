@@ -202,7 +202,7 @@ describe("runWorkflow error-stop", () => {
     const memory = result.steps.find((s) => s.nodeId === "memory");
     expect(memory?.status).toBe("skipped");
     expect(memory?.errorCode).toBe("MEMWAL_SKIP");
-    expect(memory?.cause).toMatch(/relayer/i);
+    expect(memory?.cause).toMatch(/MEMWAL_API_KEY/i);
   });
 
   it("propagates a skip downstream (on-chain node skips 'upstream skipped', run stays done)", async () => {

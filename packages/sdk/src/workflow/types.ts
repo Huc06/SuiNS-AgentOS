@@ -250,6 +250,23 @@ export interface RunContext {
   };
   /** Optional manifest/blob uploader (defaults to a Walrus upload host-side). */
   uploadManifest?: (...a: unknown[]) => Promise<{ blobId: string }>;
+  /**
+   * Optional REAL Harbor uploader. When present, the `harbor` executor stores
+   * the (Seal-encrypted) bytes in the user's Walrus Harbor account via the
+   * Harbor API and reports the real Harbor fileId/blobId. Injected by the host
+   * from HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID (the SDK engine
+   * stays signer/secret-agnostic — it never reads those env vars itself).
+   *
+   * Absent (no HARBOR_API_KEY) → the harbor executor still skips/falls back to a
+   * plain blob upload, so a no-Harbor run never crashes.
+   */
+  harbor?: {
+    /** Upload raw bytes; returns the Harbor fileId/blobId and an optional URL. */
+    upload: (
+      content: Uint8Array,
+      filename: string,
+    ) => Promise<{ blobId: string; fileId?: string; url?: string }>;
+  };
   /** Read-only resolver bundle (chain-first, registry fallback). Required by the coordinate executors. */
   resolve?: RunResolveBundle;
   /** Unsigned-PTB builder bundle. Required by the coordinate executors. */

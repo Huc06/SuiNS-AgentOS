@@ -123,7 +123,7 @@ const ERROR_RULES: ErrorRule[] = [
     hint: "Memory relayer rejected the write.",
     cause:
       "The Memwal relayer returned a non-2xx (bad API key, relayer down, or namespace rejected).",
-    remediation: "Verify MEMWAL_API_KEY / MEMWAL_RELAYER_URL and that the relayer is up.",
+    remediation: "Verify MEMWAL_API_KEY (and MEMWAL_RELAYER_URL if overriding the default staging relayer) and that the relayer is up.",
   },
   {
     code: "RESOLVE_FAILED",
@@ -157,7 +157,7 @@ const ERROR_RULES: ErrorRule[] = [
     cause:
       "The runtime sender is not on the Enoki allowlist, or the network does not match the Enoki app config.",
     remediation:
-      "Add the runtime address to the Enoki app's allowed senders and confirm NEXT_PUBLIC_SUI_NETWORK matches the Enoki network.",
+      "In portal.enoki.mystenlabs.com, allowlist the SUI_PRIVATE_KEY runtime address + the AgentOS package move-call targets, and confirm the Enoki app network = testnet (NEXT_PUBLIC_SUI_NETWORK).",
   },
   {
     code: "MISSING_CONFIG",
@@ -204,6 +204,32 @@ export function classifyError(raw: string | undefined): ClassifiedError {
 }
 
 /**
+ * Pull the first concrete Sui address (`0x` + 1..=64 hex) out of an arbitrary
+ * string. Enoki's rejection message embeds the runtime sender it refused, so we
+ * surface that EXACT address in the remediation when it is present. Returns
+ * `undefined` when the string carries no address (stays signer/env-agnostic —
+ * we never read the key, only echo what the error already exposed).
+ */
+function firstSuiAddress(raw: string | undefined): string | undefined {
+  const m = (raw ?? "").match(/0x[0-9a-fA-F]{1,64}/);
+  return m ? m[0] : undefined;
+}
+
+/**
+ * Build the SPONSOR_REJECTED remediation. When the runtime sender address is
+ * present in the raw error (Enoki echoes it), name it EXACTLY; otherwise point
+ * at the SUI_PRIVATE_KEY address generically. Always lists the three things the
+ * Enoki portal needs: the sender, the AgentOS move-call targets, network=testnet.
+ */
+function sponsorRemediation(rawError: string | undefined): string {
+  const addr = firstSuiAddress(rawError);
+  const who = addr
+    ? `Allowlist the EXACT runtime sender ${addr}`
+    : "Allowlist the SUI_PRIVATE_KEY runtime address (the sponsored-tx sender)";
+  return `${who} in the Enoki portal (portal.enoki.mystenlabs.com): add it to allowed senders, allowlist the AgentOS package move-call targets, and confirm the Enoki app network = testnet (NEXT_PUBLIC_SUI_NETWORK).`;
+}
+
+/**
  * Read a `{ note?: string }` out of a step's output (skipped steps carry a
  * human note there).
  */
@@ -229,7 +255,12 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
       return {
         code: rule.code,
         cause: rule.cause,
-        remediation: rule.remediation,
+        // SPONSOR_REJECTED: thread the EXACT runtime sender from the raw error
+        // into the fix text (Enoki echoes it); fall back to the static rule copy.
+        remediation:
+          rule.code === "SPONSOR_REJECTED"
+            ? sponsorRemediation(step.error)
+            : rule.remediation,
         severity: "error",
       };
     }
@@ -246,9 +277,9 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
     if (/memwal not configured/i.test(note)) {
       return {
         code: "MEMWAL_SKIP",
-        cause: "No memory relayer configured (MEMWAL_RELAYER_URL / MEMWAL_API_KEY unset).",
+        cause: "No memory API key configured (MEMWAL_API_KEY unset).",
         remediation:
-          "This is not a failure. Set MEMWAL_RELAYER_URL + MEMWAL_API_KEY to enable agent memory.",
+          "This is not a failure. Set MEMWAL_API_KEY to enable agent memory — the relayer URL defaults to the public staging relayer (override with MEMWAL_RELAYER_URL).",
         severity: "skip",
       };
     }
@@ -333,7 +364,11 @@ export interface PreflightEnv {
   suiKey: boolean;
   /** ENOKI_SECRET_KEY present server-side (gas sponsorship). */
   enokiKey: boolean;
-  /** MEMWAL relayer configured (MEMWAL_RELAYER_URL + MEMWAL_API_KEY). */
+  /**
+   * MEMWAL memory configured. True when MEMWAL_API_KEY is present — the relayer
+   * URL is optional (defaults to the public staging relayer), so the host should
+   * key this off the API key alone.
+   */
   memwal: boolean;
   /** A non-placeholder AGENTOS package id is configured. */
   packageId: boolean;
@@ -466,7 +501,7 @@ export function preflight(
         if (!env.memwal) {
           return mk(
             "will-skip",
-            "No memory relayer configured (skipped, not a failure).",
+            "No memory API key (MEMWAL_API_KEY) configured (skipped, not a failure).",
             "MEMWAL_SKIP",
           );
         }
@@ -477,7 +512,7 @@ export function preflight(
         if (!env.memwal) {
           return mk(
             "will-skip",
-            "No memory relayer configured (skipped, not a failure).",
+            "No memory API key (MEMWAL_API_KEY) configured (skipped, not a failure).",
             "MEMWAL_SKIP",
           );
         }
