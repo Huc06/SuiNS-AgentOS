@@ -24,7 +24,7 @@
           ],
           "spendLimit": "1000000000",
           "spent": "120000000",
-          "expiryMs": "4102444800000",
+          "expiryMs": "1798761599000",
           "revoked": false,
           "capId": "0x717cc08f1cb214cb7df92d19ea63ad179d8aa0ebddd8d82c66f700c137514ab5",
           "createdAt": "2026-06-17T09:12:00.000Z"
@@ -40,7 +40,7 @@
           ],
           "spendLimit": "500000000",
           "spent": "0",
-          "expiryMs": "4102444800000",
+          "expiryMs": "1813536000000",
           "revoked": false,
           "capId": "0x439093f29e370f3492fcaa67539dd2f458c1fcd21af93f8c28258642666656a3",
           "createdAt": "2026-06-18T14:03:00.000Z"
@@ -69,7 +69,7 @@
           ],
           "spendLimit": "300000000",
           "spent": "300000000",
-          "expiryMs": "4102444800000",
+          "expiryMs": "1786780800000",
           "revoked": true,
           "capId": "0x1abc26041168f9e8e5f523e2a5946bd49c657e1dde521895a09e6d6cf3e2e1fb",
           "createdAt": "2026-06-16T08:00:00.000Z"
@@ -99,7 +99,7 @@
           ],
           "spendLimit": "2000000000",
           "spent": "340000000",
-          "expiryMs": "4102444800000",
+          "expiryMs": "1789819200000",
           "revoked": false,
           "capId": "0xb2c05e1968a6c1ad30293976b8861419861c1d2b57981a254952f86a3b0a45e9",
           "createdAt": "2026-06-19T11:40:00.000Z"

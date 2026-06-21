@@ -12,7 +12,20 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+
+/** A `*.sui` agent name → its dashboard slug (`/agent/<slug>`). */
+function agentSlug(name: string): string {
+  return String(name || "").trim().replace(/\.sui$/i, "");
+}
+
+/** MIST (1 SUI = 1e9) → a compact SUI string: 120000000 → "0.12", 0 → "0". */
+function formatSui(mist: string): string {
+  const n = Number(mist);
+  if (!Number.isFinite(n) || n === 0) return "0";
+  return String(parseFloat((n / 1e9).toFixed(4)));
+}
 
 // ===== Shapes mirroring the registry DelegationRecord (kept local so this
 // client component never imports the Node-only SDK entry). =====
@@ -156,9 +169,13 @@ function DelegationNode({ data }: NodeProps) {
         <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-electric-purple">
           Parent agent
         </p>
-        <p className="mt-1 truncate font-mono text-sm font-bold text-pure-black" title={d.name}>
+        <Link
+          href={`/agent/${agentSlug(d.name)}`}
+          className="nodrag mt-1 block truncate font-mono text-sm font-bold text-pure-black underline-offset-2 hover:text-electric-purple hover:underline"
+          title={`Manage ${d.name} →`}
+        >
           {d.name}
-        </p>
+        </Link>
         <div className="mt-2 flex items-center gap-2">
           <span className="border border-pure-black bg-white px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-pure-black">
             {d.network}
@@ -193,9 +210,19 @@ function DelegationNode({ data }: NodeProps) {
           <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-black/50">
             Sub-agent
           </p>
-          <p className="truncate font-mono text-sm font-bold text-pure-black" title={delegation.childName}>
-            {delegation.childName || shorten(delegation.childAgent)}
-          </p>
+          {delegation.childName ? (
+            <Link
+              href={`/agent/${agentSlug(delegation.childName)}`}
+              className="nodrag block truncate font-mono text-sm font-bold text-pure-black underline-offset-2 hover:text-electric-purple hover:underline"
+              title={`Manage ${delegation.childName} →`}
+            >
+              {delegation.childName}
+            </Link>
+          ) : (
+            <p className="truncate font-mono text-sm font-bold text-pure-black" title={delegation.childAgent}>
+              {shorten(delegation.childAgent)}
+            </p>
+          )}
         </div>
         <span
           className={`shrink-0 border-2 border-pure-black px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase ${
@@ -217,7 +244,7 @@ function DelegationNode({ data }: NodeProps) {
         <div className="flex items-center justify-between font-mono text-[10px] font-bold text-black/70">
           <span>SPEND</span>
           <span>
-            {spent} / {limit || "∞"}
+            {formatSui(spent)} / {limit ? formatSui(limit) : "∞"} SUI
           </span>
         </div>
         <div className="mt-1 h-2 w-full border border-pure-black bg-off-white">
@@ -329,7 +356,8 @@ export default function DelegationsPage() {
               Delegations
             </h1>
             <p className="mt-1 font-mono text-xs text-black/60">
-              Parent agents granting scoped sub-agent capabilities. Source:{" "}
+              Parent agents granting scoped sub-agent capabilities — click an
+              agent name to manage it. Source:{" "}
               <code className="text-black/80">/api/delegations</code>
             </p>
           </div>
