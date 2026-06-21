@@ -8,7 +8,7 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-16 flex-col border-r-2 border-pure-black bg-off-white py-4 md:w-56">
+    <aside className="fixed left-0 top-0 z-50 flex h-screen w-16 flex-col border-r-2 border-pure-black bg-off-white/80 backdrop-blur-sm py-4 md:w-56">
       <div className="px-4 py-3">
         <Link href="/" className="font-mono text-sm font-bold text-black">
           AGENTOS
@@ -31,15 +31,6 @@ export function AppSidebar() {
           label="Portfolio"
           active={pathname === "/explore"}
         />
-      </nav>
-
-      <div className="mt-4 px-4 py-2">
-        <p className="font-mono text-[10px] font-bold uppercase text-black/50">
-          Resources
-        </p>
-      </div>
-      <nav className="space-y-1 px-2">
-        <SidebarLink href="/" label="Home" active={pathname === "/"} />
       </nav>
 
       <div className="flex-1" />

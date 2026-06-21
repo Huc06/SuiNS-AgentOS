@@ -49,7 +49,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
   const totalContributions = contributions.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="bg-off-white py-6">
+    <div className="py-6">
       <main
         data-portfolio
         className="mx-auto max-w-3xl px-4 transition-all duration-200"

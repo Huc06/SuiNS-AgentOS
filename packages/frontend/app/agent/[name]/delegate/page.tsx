@@ -19,7 +19,7 @@ export default async function AgentDelegatePage({ params }: Props) {
   const agent = data.resolved.agent;
 
   return (
-    <div className="bg-off-white py-6">
+    <div className="py-6">
       <div className="mx-auto max-w-3xl px-4">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-2 font-mono text-xs text-black/50">
