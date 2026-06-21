@@ -77,6 +77,20 @@ describe("classifyError", () => {
     expect(c.hint).toMatch(/owned by a different address/i);
   });
 
+  it("classifies an Enoki dry_run_failed MoveAbort as MOVE_ABORT (not SPONSOR_REJECTED)", () => {
+    const c = classifyError(
+      'Enoki dry_run_failed: MoveAbort(MoveLocation { name: Identifier("delegation") }, 1)',
+    );
+    expect(c.code).toBe("MOVE_ABORT");
+    expect(c.code).not.toBe("SPONSOR_REJECTED");
+  });
+
+  it("classifies a legacy memwal /remember 404 as MEMWAL_UNSET", () => {
+    expect(classifyError("Memwal /remember failed: 404 ").code).toBe(
+      "MEMWAL_UNSET",
+    );
+  });
+
   it("falls back to UNKNOWN with the raw message as the hint", () => {
     const c = classifyError("something totally unexpected happened");
     expect(c.code).toBe("UNKNOWN");
@@ -213,6 +227,87 @@ describe("diagnoseStep", () => {
     expect(d.code).toBe("SPONSOR_REJECTED");
     expect(d.remediation).toMatch(/SUI_PRIVATE_KEY/);
     expect(d.remediation).toMatch(/portal\.enoki\.mystenlabs\.com/);
+  });
+
+  it("MOVE_ABORT: an Enoki dry_run_failed MoveAbort is a CONTRACT abort, not an allowlist issue", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "delegate",
+        status: "error",
+        error:
+          "Enoki dry_run_failed: MoveAbort(MoveLocation { module: ModuleId { " +
+          'address: 0xb6fcc783, name: Identifier("delegation") }, function: 0, ' +
+          'instruction: 15, function_name: Some("grant") }, 1)',
+      }),
+    );
+    expect(d.code).toBe("MOVE_ABORT");
+    expect(d.severity).toBe("error");
+    // NOT misclassified as an Enoki allowlist/config problem.
+    expect(d.code).not.toBe("SPONSOR_REJECTED");
+    expect(d.remediation).not.toMatch(/portal\.enoki\.mystenlabs\.com/);
+    // Decodes delegation::grant abort code 1 = E_NOT_PARENT_OWNER.
+    expect(d.cause).toMatch(/delegation::grant \(abort code 1\)/);
+    expect(d.cause).toMatch(/E_NOT_PARENT_OWNER/);
+    expect(d.cause).toMatch(/owner\/runtime_wallet/i);
+    // Remediation: re-seed so runtime_wallet = the sponsored signer, and point
+    // at the republished package.
+    expect(d.remediation).toMatch(/runtime_wallet\s*=\s*the SUI_PRIVATE_KEY/i);
+    expect(d.remediation).toMatch(/re-?seed/i);
+    expect(d.remediation).toMatch(/republish/i);
+    expect(d.remediation).toMatch(/AGENTOS_PACKAGE_ID/);
+  });
+
+  it("MOVE_ABORT: decodes record_subagent_execution abort code 1 the same way", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "call-sub-agent",
+        status: "error",
+        error:
+          'dry_run_failed: MoveAbort(MoveLocation { module: ModuleId { name: Identifier("delegation") }, ' +
+          'function_name: Some("record_subagent_execution") }, 1)',
+      }),
+    );
+    expect(d.code).toBe("MOVE_ABORT");
+    expect(d.cause).toMatch(/delegation::record_subagent_execution \(abort code 1\)/);
+    expect(d.cause).toMatch(/E_NOT_PARENT_OWNER/);
+  });
+
+  it("MOVE_ABORT: a non-delegation abort still decodes module::function + code generically", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "sui",
+        status: "error",
+        error:
+          'MoveAbort(MoveLocation { module: ModuleId { name: Identifier("agent_passport") }, ' +
+          'function_name: Some("record_execution") }, 4)',
+      }),
+    );
+    expect(d.code).toBe("MOVE_ABORT");
+    expect(d.cause).toMatch(/agent_passport::record_execution \(abort code 4\)/);
+    expect(d.cause).not.toMatch(/E_NOT_PARENT_OWNER/);
+    expect(d.remediation).toMatch(/republished package/i);
+  });
+
+  it("MEMWAL: a /remember 404 tells the user to switch to the SIGNED scheme (not MEMWAL_API_KEY)", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "memory",
+        status: "error",
+        error: "Memwal /remember failed: 404 ",
+      }),
+    );
+    expect(d.code).toBe("MEMWAL_UNSET");
+    expect(d.severity).toBe("error");
+    // Names the signed-scheme env vars and the /api/* routes.
+    expect(d.remediation).toMatch(/MEMWAL_ACCOUNT_ID/);
+    expect(d.remediation).toMatch(/MEMWAL_DELEGATE_KEY/);
+    expect(d.remediation).toMatch(/\/api\/remember/);
+    // Steers AWAY from the legacy bearer key.
+    expect(d.remediation).toMatch(/NOT the legacy MEMWAL_API_KEY/i);
+    // Points at the official testnet relayer host.
+    expect(d.remediation).toMatch(/relayer-staging\.memory\.walrus\.xyz/);
+    // The cause explains the legacy bare path is gone (404).
+    expect(d.cause).toMatch(/legacy bare \/remember/i);
   });
 
   it("labels a pending node as BLOCKED_UPSTREAM (info), distinct from skip", () => {

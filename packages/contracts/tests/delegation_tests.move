@@ -30,6 +30,7 @@ fun test_grant_and_getters() {
 
         // Verify getters
         assert!(delegation::parent_owner(&cap) == owner, 0);
+        assert!(delegation::parent_runtime(&cap) == @0xB, 8);
         assert!(delegation::child_agent(&cap) == child, 1);
         assert!(delegation::spend_limit(&cap) == 1_000_000_000, 2);
         assert!(delegation::spent(&cap) == 0, 3);
@@ -643,6 +644,186 @@ fun test_record_subagent_execution_wrong_passport_aborts() {
     destroy(cap);
     destroy(passport_a);
     destroy(passport_b);
+    scenario.end();
+}
+
+// ===== runtime_wallet authorization (Enoki-sponsored execution) =====
+
+/// The agent's RUNTIME WALLET (not the owner) can grant a delegation — this is
+/// the Enoki-sponsored path where the server signs as the runtime wallet.
+#[test]
+fun test_grant_by_runtime_wallet() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let child = @0xC;
+    let mut scenario = test_scenario::begin(owner);
+
+    let passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+
+    // Switch to the runtime_wallet, which is NOT the owner.
+    scenario.next_tx(runtime);
+    let cap = delegation::grant(
+        &passport,
+        child,
+        vector[],
+        vector[],
+        1_000,
+        99_999,
+        scenario.ctx(),
+    );
+
+    // The cap still records the OWNER as parent_owner and the runtime as parent_runtime.
+    assert!(delegation::parent_owner(&cap) == owner, 0);
+    assert!(delegation::parent_runtime(&cap) == runtime, 1);
+    assert!(delegation::child_agent(&cap) == child, 2);
+
+    destroy(cap);
+    destroy(passport);
+    scenario.end();
+}
+
+/// A delegation granted by the runtime wallet lets the child runtime record a
+/// sub-agent execution — the full sponsored Delegate->Call path.
+#[test]
+fun test_record_subagent_execution_after_runtime_grant() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let child = @0xC;
+    let mut scenario = test_scenario::begin(owner);
+
+    let mut passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+
+    // Runtime wallet grants.
+    scenario.next_tx(runtime);
+    let cap = delegation::grant(
+        &passport,
+        child,
+        vector[],
+        vector[],
+        1_000,
+        10_000,
+        scenario.ctx(),
+    );
+
+    let mut test_clock = clock::create_for_testing(scenario.ctx());
+    test_clock.set_for_testing(5_000);
+
+    // Child runtime records the execution.
+    scenario.next_tx(child);
+    delegation::record_subagent_execution(&mut passport, &cap, &test_clock, scenario.ctx());
+    assert!(agent_passport::exec_count(&passport) == 1, 0);
+
+    destroy(test_clock);
+    destroy(cap);
+    destroy(passport);
+    scenario.end();
+}
+
+/// The runtime wallet can revoke a delegation it (or the owner) granted.
+#[test]
+fun test_revoke_by_runtime_wallet() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let mut scenario = test_scenario::begin(owner);
+
+    // Owner grants.
+    let passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+    let mut cap = delegation::grant(
+        &passport,
+        @0xC,
+        vector[],
+        vector[],
+        1_000,
+        99_999,
+        scenario.ctx(),
+    );
+
+    assert!(!delegation::is_revoked(&cap), 0);
+
+    // Runtime wallet (not owner) revokes.
+    scenario.next_tx(runtime);
+    delegation::revoke(&mut cap, scenario.ctx());
+    assert!(delegation::is_revoked(&cap), 1);
+
+    destroy(cap);
+    destroy(passport);
+    scenario.end();
+}
+
+/// A random address that is neither owner nor runtime_wallet cannot grant.
+#[test]
+#[expected_failure(abort_code = delegation::E_NOT_PARENT_OWNER)]
+fun test_grant_by_random_address_aborts() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let stranger = @0xF;
+    let mut scenario = test_scenario::begin(owner);
+
+    let passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+
+    // Neither owner nor runtime_wallet.
+    scenario.next_tx(stranger);
+    let cap = delegation::grant(
+        &passport,
+        @0xC,
+        vector[],
+        vector[],
+        1_000,
+        99_999,
+        scenario.ctx(),
+    );
+
+    destroy(cap);
+    destroy(passport);
+    scenario.end();
+}
+
+/// A random address that is neither owner nor runtime_wallet cannot revoke.
+#[test]
+#[expected_failure(abort_code = delegation::E_NOT_PARENT_OWNER)]
+fun test_revoke_by_random_address_aborts() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let stranger = @0xF;
+    let mut scenario = test_scenario::begin(owner);
+
+    let passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+    let mut cap = delegation::grant(
+        &passport,
+        @0xC,
+        vector[],
+        vector[],
+        1_000,
+        99_999,
+        scenario.ctx(),
+    );
+
+    // Neither owner nor runtime_wallet.
+    scenario.next_tx(stranger);
+    delegation::revoke(&mut cap, scenario.ctx());
+
+    destroy(cap);
+    destroy(passport);
     scenario.end();
 }
 

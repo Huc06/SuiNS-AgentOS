@@ -126,6 +126,54 @@ fun test_revoke_non_owner_aborts() {
     scenario.end();
 }
 
+/// GOVERNANCE stays owner-only: the runtime_wallet (which CAN record executions
+/// and grant delegations) must NOT be able to revoke the passport.
+#[test]
+#[expected_failure(abort_code = agent_passport::E_NOT_OWNER)]
+fun test_revoke_by_runtime_wallet_aborts() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let mut scenario = test_scenario::begin(owner);
+
+    let mut passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+
+    scenario.next_tx(runtime);
+    agent_passport::revoke(&mut passport, scenario.ctx());
+
+    destroy(passport);
+    scenario.end();
+}
+
+/// GOVERNANCE stays owner-only: the runtime_wallet must NOT be able to rebind
+/// the memory namespace.
+#[test]
+#[expected_failure(abort_code = agent_passport::E_NOT_OWNER)]
+fun test_set_memory_namespace_by_runtime_wallet_aborts() {
+    let owner = @0xA;
+    let runtime = @0xB;
+    let mut scenario = test_scenario::begin(owner);
+
+    let mut passport = agent_passport::create(
+        b"alpha-agent",
+        runtime,
+        scenario.ctx(),
+    );
+
+    scenario.next_tx(runtime);
+    agent_passport::set_memory_namespace(
+        &mut passport,
+        b"memwal://hijack",
+        scenario.ctx(),
+    );
+
+    destroy(passport);
+    scenario.end();
+}
+
 #[test]
 fun test_record_execution_by_owner() {
     let owner = @0xA;
