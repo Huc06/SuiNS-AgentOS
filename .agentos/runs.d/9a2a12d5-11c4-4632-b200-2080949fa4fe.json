@@ -1,0 +1,55 @@
+{
+  "runId": "9a2a12d5-11c4-4632-b200-2080949fa4fe",
+  "agentSlug": "alpha",
+  "status": "done",
+  "steps": [
+    {
+      "nodeId": "tpl-trigger",
+      "type": "trigger",
+      "status": "done",
+      "output": {
+        "started": true,
+        "params": {}
+      }
+    },
+    {
+      "nodeId": "tpl-mint",
+      "type": "sui",
+      "status": "skipped",
+      "output": {
+        "note": "Sui: skipped — move target package \"0xYOUR_NFT_PACKAGE\" is not a published 0x package"
+      },
+      "errorCode": "NO_PACKAGE_ID",
+      "cause": "No published AgentOS package id is configured, so the on-chain module cannot be targeted.",
+      "remediation": "Set NEXT_PUBLIC_AGENTOS_PACKAGE_ID (or AGENTOS_PACKAGE_ID) to a published 0x package id."
+    },
+    {
+      "nodeId": "tpl-harbor",
+      "type": "harbor",
+      "status": "done",
+      "output": {
+        "blobId": "XH8t2_PdcDQpPbEczlpq6aS2Xrkrf4Hszgzm2t7JHQE",
+        "sealPolicyId": "demo-policy",
+        "visibility": "private",
+        "bytes": 514,
+        "encryption": "real-seal",
+        "storage": "walrus",
+        "note": "stored on Walrus (Harbor API unavailable); Harbor resolves a non-UUID HARBOR_BUCKET_ID via the space bucket list; if upload fails with a UUID error, set HARBOR_BUCKET_ID to the bucket UUID.",
+        "harborError": "Harbor upload failed: 404 {\"error\":\"File c7dae0a9-ead2-4569-834f-cb26504ec03c not found.\"}"
+      },
+      "blobId": "XH8t2_PdcDQpPbEczlpq6aS2Xrkrf4Hszgzm2t7JHQE"
+    },
+    {
+      "nodeId": "tpl-memory",
+      "type": "memory",
+      "status": "skipped",
+      "output": {
+        "note": "memwal not configured"
+      },
+      "errorCode": "MEMWAL_SKIP",
+      "cause": "No memory credentials configured (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY, or a legacy MEMWAL_API_KEY, unset).",
+      "remediation": "This is not a failure. Set MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY (or a legacy MEMWAL_API_KEY) to enable agent memory — the relayer URL defaults to the public staging relayer (override with MEMWAL_RELAYER_URL)."
+    }
+  ],
+  "createdAt": "2026-06-21T16:16:55.519Z"
+}

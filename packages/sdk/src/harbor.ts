@@ -63,9 +63,11 @@ interface HarborFileEnvelope {
  * means the Walrus blob is certified.
  */
 interface HarborUploadStatus {
-  state?: "queued" | "active" | "completed" | "failed" | string;
-  progress?: number;
-  data?: HarborFileSummary;
+  data?: {
+    state?: "queued" | "active" | "completed" | "failed" | string;
+    progress?: number;
+    blob_id?: string | null;
+  };
 }
 
 /**
@@ -168,7 +170,7 @@ export class HarborClient {
     fileId: string,
     options: { attempts?: number; intervalMs?: number } = {},
   ): Promise<{ state?: string; blobId?: string }> {
-    const attempts = options.attempts ?? 600; // 10 minutes default (600 × 1s)
+    const attempts = options.attempts ?? 180; // 3 minutes default (180 × 1s)
     const intervalMs = options.intervalMs ?? 1000;
     const statusUrl = `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/status`;
     const startTime = Date.now();
@@ -182,15 +184,23 @@ export class HarborClient {
         const body = await res.text();
         throw new Error(`Harbor upload failed: ${res.status} ${body}`);
       }
-      const status = (await res.json()) as HarborUploadStatus;
-      const state = status.state;
+      const response = (await res.json()) as HarborUploadStatus;
+      const state = response.data?.state;
       const elapsed = Date.now() - startTime;
+
+      if ((i + 1) % 10 === 0 || i === 0) {
+        console.log(
+          `[Harbor] Status response (attempt ${i + 1}/${attempts}):`,
+          JSON.stringify(response, null, 2),
+        );
+      }
+
       if (state === "completed") {
         console.log(
           `[Harbor] Upload completed after ${elapsed}ms (attempt ${i + 1}/${attempts})`,
         );
         const blobId =
-          status.data?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
+          response.data?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
         return { state, ...(blobId ? { blobId } : {}) };
       }
       if (state === "failed") {
