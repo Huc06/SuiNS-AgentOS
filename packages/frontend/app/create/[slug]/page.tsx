@@ -1094,6 +1094,29 @@ function SkillNode({
 
 const nodeTypes: NodeTypes = { skill: SkillNode };
 
+// Known seeded skills per agent (see packages/frontend/registry.seed.json).
+// A Call Sub-Agent node must target a REAL skill the agent owns — NOT the
+// agent's own `.sui` name (resolveSkill would throw "Skill not found: <agent>").
+const DEMO_SEEDED_SKILL_BY_AGENT: Record<string, string> = {
+  alpha: "web-search.alpha.sui",
+  "beta-agent": "sandbox-tool.beta-agent.sui",
+  "walrus-bot": "walrus-read.walrus-bot.sui",
+};
+
+/** Resolve a Call Sub-Agent `skill` target for an agent name (mirror of the
+ * template helper). Prefers a concrete seeded skill the agent owns so
+ * `resolveSkill` succeeds; falls back to the bare `web-search` skill id. */
+function demoDefaultSkillFor(agentName: string): string {
+  const slug = agentName?.trim().replace(/\.sui$/, "").toLowerCase();
+  return DEMO_SEEDED_SKILL_BY_AGENT[slug] ?? "web-search";
+}
+
+// Far-future absolute expiry (ms) for the demo delegation cap. The on-chain
+// delegation::assert_valid / record_subagent_execution assert
+// `clock.timestamp_ms() <= expiry_ms`, so `expiryMs: 0` would abort the
+// delegated Call with E_EXPIRED. Year 2100 keeps the cap valid for any run.
+const DEMO_EXPIRY_MS = "4102444800000"; // 2100-01-01T00:00:00Z
+
 // ===== "Agents import agents" demo flow =====
 // Trigger -> Import Agent -> Delegate -> Call Sub-Agent -> Attest.
 // `selfName` is the current agent's .sui — used as a sensible default target so
@@ -1128,7 +1151,9 @@ function demoCoordinateGraph(selfName: string): {
       data: {
         label: "Delegate",
         subtitle: "Grant cap",
-        params: { child: target, spendLimit: "0", expiryMs: "0" },
+        // Far-future expiry so the delegated Call's assert_valid /
+        // record_subagent_execution don't abort with E_EXPIRED.
+        params: { child: target, spendLimit: "0", expiryMs: DEMO_EXPIRY_MS },
       },
     },
     {
@@ -1138,10 +1163,11 @@ function demoCoordinateGraph(selfName: string): {
       data: {
         label: "Call Sub-Agent",
         subtitle: "Delegated exec",
-        // delegationCapId left blank: it is produced at runtime by the Delegate
-        // node. Leave empty for a non-delegated run, or paste the cap id from the
-        // Delegate node's output for a true delegated run.
-        params: { skill: target, cost: "0" },
+        // Target a REAL seeded skill the agent owns (NOT `target`/the agent name
+        // — resolveSkill would throw "Skill not found: <agent>.sui"). The
+        // DelegationCap is threaded automatically from the upstream Delegate
+        // node's output at run time, so the delegated accounting path runs.
+        params: { skill: demoDefaultSkillFor(target), cost: "0" },
       },
     },
     {

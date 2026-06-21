@@ -128,6 +128,33 @@ function selfName(agentName: string): string {
   return n.includes(".") ? n : `${n}.sui`;
 }
 
+// Known seeded skills per agent (see packages/frontend/registry.seed.json).
+// A Call Sub-Agent node must target a REAL skill the agent owns — NOT the
+// agent's own `.sui` name (resolveSkill would throw "Skill not found: <agent>").
+const SEEDED_SKILL_BY_AGENT: Record<string, string> = {
+  alpha: "web-search.alpha.sui",
+  "beta-agent": "sandbox-tool.beta-agent.sui",
+  "walrus-bot": "walrus-read.walrus-bot.sui",
+};
+
+/**
+ * Resolve a Call Sub-Agent `skill` target for a given agent. Prefers a concrete
+ * seeded skill the agent actually owns (so `resolveSkill` succeeds and the
+ * delegation accounting can run on-chain); falls back to the `web-search` skill
+ * id (a bare skill id `resolveSkill` looks up globally in the registry).
+ */
+function defaultSkillFor(agentName: string): string {
+  const slug = agentName?.trim().replace(/\.sui$/, "").toLowerCase();
+  return SEEDED_SKILL_BY_AGENT[slug] ?? "web-search";
+}
+
+// A far-future absolute expiry (ms) for a demo delegation cap. The on-chain
+// `delegation::assert_valid` / `record_subagent_execution` assert
+// `clock.timestamp_ms() <= expiry_ms`, so `expiryMs: 0` would abort the
+// delegated Call with E_EXPIRED. Year 2100 keeps the cap valid for any run.
+// Deterministic (no Date.now) so templates stay reproducible.
+const DEMO_EXPIRY_MS = "4102444800000"; // 2100-01-01T00:00:00Z
+
 // A small, illustrative default manifest payload for storage nodes. Stored
 // verbatim by the Walrus/Harbor executors (`params.manifest`).
 function demoManifestParam(self: string): string {
@@ -317,12 +344,19 @@ export const TEMPLATES: WorkflowTemplate[] = [
         mkNode("tpl-delegate", 460, 240, {
           label: "Delegate",
           subtitle: "Grant cap",
-          params: { child: self, spendLimit: "0", expiryMs: "0" },
+          // Far-future expiry so the delegated Call's assert_valid /
+          // record_subagent_execution don't abort with E_EXPIRED (expiryMs: 0
+          // would). spendLimit 0 is fine — the Call consumes cost 0.
+          params: { child: self, spendLimit: "0", expiryMs: DEMO_EXPIRY_MS },
         }),
         mkNode("tpl-call", 680, 240, {
           label: "Call Sub-Agent",
           subtitle: "Delegated exec",
-          params: { skill: self, cost: "0" },
+          // Target a REAL seeded skill the agent owns (not `self`/the agent name
+          // — resolveSkill would throw "Skill not found: <agent>.sui"). The
+          // DelegationCap is threaded automatically from the upstream Delegate
+          // node's output at run time, so the delegated accounting path runs.
+          params: { skill: defaultSkillFor(agentName), cost: "0" },
         }),
         mkNode("tpl-attest", 900, 240, {
           label: "Attest",
@@ -830,7 +864,9 @@ export const TEMPLATES: WorkflowTemplate[] = [
         mkNode("tpl-call", 680, 240, {
           label: "Call Sub-Agent",
           subtitle: "Invoke purchased skill",
-          params: { skill: self, cost: "0" },
+          // A REAL seeded skill the agent owns, so resolveSkill succeeds and the
+          // delegated-exec accounting can run (not `self`/the agent name).
+          params: { skill: defaultSkillFor(agentName), cost: "0" },
         }),
         mkNode("tpl-attest", 900, 240, {
           label: "Attest",

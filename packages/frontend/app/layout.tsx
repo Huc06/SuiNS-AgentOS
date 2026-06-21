@@ -3,7 +3,7 @@ import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
 import "@mysten/dapp-kit/dist/index.css";
 
-import { AppSidebar } from "../components/app-sidebar";
+import { AppShell } from "../components/app-shell";
 import { GlobalBg } from "../components/global-bg";
 import { OnboardingModal } from "../components/onboarding-modal";
 import { Providers } from "./providers";
@@ -57,12 +57,7 @@ export default function RootLayout({
         <Providers>
           <GlobalBg />
           <OnboardingModal />
-          <div className="relative z-10 flex min-h-screen">
-            <AppSidebar />
-            <div id="main-content" className="ml-16 flex-1 md:ml-56">
-              {children}
-            </div>
-          </div>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>
