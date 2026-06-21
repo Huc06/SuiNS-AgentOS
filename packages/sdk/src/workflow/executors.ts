@@ -619,12 +619,17 @@ const delegate: StepExecutor = async (node, ctx) => {
         ? (node.params.spendLimit as number | string)
         : 0,
     ),
-    expiryMs: BigInt(
-      typeof node.params?.expiryMs === "number" ||
-        typeof node.params?.expiryMs === "string"
-        ? (node.params.expiryMs as number | string)
-        : 0,
-    ),
+    expiryMs: (() => {
+      const raw = node.params?.expiryMs;
+      const n =
+        typeof raw === "number" || typeof raw === "string" ? BigInt(raw) : 0n;
+      // A DelegationCap with expiry 0 / unset is ALREADY expired, so a later
+      // assert_valid / consume aborts E_EXPIRED (delegation abort code 4). An
+      // older/saved canvas graph can still carry expiryMs:"0" even though the
+      // template default is far-future — so default 0/unset here to a far-future
+      // expiry (2100-01-01) and the demo cap is always valid downstream.
+      return n > 0n ? n : 4102444800000n;
+    })(),
   });
 
   const result = await ctx.execute(tx);
