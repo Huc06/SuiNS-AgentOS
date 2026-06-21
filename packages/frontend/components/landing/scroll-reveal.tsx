@@ -24,7 +24,10 @@ import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
 
 type RevealDirection = "up" | "down" | "left" | "right" | "none";
 
-const DEFAULT_DISTANCE = 28;
+/** Default translate distance for section reveals (px). */
+const DEFAULT_DISTANCE = 16;
+/** Default entry blur for section reveals (px) — resolves to 0 on enter. */
+const DEFAULT_BLUR = 12;
 
 function buildVariants(
   reduced: boolean,
@@ -99,9 +102,9 @@ export function ScrollReveal<T extends ElementType = "div">({
   className,
   direction = "up",
   distance = DEFAULT_DISTANCE,
-  blur = 6,
+  blur = DEFAULT_BLUR,
   delay = 0,
-  duration = 0.6,
+  duration = 0.7,
   margin = "0px 0px -12% 0px",
   amount = 0.2,
   ...rest
@@ -197,8 +200,8 @@ export function RevealChild<T extends ElementType = "div">({
   className,
   direction = "up",
   distance = DEFAULT_DISTANCE,
-  blur = 6,
-  duration = 0.55,
+  blur = 10,
+  duration = 0.6,
   ...rest
 }: {
   children: ReactNode;

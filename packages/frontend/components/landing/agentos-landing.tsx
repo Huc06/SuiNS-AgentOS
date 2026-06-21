@@ -10,7 +10,6 @@ import {
 } from "./landing-clients";
 import { InlinePillsText } from "./inline-pills-text";
 import { AppPreview } from "./app-preview";
-import HoverPreview, { type HoverTarget } from "../react-bits/hover-preview";
 import type { ParallaxPillItem } from "./parallax-pills";
 import { ScrollReveal, RevealGroup, RevealChild } from "./scroll-reveal";
 import { ScrollProgress } from "./scroll-progress";
@@ -96,70 +95,6 @@ const PARALLAX_PILLS: ParallaxPillItem[] = [
   { label: "Workflows", background: "#0A0A0A", color: "#FAF8F5", x: 34, y: 74, width: 26, rotate: 3 },
   { label: "Attestation", background: "#6800FF", color: "#FAF8F5", x: 66, y: 80, width: 28, rotate: -4 },
   { label: "On-chain", background: "#0098F5", color: "#FAF8F5", x: 14, y: 80, width: 22, rotate: 4 },
-];
-
-/* ------------------------------------------------------------------ */
-/* HoverPreview mock cards — inline data-URI SVGs (no asset files).     */
-/* Mono/purple "primitive" cards labelled with the concept.            */
-/* ------------------------------------------------------------------ */
-
-function previewCard(opts: {
-  label: string;
-  sub: string;
-  bg: string;
-  fg: string;
-  accent: string;
-}): string {
-  const { label, sub, bg, fg, accent } = opts;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="260" viewBox="0 0 220 260">
-  <rect x="6" y="6" width="208" height="248" rx="0" fill="${bg}" stroke="#000" stroke-width="4"/>
-  <rect x="6" y="6" width="208" height="40" fill="${accent}" stroke="#000" stroke-width="4"/>
-  <circle cx="28" cy="26" r="7" fill="${bg}" stroke="#000" stroke-width="3"/>
-  <text x="46" y="31" font-family="monospace" font-size="13" font-weight="700" fill="#000">AGENTOS</text>
-  <text x="22" y="118" font-family="monospace" font-size="26" font-weight="700" fill="${fg}">${label}</text>
-  <text x="22" y="150" font-family="monospace" font-size="12" fill="${fg}" opacity="0.7">${sub}</text>
-  <rect x="22" y="176" width="120" height="10" fill="${accent}" opacity="0.85"/>
-  <rect x="22" y="194" width="170" height="8" fill="${fg}" opacity="0.18"/>
-  <rect x="22" y="210" width="140" height="8" fill="${fg}" opacity="0.18"/>
-  <text x="22" y="244" font-family="monospace" font-size="11" font-weight="700" fill="${accent}">*.sui · on-chain</text>
-</svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-const HOVER_TARGETS: HoverTarget[] = [
-  {
-    text: "Passport",
-    altText: "AgentPassport primitive",
-    imageUrl: previewCard({
-      label: "Passport",
-      sub: "On-chain identity",
-      bg: "#FAF8F5",
-      fg: "#0A0A0A",
-      accent: "#6800FF",
-    }),
-  },
-  {
-    text: "Skills",
-    altText: "Skill descriptor primitive",
-    imageUrl: previewCard({
-      label: "Skills",
-      sub: "Hash-verified manifest",
-      bg: "#6800FF",
-      fg: "#FAF8F5",
-      accent: "#CAB1FF",
-    }),
-  },
-  {
-    text: "Delegation",
-    altText: "Delegation primitive",
-    imageUrl: previewCard({
-      label: "Delegate",
-      sub: "Scoped sub-agents",
-      bg: "#0A0A0A",
-      fg: "#FAF8F5",
-      accent: "#CAB1FF",
-    }),
-  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -276,15 +211,18 @@ function Hero() {
           </RevealChild>
         </RevealGroup>
 
-        {/* Product preview — rises from the bottom, partially cut off (peek). */}
-        <div className="relative mt-12">
+        {/* Product preview — rises from the bottom, partially cut off (peek).
+            Centered in its own max-w-4xl box that matches the AppPreview window
+            width, so the peek and the next section share one centered column and
+            line up cleanly (no stray padding / off-center drift). */}
+        <div className="relative mx-auto mt-16 w-full max-w-4xl">
           {/* Soft top glow so the preview reads as floating up from below. */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 -top-16 z-10 h-16 bg-gradient-to-b from-transparent to-off-white/70"
           />
           {/* Negative bottom margin clips the window so it peeks above the fold. */}
-          <div className="relative z-0 -mb-24 px-2 sm:-mb-28 md:-mb-32">
+          <div className="relative z-0 -mb-28 sm:-mb-32 md:-mb-36">
             <AppPreview />
           </div>
         </div>
@@ -319,34 +257,6 @@ function ParallaxBand() {
           className="w-full"
         />
       </div>
-    </section>
-  );
-}
-
-/* "What each primitive does" strip — interactive hover-preview sentence. */
-function PrimitivesStrip() {
-  return (
-    <section className="relative w-full overflow-hidden border-b-2 border-pure-black bg-off-white py-20 md:py-28">
-      <ScrollReveal className="mx-auto max-w-container px-margin">
-        <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-electric-purple">
-          Three primitives · one identity
-        </p>
-        <div className="mt-6 max-w-4xl font-display text-2xl font-bold leading-[1.25] tracking-tight text-pure-black md:text-4xl">
-          <HoverPreview
-            content="Every agent carries a {0}, publishes verifiable {1}, and can hand scoped {2} to sub-agents — all named by one *.sui."
-            targets={HOVER_TARGETS}
-            imagePosition="above"
-            imageWidth={220}
-            imageHeight={260}
-            imageBorderRadius="0"
-            maxRotation={10}
-            targetClassName="text-electric-purple underline decoration-2 decoration-electric-purple/40 underline-offset-4 hover:decoration-electric-purple"
-          />
-        </div>
-        <p className="mt-6 font-mono text-xs text-on-surface-variant/70">
-          Hover a highlighted word to preview the primitive.
-        </p>
-      </ScrollReveal>
     </section>
   );
 }
@@ -548,7 +458,6 @@ export function AgentOSLanding() {
       <Hero />
       <ParallaxBand />
       <InlinePillsText />
-      <PrimitivesStrip />
       <PortalSection />
       <ClosingCta />
       <Footer />
