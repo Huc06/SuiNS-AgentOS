@@ -375,6 +375,46 @@ export async function POST(request: NextRequest, context: RouteContext) {
       steps,
       createdAt: new Date().toISOString(),
     });
+
+    // Record every successful on-chain Delegate as a registry delegation so the
+    // /delegations graph shows it. The engine creates the DelegationCap on-chain
+    // but never touches the registry (the page reads the registry), so a
+    // coordinate run would otherwise leave /delegations empty. Best-effort —
+    // bookkeeping never fails the run.
+    const nowIso = new Date().toISOString();
+    const asStr = (v: unknown): string | undefined =>
+      typeof v === 'string' ? v : typeof v === 'number' ? String(v) : undefined;
+    const asStrArr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    for (const step of steps) {
+      if (step.status !== 'done' || step.type !== 'delegate') continue;
+      const out = (step.output ?? {}) as Record<string, unknown>;
+      const capId = asStr(out.capId);
+      const childAgent = asStr(out.childAgent);
+      if (!capId || !childAgent) continue;
+      const gnode = graph.nodes.find((n) => n.id === step.nodeId);
+      const p = (gnode?.params ?? {}) as Record<string, unknown>;
+      const rawExpiry = asStr(p.expiryMs);
+      try {
+        await registry.addDelegation(agent.slug, {
+          childAgent,
+          childName: asStr(out.childName) ?? asStr(p.child) ?? childAgent,
+          allowedSkills: asStrArr(p.allowedSkills),
+          allowedCapabilities: asStrArr(p.allowedCapabilities),
+          spendLimit: asStr(p.spendLimit) ?? '0',
+          spent: '0',
+          // Mirror the executor's far-future default (0/unset cap never expires).
+          expiryMs:
+            rawExpiry && rawExpiry !== '0' ? rawExpiry : '4102444800000',
+          revoked: false,
+          capId,
+          createdAt: nowIso,
+        });
+      } catch {
+        // Delegation bookkeeping is best-effort; never fail the run for it.
+      }
+    }
+
     return NextResponse.json({ runId, steps, status });
   } catch (e) {
     return NextResponse.json(
