@@ -40,7 +40,7 @@ export default function WorkflowsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-white px-8 py-6">
+    <div className="min-h-screen px-8 py-6">
       {/* Page header */}
       <div className="mb-8 flex items-start justify-between">
         <div>
