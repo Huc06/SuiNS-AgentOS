@@ -21,6 +21,7 @@ const node = (type: WorkflowNode["type"], params?: Record<string, unknown>): Wor
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("trigger executor", () => {
@@ -146,6 +147,55 @@ describe("sui executor", () => {
     const r = await executors.sui(node("sui"), makeCtx({ execute }), []);
     expect(r.status).toBe("skipped");
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("skips gracefully (no MVR hard-error) when the package id is the placeholder", async () => {
+    // No ctx.packageId and no env id → resolveMovePackageId returns the MVR
+    // package NAME placeholder "@agentos/contracts". The executor must degrade
+    // to a clear skip rather than building a tx that triggers the @mysten/sui
+    // "MVR Api URL is not set" error.
+    vi.stubEnv("AGENTOS_PACKAGE_ID", "");
+    const execute = vi.fn(async () => ({ digest: "x" }));
+    const r = await executors.sui(
+      node("sui"),
+      makeCtx({ passport: { id: "0xabc" }, execute }),
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect(execute).not.toHaveBeenCalled();
+    expect((r.output as { note: string }).note).toMatch(
+      /set NEXT_PUBLIC_AGENTOS_PACKAGE_ID/,
+    );
+  });
+
+  it("records execution when a real 0x package id is in ctx", async () => {
+    vi.stubEnv("AGENTOS_PACKAGE_ID", "");
+    const execute = vi.fn(async () => ({ digest: "0xR", objectChanges: [] }));
+    const r = await executors.sui(
+      node("sui"),
+      makeCtx({
+        passport: { id: "0xabc" },
+        packageId:
+          "0x00000000000000000000000000000000000000000000000000000000000a905a",
+        execute,
+      }),
+      [],
+    );
+    expect(r.status).toBe("done");
+    expect(r.txDigest).toBe("0xR");
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("skips a generic move-call when the target package is a non-0x MVR name", async () => {
+    const execute = vi.fn(async () => ({ digest: "x" }));
+    const r = await executors.sui(
+      node("sui", { movePackage: "@agentos/contracts", entry: "mod::fn" }),
+      makeCtx({ execute }),
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect(execute).not.toHaveBeenCalled();
+    expect((r.output as { note: string }).note).toMatch(/not a published 0x/);
   });
 });
 

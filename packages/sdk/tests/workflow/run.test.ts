@@ -205,6 +205,98 @@ describe("runWorkflow error-stop", () => {
     expect(memory?.cause).toMatch(/relayer/i);
   });
 
+  it("propagates a skip downstream (on-chain node skips 'upstream skipped', run stays done)", async () => {
+    // delegate skips → its downstream call-sub-agent + attest auto-skip rather
+    // than erroring on config their skipped upstream would have produced.
+    const ran: string[] = [];
+    const ok: StepExecutor = async (node) => {
+      ran.push(node.id);
+      return { status: "done" };
+    };
+    const skip: StepExecutor = async (node) => {
+      ran.push(node.id);
+      return { status: "skipped", output: { note: "no packageId" } };
+    };
+    // If these executors ran, they'd error (missing config) — assert they don't.
+    const boom: StepExecutor = async (node) => {
+      ran.push(node.id);
+      return { status: "error", error: `${node.id} should not have run` };
+    };
+
+    const graph: WorkflowGraph = {
+      nodes: [
+        { id: "trigger", type: "trigger", label: "Trigger" },
+        { id: "delegate", type: "delegate", label: "Delegate" },
+        { id: "call", type: "call-sub-agent", label: "Call Sub-Agent" },
+        { id: "attest", type: "attest", label: "Attest" },
+      ],
+      edges: [
+        { source: "trigger", target: "delegate" },
+        { source: "delegate", target: "call" },
+        { source: "call", target: "attest" },
+      ],
+    };
+
+    const result = await runWorkflow(graph, makeCtx(), {
+      executors: {
+        trigger: ok,
+        delegate: skip,
+        "call-sub-agent": boom,
+        attest: boom,
+      },
+    });
+
+    // The run is NOT an error — it's all done/skipped.
+    expect(result.status).toBe("done");
+    // Downstream on-chain executors were never invoked.
+    expect(ran).toEqual(["trigger", "delegate"]);
+
+    const byId = new Map(result.steps.map((s) => [s.nodeId, s]));
+    expect(byId.get("delegate")?.status).toBe("skipped");
+    expect(byId.get("call")?.status).toBe("skipped");
+    expect(byId.get("call")?.errorCode).toBe("BLOCKED_UPSTREAM");
+    expect(byId.get("attest")?.status).toBe("skipped");
+    expect(byId.get("attest")?.errorCode).toBe("BLOCKED_UPSTREAM");
+  });
+
+  it("does NOT propagate a skip past a done predecessor", async () => {
+    // sui has two predecessors; one done, one skipped → sui still runs.
+    const ran: string[] = [];
+    const ok: StepExecutor = async (node) => {
+      ran.push(node.id);
+      return { status: "done" };
+    };
+    const skip: StepExecutor = async (node) => {
+      ran.push(node.id);
+      return { status: "skipped", output: { note: "public skill" } };
+    };
+
+    const graph: WorkflowGraph = {
+      nodes: [
+        { id: "trigger", type: "trigger", label: "Trigger" },
+        { id: "walrus", type: "walrus", label: "Walrus" },
+        { id: "harbor", type: "harbor", label: "Harbor" },
+        { id: "sui", type: "sui", label: "Sui" },
+      ],
+      edges: [
+        { source: "trigger", target: "walrus" },
+        { source: "walrus", target: "harbor" },
+        { source: "walrus", target: "sui" },
+        { source: "harbor", target: "sui" },
+      ],
+    };
+
+    const result = await runWorkflow(graph, makeCtx(), {
+      executors: { trigger: ok, walrus: ok, harbor: skip, sui: ok },
+    });
+
+    expect(result.status).toBe("done");
+    // sui ran even though harbor (one of its predecessors) skipped.
+    expect(ran).toContain("sui");
+    const byId = new Map(result.steps.map((s) => [s.nodeId, s]));
+    expect(byId.get("sui")?.status).toBe("done");
+  });
+
   it("marks a node with no executor as an error", async () => {
     const result = await runWorkflow(
       {

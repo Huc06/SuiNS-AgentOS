@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { executors } from "../../src/workflow/executors.js";
 import type {
@@ -7,6 +7,11 @@ import type {
   RunResolveBundle,
   WorkflowNode,
 } from "../../src/workflow/types.js";
+
+// Isolate from any ambient AGENTOS_PACKAGE_ID a developer may have exported.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const PASSPORT_ID =
   "0x0000000000000000000000000000000000000000000000000000000000000d0e";
@@ -18,6 +23,9 @@ const CHILD_ADDR =
   "0x0000000000000000000000000000000000000000000000000000000000000111";
 const CAP_TYPE =
   "0x2::dynamic_field::Field<...>::delegation::DelegationCap<u64>";
+/** A published, on-chain AgentOS package id (so the on-chain executors run). */
+const PACKAGE_ID =
+  "0x00000000000000000000000000000000000000000000000000000000000a905a";
 
 const node = (
   type: WorkflowNode["type"],
@@ -87,6 +95,8 @@ function makeCtx(overrides: Partial<RunContext> = {}): RunContext {
   return {
     agentName: "parent.sui",
     passport: { id: PASSPORT_ID, suinsName: "parent.sui" },
+    // A published package id so the on-chain executors don't skip by default.
+    packageId: PACKAGE_ID,
     client: {},
     execute: vi.fn(async () => ({ digest: "0xDIGEST", objectChanges: [] })),
     resolve: makeResolve(),
@@ -239,6 +249,74 @@ describe("delegate executor", () => {
     expect(r.status).toBe("error");
     expect(r.error).toMatch(/build bundle/);
   });
+
+  it("resolves a child .sui NAME to a 0x address before building the grant", async () => {
+    const resolveAgentAddress = vi.fn(async () => CHILD_ADDR);
+    const resolve = makeResolve({ resolveAgentAddress });
+    const build = makeBuild();
+    const ctx = makeCtx({ resolve, build });
+
+    const r = await executors.delegate(
+      node("delegate", { child: "kid.sui" }),
+      ctx,
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    // The NAME was resolved to an ADDRESS; the builder never sees ".sui".
+    expect(resolveAgentAddress).toHaveBeenCalledWith("kid.sui");
+    const call = (build.buildDelegateTx as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.childAgent).toBe(CHILD_ADDR);
+    // The output records the resolved address and the original name.
+    expect(r.output).toMatchObject({
+      childAgent: CHILD_ADDR,
+      childName: "kid.sui",
+    });
+  });
+
+  it("skips gracefully when the child .sui name does NOT resolve on-chain", async () => {
+    const resolveAgentAddress = vi.fn(async () => null);
+    // resolveAgent also yields no address-ish field → unresolvable.
+    const resolve = makeResolve({
+      resolveAgentAddress,
+      resolveAgent: vi.fn(async (name: string) => ({
+        suinsName: name,
+        status: "active",
+      })),
+    });
+    const build = makeBuild();
+    const ctx = makeCtx({ resolve, build });
+
+    const r = await executors.delegate(
+      node("delegate", { child: "ghost.sui" }),
+      ctx,
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/not resolvable/);
+    expect(build.buildDelegateTx).not.toHaveBeenCalled();
+    expect(ctx.execute).not.toHaveBeenCalled();
+  });
+
+  it("skips gracefully (no Invalid-address error) when there is no real package id", async () => {
+    vi.stubEnv("AGENTOS_PACKAGE_ID", "");
+    const build = makeBuild();
+    // ctx WITHOUT a packageId → resolveMovePackageId returns the placeholder.
+    const ctx = makeCtx({ build, packageId: undefined });
+
+    const r = await executors.delegate(
+      node("delegate", { child: "alpha.sui" }),
+      ctx,
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/no packageId/);
+    expect(build.buildDelegateTx).not.toHaveBeenCalled();
+    expect(ctx.execute).not.toHaveBeenCalled();
+  });
 });
 
 describe("call-sub-agent executor", () => {
@@ -325,6 +403,21 @@ describe("call-sub-agent executor", () => {
     );
     expect(r.status).toBe("error");
     expect(r.error).toMatch(/skill/);
+    expect(ctx.execute).not.toHaveBeenCalled();
+  });
+
+  it("skips gracefully when there is no real package id", async () => {
+    vi.stubEnv("AGENTOS_PACKAGE_ID", "");
+    const build = makeBuild();
+    const ctx = makeCtx({ build, packageId: undefined });
+    const r = await executors["call-sub-agent"](
+      node("call-sub-agent", { skill: "trade.alpha.sui" }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/no packageId/);
+    expect(build.buildCallSubAgentTx).not.toHaveBeenCalled();
     expect(ctx.execute).not.toHaveBeenCalled();
   });
 
@@ -437,5 +530,25 @@ describe("attest executor", () => {
     );
     expect(r.status).toBe("error");
     expect(r.error).toMatch(/build bundle/);
+  });
+
+  it("skips gracefully when there is no real package id (before config checks)", async () => {
+    vi.stubEnv("AGENTOS_PACKAGE_ID", "");
+    const build = makeBuild();
+    const ctx = makeCtx({ build, packageId: undefined });
+    // Even with a complete config, no package id → a clean skip, not a tx.
+    const r = await executors.attest(
+      node("attest", {
+        subjectPassportId: SUBJECT_ID,
+        score: 90,
+        recipient: CHILD_ADDR,
+      }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/no packageId/);
+    expect(build.buildAttestTx).not.toHaveBeenCalled();
+    expect(ctx.execute).not.toHaveBeenCalled();
   });
 });

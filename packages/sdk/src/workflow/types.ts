@@ -137,6 +137,15 @@ export interface RunResolveBundle {
     expectedHash: string,
     options?: { sealPolicyId?: string },
   ) => Promise<ResolvedManifest>;
+  /**
+   * Resolve a `.sui` name to its on-chain Sui address (0x…), or `null` when the
+   * name is not registered on-chain. Used by the coordinate executors so a
+   * `.sui` name is never passed where a Sui ADDRESS is required (e.g.
+   * `tx.pure.address` / a DelegationCap's child). Optional so older hosts/tests
+   * that don't inject it still type-check; when absent (or returns `null`) the
+   * executor treats an unresolved name as a graceful skip.
+   */
+  resolveAgentAddress?: (suinsName: string) => Promise<string | null>;
 }
 
 /** Options for the injected delegated-skill PTB builder. */
@@ -215,6 +224,16 @@ export interface RunContext {
     memoryNamespace?: string;
   };
   params?: Record<string, unknown>;
+  /**
+   * The AgentOS Move package id the host has configured (from
+   * `NEXT_PUBLIC_AGENTOS_PACKAGE_ID` / `AGENTOS_PACKAGE_ID`). Absent (or an MVR
+   * package NAME placeholder, or a non-`0x` string) means there is no published
+   * package on this network — the on-chain executors that target the agentos
+   * package then SKIP gracefully instead of triggering the `@mysten/sui`
+   * "MVR Api URL is not set" hard error. When a real `0x…` id is present the
+   * executors behave exactly as before.
+   */
+  packageId?: string;
   /** Opaque Sui client (e.g. `SuiClient`); typed `unknown` to avoid coupling. */
   client: unknown;
   /** Build->sponsor->sign->execute a transaction. Returns at least a digest. */

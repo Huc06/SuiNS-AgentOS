@@ -10,7 +10,12 @@
 import { Transaction } from "@mysten/sui/transactions";
 
 import * as contracts from "../contracts/index.js";
+import {
+  PACKAGE_PLACEHOLDER,
+  resolveMovePackageId,
+} from "../contracts/package-id.js";
 import { sealEncrypt } from "../seal.js";
+import { isValidSuiNSName } from "../suins-resolve.js";
 import { WalrusClient } from "../walrus.js";
 import type {
   RunContext,
@@ -19,6 +24,28 @@ import type {
   WorkflowNode,
   WorkflowNodeType,
 } from "./types.js";
+
+/** A Sui object/address id: `0x` followed by 1..=64 hex chars. */
+const HEX_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
+
+/** True when `value` is a concrete on-chain Sui address (`0x…hex`). */
+function isSuiAddress(value: string | undefined): value is string {
+  return typeof value === "string" && HEX_ADDRESS.test(value.trim());
+}
+
+/**
+ * Decide whether the host has a REAL, published agentos Move package id to
+ * target. `resolveMovePackageId` falls back to the MVR package NAME placeholder
+ * (`@agentos/contracts`) when nothing is configured; @mysten/sui then needs an
+ * MVR Api URL on the client to resolve a name → it aborts with a cryptic
+ * "MVR Api URL is not set" error. We avoid that entirely: only a concrete
+ * `0x…` package id counts as real. `ctx.packageId` wins; otherwise the env
+ * fallback inside `resolveMovePackageId` applies.
+ */
+function hasRealPackageId(ctx: RunContext): boolean {
+  const resolved = resolveMovePackageId(ctx.packageId);
+  return resolved !== PACKAGE_PLACEHOLDER && isSuiAddress(resolved);
+}
 
 /** What an executor returns; {@link runWorkflow} folds this into a StepResult. */
 export interface StepExecutorResult {
@@ -162,12 +189,35 @@ const sui: StepExecutor = async (node, ctx) => {
     typeof node.params?.entry === "string" ? node.params.entry : undefined;
 
   if (movePackage && entry) {
+    // A generic, user-supplied Move call. Only run it when the target package
+    // is a concrete on-chain id; a bare MVR package NAME would make
+    // @mysten/sui demand an MVR Api URL and hard-error. Skip gracefully.
+    if (!isSuiAddress(movePackage)) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Sui: skipped — move target package "${movePackage}" is not a published 0x package`,
+        },
+      };
+    }
     tx.moveCall({ target: parseTarget(movePackage, entry), arguments: [] });
   } else if (passportId) {
+    // record_execution targets the AgentOS package. With no published package
+    // id configured, `resolveMovePackageId` falls back to the MVR placeholder
+    // "@agentos/contracts" and @mysten/sui aborts with "MVR Api URL is not set".
+    // Degrade to a clear skip instead of surfacing that cryptic error.
+    if (!isSuiAddress(packageId) && !hasRealPackageId(ctx)) {
+      return {
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — set NEXT_PUBLIC_AGENTOS_PACKAGE_ID to a published 0x package",
+        },
+      };
+    }
     tx.add(
       contracts.agentPassport.recordExecution({
         passport: tx.object(passportId),
-        packageId,
+        packageId: isSuiAddress(packageId) ? packageId : ctx.packageId,
       }),
     );
   } else {
@@ -316,12 +366,47 @@ const importAgent: StepExecutor = async (node, ctx) => {
 };
 
 /**
+ * Coerce an agent identifier (a `.sui` name OR a `0x…` address) to a concrete
+ * Sui address. A bare `0x…` is returned as-is. A `.sui` name is resolved via the
+ * injected `resolve.resolveAgentAddress` (then, as a fallback, the address-ish
+ * fields on `resolve.resolveAgent`). Returns `null` when it cannot be resolved
+ * to a `0x…` address — callers then SKIP gracefully rather than passing a
+ * non-address string to `tx.pure.address` (which would hard-error).
+ */
+async function resolveToAddress(
+  identifier: string,
+  ctx: RunContext,
+): Promise<string | null> {
+  if (isSuiAddress(identifier)) return identifier;
+  if (!isValidSuiNSName(identifier)) return null;
+  const resolve = ctx.resolve;
+  if (!resolve) return null;
+
+  if (resolve.resolveAgentAddress) {
+    const addr = await resolve.resolveAgentAddress(identifier);
+    if (isSuiAddress(addr ?? undefined)) return addr as string;
+  }
+  // Fallback: pull an address-ish field off the resolved agent.
+  try {
+    const agent = await resolve.resolveAgent(identifier);
+    const candidate = agent.runtimeWallet ?? agent.owner ?? agent.id;
+    if (isSuiAddress(candidate)) return candidate;
+  } catch {
+    // resolveAgent throwing means "not resolvable" → fall through to null.
+  }
+  return null;
+}
+
+/**
  * delegate: grant a DelegationCap from the run's parent passport to a child
  * agent. Builds the grant PTB via the injected builder and commits it through
  * `ctx.execute`; reads the created cap id back out of `objectChanges`.
  *
  * Params: `{ child: "<addr|name>", allowedSkills?, allowedCapabilities?,
  *            spendLimit?, expiryMs?, parentPassportId? }`.
+ *
+ * Skips gracefully (no cryptic hard-error) when there is no published package
+ * id, or when the child `.sui` name does not resolve to an on-chain address.
  */
 const delegate: StepExecutor = async (node, ctx) => {
   if (!ctx.build) {
@@ -346,9 +431,32 @@ const delegate: StepExecutor = async (node, ctx) => {
     };
   }
 
+  // The delegation module lives in the AgentOS package. With no published
+  // package id, building the grant PTB would target the MVR placeholder and
+  // hard-error. Skip with a clear note instead.
+  if (!hasRealPackageId(ctx)) {
+    return {
+      status: "skipped",
+      output: {
+        note: `Delegate: skipped — no packageId (set NEXT_PUBLIC_AGENTOS_PACKAGE_ID to a published 0x package)`,
+      },
+    };
+  }
+
+  // Never pass a `.sui` NAME where a Sui ADDRESS is required: resolve it first.
+  const childAddress = await resolveToAddress(childAgent, ctx);
+  if (!childAddress) {
+    return {
+      status: "skipped",
+      output: {
+        note: `Delegate: skipped — ${childAgent} not resolvable on-chain (no passport/address)`,
+      },
+    };
+  }
+
   const tx = ctx.build.buildDelegateTx({
     parentPassportId,
-    childAgent,
+    childAgent: childAddress,
     allowedSkills: strArrayParam(node, "allowedSkills") ?? [],
     allowedCapabilities: strArrayParam(node, "allowedCapabilities") ?? [],
     spendLimit: BigInt(
@@ -373,7 +481,13 @@ const delegate: StepExecutor = async (node, ctx) => {
   return {
     status: "done",
     txDigest: result.digest,
-    output: { digest: result.digest, capId, childAgent, parentPassportId },
+    output: {
+      digest: result.digest,
+      capId,
+      childAgent: childAddress,
+      ...(childAddress !== childAgent ? { childName: childAgent } : {}),
+      parentPassportId,
+    },
   };
 };
 
@@ -399,6 +513,18 @@ const callSubAgent: StepExecutor = async (node, ctx) => {
       error: "call-sub-agent: no skill .sui name provided (params.skill)",
     };
   }
+
+  // The delegated skill PTB binds against the AgentOS package. With no published
+  // package id, skip gracefully rather than building a tx that hard-errors.
+  if (!hasRealPackageId(ctx)) {
+    return {
+      status: "skipped",
+      output: {
+        note: `Call Sub-Agent: skipped — no packageId (set NEXT_PUBLIC_AGENTOS_PACKAGE_ID to a published 0x package)`,
+      },
+    };
+  }
+
   const delegationCapId = strParam(node, "delegationCapId");
   const subjectPassportId =
     strParam(node, "subjectPassportId") ??
@@ -451,6 +577,19 @@ const attest: StepExecutor = async (node, ctx) => {
       error: "attest: ctx.build bundle not injected by host",
     };
   }
+
+  // The attestation module lives in the AgentOS package. With no published
+  // package id this node cannot run on-chain — skip gracefully BEFORE the
+  // config checks so a no-env run reports a clean skip (not a config error).
+  if (!hasRealPackageId(ctx)) {
+    return {
+      status: "skipped",
+      output: {
+        note: `Attest: skipped — no packageId (set NEXT_PUBLIC_AGENTOS_PACKAGE_ID to a published 0x package)`,
+      },
+    };
+  }
+
   const subjectPassportId =
     strParam(node, "subjectPassportId") ?? strParam(node, "subject");
   if (!subjectPassportId) {

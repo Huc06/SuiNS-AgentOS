@@ -3,11 +3,16 @@
  * sequentially, stopping the chain on the first error.
  */
 
-import { classifyError, diagnoseStep } from "./diagnose.js";
+import {
+  classifyError,
+  diagnoseStep,
+  ONCHAIN_NODE_TYPES,
+} from "./diagnose.js";
 import { executors as defaultExecutors, type StepExecutor } from "./executors.js";
 import type {
   RunContext,
   StepResult,
+  WorkflowEdge,
   WorkflowGraph,
   WorkflowNode,
 } from "./types.js";
@@ -92,6 +97,34 @@ function topoSort(graph: WorkflowGraph): WorkflowNode[] {
   return order;
 }
 
+/** Build a `target -> [source...]` map of each node's direct predecessors. */
+function predecessorsOf(edges: WorkflowEdge[]): Map<string, string[]> {
+  const preds = new Map<string, string[]>();
+  for (const edge of edges) {
+    preds.set(edge.target, [...(preds.get(edge.target) ?? []), edge.source]);
+  }
+  return preds;
+}
+
+/**
+ * Decide whether a node should AUTO-SKIP because its on-chain work is moot once
+ * upstream produced nothing. Only on-chain coordinate nodes (sui / delegate /
+ * call-sub-agent / attest) auto-skip, and only when they HAVE predecessors and
+ * EVERY direct predecessor settled as `skipped`. This keeps a template with no
+ * on-chain env producing an all-done/skipped run (never a cryptic config error
+ * on a node that only lacked config its skipped upstream would have supplied),
+ * while storage/memory nodes always run their own executor and self-decide.
+ */
+function shouldSkipForUpstream(
+  node: WorkflowNode,
+  preds: string[] | undefined,
+  byId: Map<string, StepResult>,
+): boolean {
+  if (!ONCHAIN_NODE_TYPES.has(node.type)) return false;
+  if (!preds || preds.length === 0) return false;
+  return preds.every((p) => byId.get(p)?.status === "skipped");
+}
+
 /** Fold an executor result into a fully-formed StepResult. */
 function settle(
   node: WorkflowNode,
@@ -128,7 +161,9 @@ export async function runWorkflow(
 ): Promise<RunWorkflowResult> {
   const executors = { ...defaultExecutors, ...opts.executors };
   const ordered = topoSort(graph);
+  const preds = predecessorsOf(graph.edges);
   const steps: StepResult[] = [];
+  const byId = new Map<string, StepResult>();
   let failed = false;
 
   for (const node of ordered) {
@@ -139,7 +174,27 @@ export async function runWorkflow(
         status: "pending",
       });
       steps.push(pending);
+      byId.set(node.id, pending);
       opts.onStep?.(pending);
+      continue;
+    }
+
+    // Upstream-skip propagation: a skipped upstream lets a dependent on-chain
+    // node skip too ("upstream skipped"), instead of erroring on config the
+    // skipped node would have produced. Keeps a no-env run all-done/skipped.
+    if (shouldSkipForUpstream(node, preds.get(node.id), byId)) {
+      opts.onStep?.({ nodeId: node.id, type: node.type, status: "running" });
+      const skipped = withDiagnosis(
+        settle(node, {
+          status: "skipped",
+          output: {
+            note: `${node.label}: skipped — upstream skipped`,
+          },
+        }),
+      );
+      steps.push(skipped);
+      byId.set(node.id, skipped);
+      opts.onStep?.(skipped);
       continue;
     }
 
@@ -166,6 +221,7 @@ export async function runWorkflow(
 
     result = withDiagnosis(result);
     steps.push(result);
+    byId.set(node.id, result);
     // After: announce the settled result.
     opts.onStep?.(result);
     if (result.status === "error") failed = true;
