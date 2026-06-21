@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { RadialLiquidClient, ParallaxPillsClient } from "./landing-clients";
 import { InlinePillsText } from "./inline-pills-text";
+import { AppPreview } from "./app-preview";
 import type { ParallaxPillItem } from "./parallax-pills";
 
 /* ------------------------------------------------------------------ */
@@ -65,13 +66,14 @@ const icon = {
   ),
 };
 
-const FEATURE_CHIPS: { label: string; icon: ReactNode }[] = [
+/* learnhouse-style feature nav: icon + label items, exactly one active. */
+const FEATURE_NAV: { label: string; icon: ReactNode; active?: boolean }[] = [
   { label: "Passport", icon: icon.passport },
   { label: "Skills", icon: icon.skills },
   { label: "Delegation", icon: icon.delegation },
   { label: "Walrus", icon: icon.walrus },
   { label: "Harbor", icon: icon.harbor },
-  { label: "Workflows", icon: icon.workflows },
+  { label: "Workflows", icon: icon.workflows, active: true },
   { label: "Attestation", icon: icon.attestation },
 ];
 
@@ -94,7 +96,7 @@ const PARALLAX_PILLS: ParallaxPillItem[] = [
 
 function Hero() {
   return (
-    <section className="relative min-h-[100svh] w-full overflow-hidden border-b-2 border-pure-black bg-off-white">
+    <section className="relative min-h-[112svh] w-full overflow-hidden border-b-2 border-pure-black bg-off-white">
       {/* Atmospheric WebGL background (client-only) */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <RadialLiquidClient
@@ -120,57 +122,82 @@ function Hero() {
       </div>
 
       {/* Hero content */}
-      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-container flex-col justify-center px-margin py-24">
-        <div className="mb-8 inline-flex w-fit items-center gap-2 border-2 border-pure-black bg-off-white px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-pure-black shadow-[2px_2px_0_0_#000]">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-electric-purple" />
-          Sui-native · Powered by SuiNS
-        </div>
-
-        <h1 className="max-w-4xl font-display text-5xl font-bold uppercase leading-[0.92] tracking-tight text-pure-black sm:text-6xl md:text-8xl">
-          Identity for
-          <br />
-          AI Agents.
-          <br />
-          <span className="text-electric-purple">Openly yours.</span>
-        </h1>
-
-        <div className="mt-10 grid max-w-5xl grid-cols-1 items-end gap-8 lg:grid-cols-2">
-          <p className="max-w-xl font-mono text-base leading-relaxed text-on-surface-variant md:text-lg">
-            Sui-native identity, skills, delegation, and storage for autonomous
-            agents. Every agent gets an on-chain{" "}
-            <span className="font-bold text-pure-black">AgentPassport</span>,
-            named by a single{" "}
-            <span className="font-bold text-pure-black">*.sui</span> SuiNS name —
-            resolvable, verifiable, and openly yours.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-4 lg:justify-end">
-            <Link
-              href="/create"
-              className="inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-7 py-4 font-mono text-sm font-bold uppercase text-off-white shadow-[4px_4px_0_0_#000] transition-transform neo-hover"
-            >
-              Launch App {icon.arrow}
-            </Link>
-            <Link
-              href="/explore"
-              className="inline-flex items-center gap-2 border-2 border-pure-black bg-off-white px-7 py-4 font-mono text-sm font-bold uppercase text-pure-black shadow-[4px_4px_0_0_#000] transition-transform neo-hover"
-            >
-              Explore agents
-            </Link>
+      <div className="relative z-10 mx-auto flex min-h-[112svh] max-w-container flex-col px-margin pt-24 pb-0">
+        <div className="flex flex-1 flex-col justify-center">
+          <div className="mb-8 inline-flex w-fit items-center gap-2 border-2 border-pure-black bg-off-white px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-pure-black shadow-[2px_2px_0_0_#000]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-electric-purple" />
+            Sui-native · Powered by SuiNS
           </div>
+
+          <h1 className="max-w-4xl font-display text-5xl font-bold uppercase leading-[0.92] tracking-tight text-pure-black sm:text-6xl md:text-8xl">
+            Identity for
+            <br />
+            AI Agents.
+            <br />
+            <span className="text-electric-purple">Openly yours.</span>
+          </h1>
+
+          <div className="mt-10 grid max-w-5xl grid-cols-1 items-end gap-8 lg:grid-cols-2">
+            <p className="max-w-xl font-mono text-base leading-relaxed text-on-surface-variant md:text-lg">
+              Sui-native identity, skills, delegation, and storage for autonomous
+              agents. Every agent gets an on-chain{" "}
+              <span className="font-bold text-pure-black">AgentPassport</span>,
+              named by a single{" "}
+              <span className="font-bold text-pure-black">*.sui</span> SuiNS name —
+              resolvable, verifiable, and openly yours.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-4 lg:justify-end">
+              <Link
+                href="/create"
+                className="inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-7 py-4 font-mono text-sm font-bold uppercase text-off-white shadow-[4px_4px_0_0_#000] transition-transform neo-hover"
+              >
+                Launch App {icon.arrow}
+              </Link>
+              <Link
+                href="/explore"
+                className="inline-flex items-center gap-2 border-2 border-pure-black bg-off-white px-7 py-4 font-mono text-sm font-bold uppercase text-pure-black shadow-[4px_4px_0_0_#000] transition-transform neo-hover"
+              >
+                Explore agents
+              </Link>
+            </div>
+          </div>
+
+          {/* Feature nav — horizontal icon+label items, one active pill */}
+          <nav
+            aria-label="AgentOS primitives"
+            className="mt-12 flex flex-wrap items-center gap-x-1 gap-y-2 border-y-2 border-pure-black/15 py-2"
+          >
+            {FEATURE_NAV.map((item) => (
+              <span
+                key={item.label}
+                aria-current={item.active ? "true" : undefined}
+                className={
+                  item.active
+                    ? "inline-flex items-center gap-2 border-2 border-pure-black bg-electric-purple px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-tight text-off-white shadow-[2px_2px_0_0_#000]"
+                    : "inline-flex items-center gap-2 border-2 border-transparent px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-tight text-on-surface-variant transition-colors hover:border-pure-black hover:bg-off-white hover:text-pure-black"
+                }
+              >
+                <span className={item.active ? "text-soft-lavender" : "text-electric-purple"}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </span>
+            ))}
+          </nav>
         </div>
 
-        {/* Feature-chip row */}
-        <div className="mt-14 flex flex-wrap gap-3">
-          {FEATURE_CHIPS.map((chip) => (
-            <span
-              key={chip.label}
-              className="inline-flex items-center gap-2 border-2 border-pure-black bg-off-white px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-tight text-pure-black"
-            >
-              <span className="text-electric-purple">{chip.icon}</span>
-              {chip.label}
-            </span>
-          ))}
+        {/* Product preview — rises from the bottom, partially cut off (peek). */}
+        <div className="relative mt-12">
+          {/* Soft top glow so the preview reads as floating up from below. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-16 z-10 h-16 bg-gradient-to-b from-transparent to-off-white/70"
+          />
+          {/* Negative bottom margin clips the window so it peeks above the fold. */}
+          <div className="relative z-0 -mb-24 px-2 sm:-mb-28 md:-mb-32">
+            <AppPreview />
+          </div>
         </div>
       </div>
     </section>
