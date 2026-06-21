@@ -1,8 +1,7 @@
-import { AgentManageSidebar } from "../../../../components/agent/agent-manage-sidebar";
+import Link from "next/link";
+
 import { AgentNotFound } from "../../../../components/agent/agent-not-found";
 import { DelegateContent } from "../../../../components/agent/delegate-content";
-import { SiteFooter } from "../../../../components/site-footer";
-import { SiteHeader } from "../../../../components/site-header";
 import { resolveAgentPageData } from "../../../../lib/registry-resolve";
 
 interface Props {
@@ -17,19 +16,30 @@ export default async function AgentDelegatePage({ params }: Props) {
     return <AgentNotFound name={name} />;
   }
 
+  const agent = data.resolved.agent;
+
   return (
-    <>
-      <SiteHeader activeHref="/create" />
-      <div className="mx-auto flex min-h-[calc(100vh-180px)] max-w-container flex-col min-w-0 px-margin lg:flex-row">
-        <AgentManageSidebar agentSlug={data.card.slug} />
-        <main className="min-w-0 flex-1 py-12 lg:pl-12">
-          <DelegateContent
-            agentSlug={data.card.slug}
-            passportId={data.resolved.agent.passportId}
-          />
-        </main>
+    <div className="py-6">
+      <div className="mx-auto max-w-3xl px-4">
+        {/* Breadcrumb */}
+        <nav className="mb-6 flex items-center gap-2 font-mono text-xs text-black/50">
+          <Link href="/explore" className="hover:text-black">
+            Portfolio
+          </Link>
+          <span>/</span>
+          <Link href={`/agent/${name}`} className="hover:text-black">
+            @{agent.slug}
+          </Link>
+          <span>/</span>
+          <span className="font-bold text-black">Delegate</span>
+        </nav>
+
+        {/* Page content */}
+        <DelegateContent
+          agentSlug={data.card.slug}
+          passportId={data.resolved.agent.passportId}
+        />
       </div>
-      <SiteFooter />
-    </>
+    </div>
   );
 }
