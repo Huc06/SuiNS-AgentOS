@@ -119,55 +119,70 @@ const walrus: StepExecutor = async (node, ctx) => {
 };
 
 /**
- * Store the (already Seal-encrypted) ciphertext via the SAME working Walrus
- * upload the `walrus` executor uses: the host's generic `ctx.uploadManifest`
- * (Walrus-backed) when injected, otherwise a direct Walrus `PUT`. This is the
- * resilience net for the Harbor node — when the real Harbor API is unavailable
- * (or unconfigured) we still land the bytes on a Walrus publisher that is known
- * to work on this network, so the node ends DONE and Memory runs.
+ * Store the Harbor node's bytes (the Seal ciphertext for a private skill, or the
+ * plain payload for a public one) via the SAME working Walrus upload the
+ * `walrus` executor uses: the host's generic `ctx.uploadManifest` (Walrus-backed)
+ * when injected, otherwise a direct Walrus `PUT`. This is the resilience net for
+ * the Harbor node — when the real Harbor API is unavailable (or unconfigured) we
+ * still land the bytes on a Walrus publisher that is known to work on this
+ * network, so the node ends DONE and Memory runs.
  */
 async function storeEncryptedOnWalrus(
   ctx: RunContext,
-  encrypted: Uint8Array,
+  bytes: Uint8Array,
   sealPolicyId: string,
 ): Promise<string | undefined> {
   if (ctx.uploadManifest) {
     const r = await ctx.uploadManifest({
-      encrypted: Array.from(encrypted),
-      sealPolicyId,
+      encrypted: Array.from(bytes),
+      ...(sealPolicyId ? { sealPolicyId } : {}),
     });
     return r.blobId;
   }
-  const r = await new WalrusClient().uploadBlob(encrypted);
+  const r = await new WalrusClient().uploadBlob(bytes);
   return r.blobId;
 }
 
 /**
- * Harbor: for private skills, Seal-encrypt the payload and store the ciphertext.
- * For public skills there is nothing to encrypt, so skip.
+ * The note appended to a Harbor-success output documenting the bucket-id caveat.
+ * The HarborClient resolves a friendly bucket NAME (e.g. "Default") to its UUID
+ * via the space's bucket list; if that resolution fails, Harbor 500s on upload
+ * ("Error creating UUID"). When that happens the user must set HARBOR_BUCKET_ID
+ * to the bucket UUID directly. Surfaced in the node output so a degraded run is
+ * legible from the canvas without reading server logs.
+ */
+const HARBOR_BUCKET_HINT =
+  "Harbor resolves a non-UUID HARBOR_BUCKET_ID via the space bucket list; if upload fails with a UUID error, set HARBOR_BUCKET_ID to the bucket UUID.";
+
+/**
+ * Harbor: store the payload in the user's Walrus Harbor account whenever a real
+ * Harbor uploader is configured — for PRIVATE skills the Seal-encrypted
+ * ciphertext, for PUBLIC skills the plain payload — so the user always sees real
+ * data in their Harbor account. Only when Harbor is NOT configured do we skip a
+ * public skill (nothing to encrypt, no account to land it in) or fall a private
+ * skill back to Walrus.
+ *
+ * Encryption (PRIVATE only): prefer REAL Mysten Seal (threshold-sealed to the
+ * on-chain bucket_policy package) via the host-injected `ctx.seal`; only when
+ * that is absent or returns null (offline / no key servers / no published
+ * package) do we fall back to the AES demo envelope (`sealEncrypt`). The engine
+ * never imports @mysten/seal — real Seal is reached only through ctx.seal.
  *
  * Upload backend precedence (the node ends DONE on the FIRST that works):
  *   1. `ctx.harbor.upload` — the REAL Harbor API uploader injected by the host
- *      (HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID). The encrypted blob
- *      lands in the user's Harbor bucket and we surface the real fileId + URL.
- *      If this THROWS (e.g. the Harbor endpoint 404s / the account is down) we
- *      DO NOT hard-error — we fall through to (2).
+ *      (HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID). The blob lands in
+ *      the user's Harbor bucket and we surface the real fileId + URL. If this
+ *      THROWS (e.g. the Harbor endpoint 404s / the bucket-id can't resolve to a
+ *      UUID / the account is down) we DO NOT hard-error — we fall through to (2).
  *   2. Walrus fallback — the exact same working Walrus upload the `walrus`
  *      executor uses (`ctx.uploadManifest`, else a direct Walrus `PUT`). Returns
  *      `{ storage: "walrus", note: "stored on Walrus (Harbor API unavailable)" }`.
  *
  * Only when BOTH the Harbor API and the Walrus fallback genuinely fail does the
- * node error. When HARBOR_API_KEY is unset the host injects no `ctx.harbor`, so
- * a private skill goes straight to the Walrus fallback and never crashes.
+ * node error.
  */
 const harbor: StepExecutor = async (node, ctx) => {
   const isPrivate = Boolean(node.params?.private);
-  if (!isPrivate) {
-    return {
-      status: "skipped",
-      output: { note: "public skill — Seal encryption skipped" },
-    };
-  }
 
   const sealPolicyId =
     typeof node.params?.sealPolicyId === "string"
@@ -175,35 +190,81 @@ const harbor: StepExecutor = async (node, ctx) => {
       : typeof node.params?.private === "string"
         ? node.params.private
         : "";
-  if (!sealPolicyId) {
+  if (isPrivate && !sealPolicyId) {
     return {
       status: "error",
       error: "harbor node marked private but no sealPolicyId provided",
     };
   }
 
-  // NOTE: sealEncrypt is the AES DEMO Seal envelope (see seal.ts). Swap for a
-  // real Seal threshold-encrypt before production.
-  const encrypted = await sealEncrypt(toBytes(pickPayload(node, ctx)), sealPolicyId);
+  // Public skill with NO Harbor account configured → nothing to encrypt and
+  // nowhere to put it. Skip (unchanged behavior for the no-Harbor public path).
+  if (!isPrivate && !ctx.harbor) {
+    return {
+      status: "skipped",
+      output: {
+        note: "public skill, no Harbor configured — nothing to store",
+      },
+    };
+  }
 
-  // 1. Real Harbor: store the ciphertext in the user's Walrus Harbor bucket.
-  //    A Harbor-API failure (404/auth/outage) must NOT block the run — we catch
-  //    it and fall back to the working Walrus upload below.
+  const plaintext = toBytes(pickPayload(node, ctx));
+
+  // PRIVATE → encrypt (real Seal, else AES envelope). PUBLIC → upload the plain
+  // payload (no Seal). `payload` is the bytes we actually store.
+  let payload: Uint8Array;
+  let sealMode: "real-seal" | "aes-demo" | "none";
+  if (isPrivate) {
+    let encrypted: Uint8Array | null = null;
+    if (ctx.seal) {
+      try {
+        const real = await ctx.seal(plaintext, sealPolicyId);
+        if (real && real.length > 0) {
+          encrypted = real;
+          sealMode = "real-seal";
+        }
+      } catch {
+        // Real Seal threw → fall back to the AES envelope below.
+      }
+    }
+    if (!encrypted) {
+      encrypted = await sealEncrypt(plaintext, sealPolicyId);
+      sealMode = "aes-demo";
+    } else {
+      sealMode = "real-seal";
+    }
+    payload = encrypted;
+  } else {
+    payload = plaintext;
+    sealMode = "none";
+  }
+
+  // 1. Real Harbor: store the bytes in the user's Walrus Harbor bucket. A
+  //    Harbor-API failure (404/auth/UUID-resolution/outage) must NOT block the
+  //    run — we catch it and fall back to the working Walrus upload below.
   let harborError: string | undefined;
   if (ctx.harbor) {
+    const ext = isPrivate ? "seal" : "json";
     const filename =
-      strParam(node, "filename") ?? `${sealPolicyId}-${Date.now()}.seal`;
+      strParam(node, "filename") ??
+      `${sealPolicyId || "public"}-${Date.now()}.${ext}`;
     try {
-      const r = await ctx.harbor.upload(encrypted, filename);
+      const r = await ctx.harbor.upload(payload, filename);
       if (r.blobId) {
         return {
           status: "done",
           blobId: r.blobId,
           output: {
             blobId: r.blobId,
-            sealPolicyId,
-            encryptedBytes: encrypted.length,
+            ...(sealPolicyId ? { sealPolicyId } : {}),
+            visibility: isPrivate ? "private" : "public",
+            bytes: payload.length,
+            encryption: sealMode,
             storage: "harbor",
+            note:
+              sealMode === "aes-demo"
+                ? `AES demo envelope (real Seal unavailable). ${HARBOR_BUCKET_HINT}`
+                : HARBOR_BUCKET_HINT,
             ...(r.fileId ? { fileId: r.fileId } : {}),
             ...(r.url ? { url: r.url } : {}),
           },
@@ -220,18 +281,29 @@ const harbor: StepExecutor = async (node, ctx) => {
   // 2. Walrus fallback: the same working upload the `walrus` executor uses. This
   //    is the safety net that keeps the Harbor node DONE so Memory can run.
   try {
-    const blobId = await storeEncryptedOnWalrus(ctx, encrypted, sealPolicyId);
+    const blobId = await storeEncryptedOnWalrus(ctx, payload, sealPolicyId);
+    const notes: string[] = [];
+    if (harborError) {
+      notes.push("stored on Walrus (Harbor API unavailable)");
+      // The most common real Harbor failure is the bucket-id not resolving to a
+      // UUID — document the fix right on the degraded run.
+      notes.push(HARBOR_BUCKET_HINT);
+    }
+    if (sealMode === "aes-demo") {
+      notes.push("AES demo envelope (real Seal unavailable)");
+    }
     return {
       status: "done",
       blobId,
       output: {
         blobId,
-        sealPolicyId,
-        encryptedBytes: encrypted.length,
+        ...(sealPolicyId ? { sealPolicyId } : {}),
+        visibility: isPrivate ? "private" : "public",
+        bytes: payload.length,
+        encryption: sealMode,
         storage: "walrus",
-        ...(harborError
-          ? { note: "stored on Walrus (Harbor API unavailable)", harborError }
-          : {}),
+        ...(notes.length > 0 ? { note: notes.join("; ") } : {}),
+        ...(harborError ? { harborError } : {}),
       },
     };
   } catch (walrusErr) {
