@@ -67,10 +67,47 @@ describe("walrus executor", () => {
 });
 
 describe("harbor executor", () => {
-  it("skips public skills (no private flag)", async () => {
+  it("skips a public skill when no Harbor account is configured", async () => {
     const r = await executors.harbor(node("harbor"), makeCtx(), []);
     expect(r.status).toBe("skipped");
-    expect((r.output as { note: string }).note).toMatch(/encryption skipped/);
+    expect((r.output as { note: string }).note).toMatch(
+      /no Harbor configured/,
+    );
+  });
+
+  it("uploads a PUBLIC skill's PLAIN payload to real Harbor when configured", async () => {
+    // With a real Harbor account wired, even a public skill is stored (plaintext,
+    // no Seal) so the user sees real data in their Harbor bucket.
+    const upload = vi.fn(async (_bytes: Uint8Array, _name: string) => ({
+      blobId: "HARBOR_PUBLIC",
+      fileId: "HARBOR_PUBLIC",
+      url: "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/b/files/HARBOR_PUBLIC/download",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", { manifest: { name: "open-skill" } }),
+      makeCtx({ harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("HARBOR_PUBLIC");
+    expect(upload).toHaveBeenCalledOnce();
+    const out = r.output as {
+      storage: string;
+      visibility: string;
+      encryption: string;
+      fileId: string;
+    };
+    expect(out.storage).toBe("harbor");
+    expect(out.visibility).toBe("public");
+    expect(out.encryption).toBe("none");
+    expect(out.fileId).toBe("HARBOR_PUBLIC");
+
+    // The uploaded bytes are the PLAIN payload — NOT a Seal envelope.
+    const [bytes] = upload.mock.calls[0] as [Uint8Array, string];
+    const magic = new TextDecoder().decode(bytes.slice(0, 7));
+    expect(magic).not.toBe("AOSEAL1");
   });
 
   it("errors when marked private without a sealPolicyId", async () => {
@@ -230,6 +267,106 @@ describe("harbor executor", () => {
     expect(r.status).toBe("done");
     expect(r.blobId).toBe("WALRUS_SAVED");
     expect((r.output as { storage: string }).storage).toBe("walrus");
+  });
+
+  it("uses REAL Seal (ctx.seal) ciphertext when it succeeds, with no AES note", async () => {
+    // ctx.seal returns a genuine Seal EncryptedObject payload (marked). The
+    // harbor executor must upload THOSE bytes (not the AES envelope) and report
+    // encryption: "real-seal" with no demo wording.
+    const realBytes = new Uint8Array([
+      ...new TextEncoder().encode("SEALREAL1"),
+      42,
+      43,
+      44,
+    ]);
+    const seal = vi.fn(async (_data: Uint8Array, _policy: string) => realBytes);
+    const upload = vi.fn(async (_bytes: Uint8Array, _name: string) => ({
+      blobId: "HARBOR_REAL",
+      fileId: "HARBOR_REAL",
+      url: "https://api.testnet.harbor.walrus.xyz/api/v1/blobs/HARBOR_REAL",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        manifest: { secret: "hi" },
+      }),
+      makeCtx({ seal, harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("HARBOR_REAL");
+    expect(seal).toHaveBeenCalledOnce();
+    // The bytes handed to Harbor are the REAL Seal payload, not the AES envelope.
+    const [bytes] = upload.mock.calls[0] as [Uint8Array, string];
+    const magic = new TextDecoder().decode(bytes.slice(0, 9));
+    expect(magic).toBe("SEALREAL1");
+
+    const out = r.output as { encryption: string; note?: string };
+    expect(out.encryption).toBe("real-seal");
+    // Real Seal succeeded → no AES demo wording.
+    expect(out.note ?? "").not.toMatch(/AES demo/);
+  });
+
+  it("falls back to the AES envelope when ctx.seal returns null", async () => {
+    // Real Seal unavailable (e.g. offline) → ctx.seal returns null. The executor
+    // must fall back to the AES envelope (AOSEAL1 magic) and stay DONE, marking
+    // the encryption mode honestly as the AES demo.
+    const seal = vi.fn(async (_data: Uint8Array, _policy: string) => null);
+    const upload = vi.fn(async (_bytes: Uint8Array, _name: string) => ({
+      blobId: "HARBOR_AES",
+      fileId: "HARBOR_AES",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        manifest: { secret: "hi" },
+      }),
+      makeCtx({ seal, harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("HARBOR_AES");
+    expect(seal).toHaveBeenCalledOnce();
+    // The uploaded bytes are the AES envelope (AOSEAL1), not a real Seal object.
+    const [bytes] = upload.mock.calls[0] as [Uint8Array, string];
+    const magic = new TextDecoder().decode(bytes.slice(0, 7));
+    expect(magic).toBe("AOSEAL1");
+
+    const out = r.output as { encryption: string; note?: string };
+    expect(out.encryption).toBe("aes-demo");
+    expect(out.note).toMatch(/AES demo/);
+  });
+
+  it("falls back to the AES envelope when ctx.seal THROWS", async () => {
+    const seal = vi.fn(async (_data: Uint8Array, _policy: string) => {
+      throw new Error("seal network down");
+    });
+    const uploadManifest = vi.fn(async (..._a: unknown[]) => ({
+      blobId: "WALRUS_AES",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", { private: true, sealPolicyId: "0xpolicy" }),
+      makeCtx({ seal, uploadManifest }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(seal).toHaveBeenCalledOnce();
+    const out = r.output as { encryption: string };
+    expect(out.encryption).toBe("aes-demo");
+    // The bytes uploaded to Walrus carry the AES envelope magic.
+    const arg = uploadManifest.mock.calls[0]?.[0] as { encrypted: number[] };
+    const magic = new TextDecoder().decode(
+      new Uint8Array(arg.encrypted.slice(0, 7)),
+    );
+    expect(magic).toBe("AOSEAL1");
   });
 
   it("errors only when BOTH Harbor and the Walrus fallback fail", async () => {

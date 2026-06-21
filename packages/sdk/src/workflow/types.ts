@@ -274,6 +274,24 @@ export interface RunContext {
       filename: string,
     ) => Promise<{ blobId: string; fileId?: string; url?: string }>;
   };
+  /**
+   * Optional REAL Mysten Seal encryptor, injected by the host. Given the bytes
+   * to encrypt and a Seal access-policy id, returns a genuine Seal
+   * `EncryptedObject` payload (threshold-sealed to the on-chain `bucket_policy`
+   * package) — or `null` when real Seal is unavailable (offline / no key
+   * servers / no published package), in which case the harbor executor falls
+   * back to the AES envelope (`sealEncrypt`).
+   *
+   * The engine stays signer/SDK-agnostic: this is a plain function type with no
+   * `@mysten/seal` or `SuiClient` import here. The host builds it (from the
+   * read-only SuiClient + the AgentOS package id + network) and injects it,
+   * mirroring `ctx.harbor` / `ctx.uploadManifest`. Absent → the harbor executor
+   * uses the AES envelope directly, so a no-Seal run never crashes.
+   */
+  seal?: (
+    data: Uint8Array,
+    sealPolicyId: string,
+  ) => Promise<Uint8Array | null>;
   /** Read-only resolver bundle (chain-first, registry fallback). Required by the coordinate executors. */
   resolve?: RunResolveBundle;
   /** Unsigned-PTB builder bundle. Required by the coordinate executors. */

@@ -7,6 +7,7 @@ import {
   memwalFromEnv,
   resolveAgentAddress,
   runWorkflow,
+  sealEncryptReal,
   serializeManifest,
   validateManifest,
   WalrusClient,
@@ -229,6 +230,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
       : null;
 
+  // REAL Mysten Seal encryptor (write path). Threshold-seals the bytes to the
+  // published AgentOS bucket_policy package using the network's allowlisted key
+  // servers, fetched via the read-only SuiClient. Returns null on ANY failure
+  // (no published package, offline, no key servers) → the harbor executor then
+  // falls back to the AES envelope, so a run never hard-fails. The SDK helper is
+  // self-contained and signer-agnostic; we only hand it the read-only client +
+  // the package id + the network. Seal supports testnet/mainnet only, so we map
+  // devnet → testnet.
+  const sealNetwork = getSuiNetwork() === 'mainnet' ? 'mainnet' : 'testnet';
+  const seal = packageId
+    ? async (data: Uint8Array, sealPolicyId: string) => {
+        const r = await sealEncryptReal({
+          data,
+          sealPolicyId,
+          suiClient,
+          packageId,
+          network: sealNetwork,
+          threshold: 1,
+        });
+        return r ? r.bytes : null;
+      }
+    : null;
+
   // A server-side AgentOSClient backs the read-only `resolve` bundle and the
   // unsigned-PTB `build` bundle. It shares the one registry file with the rest
   // of the surfaces and never signs/submits — every on-chain commit still flows
@@ -337,6 +361,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     build,
     ...(memory ? { memory } : {}),
     ...(harbor ? { harbor } : {}),
+    ...(seal ? { seal } : {}),
   };
 
   try {
