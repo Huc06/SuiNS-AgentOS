@@ -88,9 +88,6 @@ export default async function AgentPortfolioPage({ params }: Props) {
                   </svg>
                 )}
               </div>
-              <p className="mt-1 font-mono text-sm text-black/50">
-                Autonomous Agent · {agent.network} · Since {createdDate}
-              </p>
             </div>
           </div>
 
@@ -101,12 +98,18 @@ export default async function AgentPortfolioPage({ params }: Props) {
                 {agent.description ||
                   `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
               </p>
-              <div className="mt-4 flex flex-wrap gap-3">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  {agent.passportVersion}
+                  Autonomous Agent
                 </span>
                 <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                   {agent.network}
+                </span>
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  Since {createdDate}
+                </span>
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  {agent.passportVersion}
                 </span>
                 <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                   {skills.length} skills
