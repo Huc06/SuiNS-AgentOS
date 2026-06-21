@@ -339,6 +339,12 @@ export function nodeOutputDetail(
       const bytes = num(rec?.encryptedBytes);
       if (bytes !== undefined)
         fields.push({ label: "bytes", value: String(bytes) });
+      // When the bytes landed in the user's REAL Harbor account, show where.
+      if (str(rec?.storage) === "harbor") {
+        fields.push({ label: "storage", value: "harbor" });
+        const url = str(rec?.url);
+        if (url) fields.push({ label: "url", value: url });
+      }
       pushBlob();
       break;
     }

@@ -811,8 +811,13 @@ const attest: StepExecutor = async (node, ctx) => {
     };
   }
 
+  // The subject defaults to the run's own passport (the agent attests about the
+  // coordination it just performed) so a coordinate-template Attest node with no
+  // explicit subject still completes instead of erroring MISSING_CONFIG.
   const subjectPassportId =
-    strParam(node, "subjectPassportId") ?? strParam(node, "subject");
+    strParam(node, "subjectPassportId") ??
+    strParam(node, "subject") ??
+    ctx.passport?.id;
   if (!subjectPassportId) {
     return {
       status: "error",
