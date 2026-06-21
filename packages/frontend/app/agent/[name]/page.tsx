@@ -157,21 +157,12 @@ export default async function AgentPortfolioPage({ params }: Props) {
 
         <Separator />
 
-        {/* ===== Code Snippets ===== */}
+        {/* ===== Code Snippet ===== */}
         <section className="border-x border-pure-black/10 px-6 py-6">
           <h2 className="mb-3 text-sm font-bold text-black">Quick Start</h2>
-          <div className="space-y-3">
-            <CodeSnippet
-              label="Resolve"
-              description="Look up this agent by SuiNS name"
-              code={`const agent = await agentOS.resolve('${agent.suinsName}');`}
-            />
-            <CodeSnippet
-              label="Execute"
-              description="Run a skill on this agent"
-              code={`await agentOS.execute('${agent.suinsName}', '${skills[0]?.name ?? "skill-name"}');`}
-            />
-          </div>
+          <CodeSnippet
+            code={`npm install @agentos/sdk\n\n// Resolve — look up by SuiNS name\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\n\n// Execute — run a skill\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}
+          />
         </section>
 
         <Separator />
@@ -617,26 +608,10 @@ function generateContributions(): number[] {
   return data;
 }
 
-function CodeSnippet({
-  label,
-  description,
-  code,
-}: {
-  label: string;
-  description?: string;
-  code: string;
-}) {
+function CodeSnippet({ code }: { code: string }) {
   return (
     <div className="overflow-hidden rounded-lg border border-pure-black/10">
-      <div className="flex items-center justify-between border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] font-bold uppercase text-black/40">
-            {label}
-          </span>
-          {description && (
-            <span className="text-[10px] text-black/30">— {description}</span>
-          )}
-        </div>
+      <div className="flex items-center justify-end border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
         <CopyButton text={code} />
       </div>
       <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-black">
