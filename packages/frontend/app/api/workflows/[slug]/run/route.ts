@@ -4,6 +4,7 @@ import {
   AgentOSClient,
   contracts,
   memwalFromEnv,
+  resolveAgentAddress,
   runWorkflow,
   serializeManifest,
   validateManifest,
@@ -208,6 +209,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
     listSkills: (agentName) => agentClient.listSkills(agentName),
     downloadManifest: (blobId, expectedHash, options) =>
       agentClient.downloadManifest(blobId, expectedHash, options),
+    // Resolve a `.sui` name to its on-chain 0x address (SuiNS), with a registry
+    // fallback. Returns null when unregistered → coordinate executors skip
+    // gracefully instead of passing a non-address where one is required.
+    resolveAgentAddress: async (name) => {
+      try {
+        const onchain = await resolveAgentAddress(suiClient as never, name);
+        if (onchain) return onchain;
+      } catch {
+        // SuiNS lookup failed (network / unregistered) → try the registry.
+      }
+      try {
+        const r = await agentClient.resolveAgent(name);
+        return r.runtimeWallet ?? r.owner ?? null;
+      } catch {
+        return null;
+      }
+    },
   };
 
   const build: RunBuildBundle = {
@@ -263,6 +281,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       memoryNamespace: agent.suinsName,
     },
     ...(parsed.data.params ? { params: parsed.data.params } : {}),
+    // Lets the on-chain executors detect "no published package" and skip
+    // gracefully (instead of hard-erroring on the MVR placeholder).
+    ...(packageId ? { packageId } : {}),
     client: suiClient,
     execute: (tx: unknown) => sponsoredExecuteServer(tx as Transaction),
     uploadManifest,

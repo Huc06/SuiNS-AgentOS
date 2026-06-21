@@ -117,7 +117,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-walrus", 300, 240, {
           label: "Walrus",
-          subtitle: "Store manifest",
+          subtitle: "Store blob",
           params: { manifest: demoManifestParam(self) },
         }),
         mkNode("tpl-sui", 540, 240, {
@@ -150,7 +150,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-walrus", 280, 240, {
           label: "Walrus",
-          subtitle: "Store manifest",
+          subtitle: "Store blob",
           params: { manifest: demoManifestParam(self) },
         }),
         mkNode("tpl-harbor", 500, 240, {
@@ -161,7 +161,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-memory", 720, 240, {
           label: "Memory",
-          subtitle: "Walrus storage",
+          subtitle: "Remember",
         }),
       ];
       const edges: Edge[] = [
@@ -189,12 +189,12 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-walrus", 300, 240, {
           label: "Walrus",
-          subtitle: "Store manifest",
+          subtitle: "Store blob",
           params: { manifest: demoManifestParam(self) },
         }),
         mkNode("tpl-memory", 540, 240, {
           label: "Memory",
-          subtitle: "Walrus storage",
+          subtitle: "Remember",
         }),
       ];
       const edges: Edge[] = [

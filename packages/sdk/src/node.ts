@@ -34,6 +34,14 @@ export type { SkillMdMetadata } from "./skill-md-parser.js";
 export type { SkillManifest } from "./types.js";
 export { scanSkillsDirectory } from "./skill-md-scanner.js";
 export {
+  resolveAgentAddress,
+  resolveAgentByName,
+  resolveSkillByName,
+  reverseResolve,
+  parseSubname,
+  isValidSuiNSName,
+} from "./suins-resolve.js";
+export {
   parseSuiperpowerOutput,
   detectSuperpowerProject,
   buildManifestFromSuperpowerOutput,

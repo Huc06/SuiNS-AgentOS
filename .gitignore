@@ -15,3 +15,4 @@ packages/contracts/publish-testnet.json
 
 # runtime workflow run records (generated)
 .agentos/runs.json
+.vercel

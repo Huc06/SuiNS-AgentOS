@@ -270,6 +270,35 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
         severity: "skip",
       };
     }
+    if (/upstream skipped/i.test(note)) {
+      return {
+        code: "BLOCKED_UPSTREAM",
+        cause: "An upstream node skipped, so this node had nothing to act on.",
+        remediation:
+          "Resolve the upstream skip (e.g. set the package id / wire the relayer) to enable this node.",
+        severity: "skip",
+      };
+    }
+    if (/no packageId|not a published 0x package/i.test(note)) {
+      return {
+        code: "NO_PACKAGE_ID",
+        cause:
+          "No published AgentOS package id is configured, so the on-chain module cannot be targeted.",
+        remediation:
+          "Set NEXT_PUBLIC_AGENTOS_PACKAGE_ID (or AGENTOS_PACKAGE_ID) to a published 0x package id.",
+        severity: "skip",
+      };
+    }
+    if (/not resolvable on-chain/i.test(note)) {
+      return {
+        code: "RESOLVE_FAILED",
+        cause:
+          "The target .sui name does not resolve to an on-chain address (no passport registered on this network).",
+        remediation:
+          "Register/mint the agent on-chain (so its .sui name resolves), or point the node at a 0x address.",
+        severity: "skip",
+      };
+    }
     return {
       code: "MISSING_CONFIG",
       cause: note || "Step was skipped.",
