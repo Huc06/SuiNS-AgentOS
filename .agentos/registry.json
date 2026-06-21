@@ -10,7 +10,42 @@
       "passportVersion": "Passport v1.2.4",
       "status": "active",
       "createdAt": "2026-06-21T10:54:29.226Z",
-      "description": "Primary research agent"
+      "description": "Primary research agent",
+      "delegations": [
+        {
+          "childAgent": "0xe9f4b8c61faab60560f0a73f2f358f0d8a08771f5887341a3f1345ef15c52365",
+          "childName": "beta-agent.sui",
+          "allowedSkills": [
+            "web-search.alpha.sui"
+          ],
+          "allowedCapabilities": [
+            "read",
+            "exec"
+          ],
+          "spendLimit": "1000000000",
+          "spent": "120000000",
+          "expiryMs": "4102444800000",
+          "revoked": false,
+          "capId": "0x717cc08f1cb214cb7df92d19ea63ad179d8aa0ebddd8d82c66f700c137514ab5",
+          "createdAt": "2026-06-17T09:12:00.000Z"
+        },
+        {
+          "childAgent": "0x0130f164fdeb617c3e841ccb848f84bbfd8e4f3ce5452b6be0ffac15e9f8b480",
+          "childName": "walrus-bot.sui",
+          "allowedSkills": [
+            "delegate-policy.alpha.sui"
+          ],
+          "allowedCapabilities": [
+            "read"
+          ],
+          "spendLimit": "500000000",
+          "spent": "0",
+          "expiryMs": "4102444800000",
+          "revoked": false,
+          "capId": "0x439093f29e370f3492fcaa67539dd2f458c1fcd21af93f8c28258642666656a3",
+          "createdAt": "2026-06-18T14:03:00.000Z"
+        }
+      ]
     },
     {
       "slug": "beta-agent",
@@ -21,7 +56,25 @@
       "passportVersion": "Passport v0.9.1-beta",
       "status": "active",
       "createdAt": "2026-06-21T10:54:31.162Z",
-      "description": "Testing & QA agent"
+      "description": "Testing & QA agent",
+      "delegations": [
+        {
+          "childAgent": "0x5040ead4767d3ffb23f2c23b7142031519cebf745abb1dcdb63a8a9a6bb01620",
+          "childName": "sui-indexer.sui",
+          "allowedSkills": [
+            "sandbox-tool.beta-agent.sui"
+          ],
+          "allowedCapabilities": [
+            "exec"
+          ],
+          "spendLimit": "300000000",
+          "spent": "300000000",
+          "expiryMs": "4102444800000",
+          "revoked": true,
+          "capId": "0x1abc26041168f9e8e5f523e2a5946bd49c657e1dde521895a09e6d6cf3e2e1fb",
+          "createdAt": "2026-06-16T08:00:00.000Z"
+        }
+      ]
     },
     {
       "slug": "walrus-bot",
@@ -32,7 +85,26 @@
       "passportVersion": "Passport v2.1.0",
       "status": "active",
       "createdAt": "2026-06-21T10:54:32.704Z",
-      "description": "Storage management agent"
+      "description": "Storage management agent",
+      "delegations": [
+        {
+          "childAgent": "0x77e064c470eec2cccf2ed93bd3c60d6254ed1941b1b9391581290f3575f7ddbc",
+          "childName": "defi-rebalancer.sui",
+          "allowedSkills": [
+            "walrus-read.walrus-bot.sui"
+          ],
+          "allowedCapabilities": [
+            "read",
+            "write"
+          ],
+          "spendLimit": "2000000000",
+          "spent": "340000000",
+          "expiryMs": "4102444800000",
+          "revoked": false,
+          "capId": "0xb2c05e1968a6c1ad30293976b8861419861c1d2b57981a254952f86a3b0a45e9",
+          "createdAt": "2026-06-19T11:40:00.000Z"
+        }
+      ]
     },
     {
       "slug": "defi-rebalancer",
