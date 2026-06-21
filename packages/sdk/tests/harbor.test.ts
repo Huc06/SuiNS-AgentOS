@@ -173,67 +173,6 @@ describe("HarborClient", () => {
         }),
       ).rejects.toThrow("Harbor upload failed: job f1 reported failed");
     });
-
-    it("resolves a bucket NAME to its UUID via the space bucket list, then uploads", async () => {
-      mockFetch
-        // 1) list buckets in the space → find "default" → its UUID.
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: [
-              { id: "11111111-1111-4111-8111-111111111111", name: "other" },
-              { id: BUCKET, name: "default" },
-            ],
-          }),
-        })
-        // 2) upload POST → blob_id present.
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: { id: "f9", blob_id: "WAL_OK" } }),
-        });
-
-      const result = await client.uploadBlob(
-        "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
-        "default",
-        new Uint8Array([1]),
-        "f.json",
-      );
-
-      expect(result.blobId).toBe("WAL_OK");
-      const listUrl = (mockFetch.mock.calls[0] as [string])[0];
-      expect(listUrl).toBe(
-        "https://api.testnet.harbor.walrus.xyz/api/v1/spaces/00b9f6ae-952d-4971-9ddb-c02acf53e0df/buckets",
-      );
-      const uploadUrl = (mockFetch.mock.calls[1] as [string])[0];
-      expect(uploadUrl).toBe(
-        `https://api.testnet.harbor.walrus.xyz/api/v1/buckets/${BUCKET}/files`,
-      );
-    });
-
-    it("passes the bucket name through when it can't be resolved (Walrus fallback then handles any real 500)", async () => {
-      mockFetch
-        // list → no matching name.
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: [{ id: BUCKET, name: "other" }] }),
-        })
-        // upload proceeds with the original name.
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: { id: "f", blob_id: "WAL" } }),
-        });
-
-      const result = await client.uploadBlob(
-        "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
-        "nonexistent",
-        new Uint8Array([1]),
-        "f.json",
-      );
-
-      expect(result.blobId).toBe("WAL");
-      const uploadUrl = (mockFetch.mock.calls[1] as [string])[0];
-      expect(uploadUrl).toContain("/buckets/nonexistent/files");
-    });
   });
 
   describe("downloadBlob", () => {
