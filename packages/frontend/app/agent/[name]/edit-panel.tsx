@@ -21,6 +21,8 @@ interface EditPanelProps {
   status: string;
   createdAt: string;
   delegationCount: number;
+  activeTab: "skills" | "delegate" | "info";
+  onTabChange: (tab: "skills" | "delegate" | "info") => void;
 }
 
 export function EditPanel({
@@ -37,11 +39,12 @@ export function EditPanel({
   status,
   createdAt,
   delegationCount,
+  activeTab: tab,
+  onTabChange: setTab,
 }: EditPanelProps) {
   const [description, setDescription] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<"skills" | "delegate" | "info">("skills");
 
   const handleSave = async () => {
     setSaving(true);

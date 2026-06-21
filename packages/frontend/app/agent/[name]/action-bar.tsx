@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import type { AgentSkillRow } from "../../../lib/agent-types";
@@ -38,6 +37,14 @@ export function ActionBar({
   delegationCount,
 }: ActionBarProps) {
   const [editOpen, setEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"skills" | "delegate" | "info">(
+    "skills",
+  );
+
+  const openTab = (tab: "skills" | "delegate" | "info") => {
+    setActiveTab(tab);
+    setEditOpen(true);
+  };
 
   return (
     <>
@@ -57,18 +64,20 @@ export function ActionBar({
         >
           Suiscan ↗
         </a>
-        <Link
-          href={`/agent/${name}/skills`}
+        <button
+          type="button"
+          onClick={() => openTab("skills")}
           className="rounded border border-pure-black/10 px-3 py-1.5 font-mono text-[11px] font-bold text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple"
         >
           Skills
-        </Link>
-        <Link
-          href={`/agent/${name}/delegate`}
+        </button>
+        <button
+          type="button"
+          onClick={() => openTab("delegate")}
           className="rounded border border-pure-black/10 px-3 py-1.5 font-mono text-[11px] font-bold text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple"
         >
           Delegate
-        </Link>
+        </button>
         <div className="flex-1" />
         <button
           type="button"
@@ -97,6 +106,8 @@ export function ActionBar({
         status={status}
         createdAt={createdAt}
         delegationCount={delegationCount}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
     </>
   );
