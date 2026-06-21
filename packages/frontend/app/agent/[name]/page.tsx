@@ -53,6 +53,14 @@ export default async function AgentPortfolioPage({ params }: Props) {
         data-portfolio
         className="mx-auto max-w-3xl px-4 transition-all duration-200"
       >
+        {/* Back button */}
+        <Link
+          href="/explore"
+          className="mb-4 inline-flex items-center gap-1.5 font-mono text-xs text-black/50 transition-colors hover:text-black"
+        >
+          ← Back to Portfolio
+        </Link>
+
         {/* ===== Profile Header ===== */}
         <PortfolioBorder>
           <section className="border-x border-b border-pure-black/10">
