@@ -25,7 +25,11 @@ export interface PreflightEnvSummary {
   suiKey: boolean;
   /** ENOKI_SECRET_KEY present (gas sponsorship). */
   enokiKey: boolean;
-  /** MEMWAL relayer configured (MEMWAL_RELAYER_URL + MEMWAL_API_KEY). */
+  /**
+   * MEMWAL memory configured: the signed scheme (MEMWAL_ACCOUNT_ID +
+   * MEMWAL_DELEGATE_KEY) OR a legacy MEMWAL_API_KEY. MEMWAL_RELAYER_URL is
+   * optional (defaults to the public staging relayer in memwalFromEnv).
+   */
   memwal: boolean;
   /** A non-placeholder AGENTOS package id is configured. */
   packageId: boolean;
@@ -45,10 +49,14 @@ export function readEnvPresence(opts: {
   return {
     suiKey: Boolean(process.env.SUI_PRIVATE_KEY?.trim()),
     enokiKey: Boolean(process.env.ENOKI_SECRET_KEY?.trim()),
-    memwal: Boolean(
-      process.env.MEMWAL_RELAYER_URL?.trim() &&
-        process.env.MEMWAL_API_KEY?.trim(),
-    ),
+    // Memory needs either the signed-scheme credentials (MEMWAL_ACCOUNT_ID +
+    // MEMWAL_DELEGATE_KEY) or a legacy MEMWAL_API_KEY — MEMWAL_RELAYER_URL
+    // defaults to the public staging relayer in memwalFromEnv, so don't require
+    // it here. Mirrors the precedence in memwalFromEnv.
+    memwal:
+      (Boolean(process.env.MEMWAL_ACCOUNT_ID?.trim()) &&
+        Boolean(process.env.MEMWAL_DELEGATE_KEY?.trim())) ||
+      Boolean(process.env.MEMWAL_API_KEY?.trim()),
     packageId: Boolean(getAgentosPackageId()),
     // A passport id recorded in the registry is the best signal we have without
     // an on-chain getObject; the SDK preflight treats it as "may run on-chain".
