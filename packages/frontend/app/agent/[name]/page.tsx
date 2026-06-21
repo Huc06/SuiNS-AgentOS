@@ -135,102 +135,63 @@ export default async function AgentPortfolioPage({ params }: Props) {
               internal
             />
           </div>
-          {/* Owner */}
-          <div className="mt-3 flex items-center gap-2">
-            <span className="font-mono text-[10px] font-bold uppercase text-black/40">
-              Owner
-            </span>
-            <code className="rounded bg-black/5 px-2 py-0.5 font-mono text-[11px] text-black">
-              {agent.runtimeWallet && agent.runtimeWallet !== "0x0"
-                ? shortObjectId(agent.runtimeWallet)
-                : shortObjectId(agent.passportId)}
-            </code>
-            <CopyButton
-              text={
-                agent.runtimeWallet && agent.runtimeWallet !== "0x0"
-                  ? agent.runtimeWallet
-                  : agent.passportId
-              }
-            />
-          </div>
         </section>
 
         <Separator />
 
-        {/* ===== Skills Showcase (plugin-style) ===== */}
-        <section className="border-x border-pure-black/10 px-6 py-6">
-          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
-            Skills
-            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
-              {skills.length}
-            </span>
-          </h2>
-          {skills.length === 0 ? (
-            <p className="font-mono text-sm text-black/50">
-              No skills published yet.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {skills.map((skill) => (
-                <div
-                  key={skill.id}
-                  className="overflow-hidden rounded-xl border border-pure-black/10 bg-white"
-                >
-                  {/* Skill header */}
-                  <div className="border-b border-pure-black/5 px-5 py-4">
-                    <h3 className="text-lg font-bold text-black">
-                      {skill.name}
-                    </h3>
-                    <p className="mt-1 text-sm text-black/60">
-                      <span className="capitalize">{agent.suinsName}</span>{" "}
-                      performs{" "}
-                      <span className="font-medium text-black">
-                        {skill.name.replace(/-/g, " ")}
-                      </span>{" "}
-                      with on-chain verification, encrypted storage, and
-                      delegated execution through AgentOS.
-                    </p>
-                  </div>
-                  {/* Metadata row */}
-                  <div className="grid grid-cols-3 divide-x divide-pure-black/5 px-1 py-3">
-                    <div className="px-4">
-                      <p className="font-mono text-[10px] text-black/40">
-                        Install in
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-black">
-                        AgentOS
-                      </p>
-                    </div>
-                    <div className="px-4">
-                      <p className="font-mono text-[10px] text-black/40">
-                        Published by
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-black">
-                        {agent.suinsName}
-                      </p>
-                    </div>
-                    <div className="px-4">
-                      <p className="font-mono text-[10px] text-black/40">
-                        Executions
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-black">0</p>
-                    </div>
-                  </div>
-                  {/* Install command */}
-                  <div className="border-t border-pure-black/5 bg-black/[0.02] px-5 py-3">
-                    <div className="flex items-center justify-between">
-                      <code className="font-mono text-[11px] text-black">
-                        agentos skill install {skill.mvrPackage}
-                      </code>
-                      <CopyButton
-                        text={`agentos skill install ${skill.mvrPackage}`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {/* ===== Plugin Card (dark, like Claude plugins) ===== */}
+        <section className="border-x border-pure-black/10">
+          <div className="flex flex-col gap-6 bg-[#1a1a1a] px-6 py-8 sm:flex-row sm:items-start sm:justify-between">
+            {/* Left: name + description */}
+            <div className="max-w-md">
+              <h2 className="font-display text-2xl font-bold text-white">
+                {agent.suinsName}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-white/60">
+                {agent.description ||
+                  `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
+              </p>
             </div>
-          )}
+
+            {/* Right: metadata */}
+            <div className="flex shrink-0 flex-col gap-3 sm:items-end">
+              <MetaRow icon="terminal" label="Install in" value="AgentOS" />
+              <MetaRow
+                icon="user"
+                label="Owner"
+                value={
+                  agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                    ? shortObjectId(agent.runtimeWallet)
+                    : shortObjectId(agent.passportId)
+                }
+                copyText={
+                  agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                    ? agent.runtimeWallet
+                    : agent.passportId
+                }
+              />
+              <MetaRow
+                icon="download"
+                label="Skills"
+                value={String(skills.length)}
+              />
+            </div>
+          </div>
+
+          {/* Code snippet below the dark card */}
+          <div className="border-t border-white/10 bg-[#111] px-6 py-4">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] font-bold uppercase text-white/30">
+                Quick Start
+              </span>
+              <CopyButton
+                text={`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}
+              />
+            </div>
+            <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed text-white/70">
+              <code>{`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}</code>
+            </pre>
+          </div>
         </section>
 
         <Separator />
@@ -361,6 +322,82 @@ export default async function AgentPortfolioPage({ params }: Props) {
             <div className="h-[10px] w-[10px] rounded-sm bg-electric-purple" />
             <span>More</span>
           </div>
+        </section>
+
+        <Separator />
+
+        {/* ===== Stack (Skills as tech stack) ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
+            Stack
+            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
+              {skills.length}
+            </span>
+          </h2>
+          {skills.length === 0 ? (
+            <p className="font-mono text-sm text-black/50">
+              No skills published yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {skills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className="flex items-center gap-3 rounded-lg border border-pure-black/10 bg-white px-3 py-3 transition-colors hover:border-electric-purple/30 hover:bg-electric-purple/[0.02]"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pure-black/10 bg-black/[0.02] text-black/60">
+                    {skill.icon === "token" ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v12M6 12h12" />
+                      </svg>
+                    ) : skill.icon === "wallet" ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <rect x="2" y="6" width="20" height="14" rx="2" />
+                        <path d="M22 10H18a2 2 0 000 4h4" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M16 3l5 5-5 5" />
+                        <path d="M21 8H9" />
+                        <path d="M8 21l-5-5 5-5" />
+                        <path d="M3 16h12" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-black">
+                      {skill.name}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-black/40">
+                      {skill.mvrPackage}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <Separator />
@@ -598,4 +635,88 @@ function generateContributions(): number[] {
     else data.push(Math.floor(rand * 12) + 5);
   }
   return data;
+}
+
+function CodeSnippet({ code }: { code: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-pure-black/10">
+      <div className="flex items-center justify-end border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
+        <CopyButton text={code} />
+      </div>
+      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-black">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function MetaRow({
+  icon,
+  label,
+  value,
+  copyText,
+}: {
+  icon: "terminal" | "user" | "download";
+  label: string;
+  value: string;
+  copyText?: string;
+}) {
+  const icons = {
+    terminal: (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-white/40"
+      >
+        <polyline points="4 17 10 11 4 5" />
+        <line x1="12" y1="19" x2="20" y2="19" />
+      </svg>
+    ),
+    user: (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-white/40"
+      >
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+    download: (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-white/40"
+      >
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+    ),
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {icons[icon]}
+      <div>
+        <p className="font-mono text-[10px] text-white/40">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-mono text-sm font-bold text-white">{value}</p>
+          {copyText && <CopyButton text={copyText} />}
+        </div>
+      </div>
+    </div>
+  );
 }
