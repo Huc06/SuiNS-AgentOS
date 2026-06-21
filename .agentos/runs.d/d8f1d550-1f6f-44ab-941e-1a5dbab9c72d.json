@@ -1,0 +1,81 @@
+{
+  "runId": "d8f1d550-1f6f-44ab-941e-1a5dbab9c72d",
+  "agentSlug": "alpha",
+  "status": "done",
+  "steps": [
+    {
+      "nodeId": "alpha-trigger",
+      "type": "trigger",
+      "status": "done",
+      "output": {
+        "started": true,
+        "params": {}
+      }
+    },
+    {
+      "nodeId": "alpha-import",
+      "type": "import-agent",
+      "status": "done",
+      "output": {
+        "agent": "alpha.sui",
+        "passportId": "0xa1d1a4ec19f817fda256b66dcee38d0c819ac709bc50aa2ae5dadc479c449133",
+        "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
+        "skillCount": 2,
+        "catalog": [
+          {
+            "skillId": "web-search",
+            "name": "web-search",
+            "version": "v1.0.0",
+            "manifestHash": "0x30c99c1b18d5b8e7c944bc119d879648082e500cdfba437459a7ac912dc6f854",
+            "verified": false,
+            "requiredCapabilities": [],
+            "error": "Manifest integrity check failed: expected 0x30c99c1b18d5b8e7c944bc119d879648082e500cdfba437459a7ac912dc6f854, got 30c99c1b18d5b8e7c944bc119d879648082e500cdfba437459a7ac912dc6f854"
+          },
+          {
+            "skillId": "delegate-policy",
+            "name": "delegate-policy",
+            "version": "v1.0.0",
+            "manifestHash": "0x8893b18d1ff2747d82de7703fe39eb91e3e3e030b0421d6110aa30e2180c3e23",
+            "verified": false,
+            "requiredCapabilities": [],
+            "error": "Manifest integrity check failed: expected 0x8893b18d1ff2747d82de7703fe39eb91e3e3e030b0421d6110aa30e2180c3e23, got 8893b18d1ff2747d82de7703fe39eb91e3e3e030b0421d6110aa30e2180c3e23"
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "alpha-delegate",
+      "type": "delegate",
+      "status": "skipped",
+      "output": {
+        "note": "Delegate: skipped — no packageId (set NEXT_PUBLIC_AGENTOS_PACKAGE_ID to a published 0x package)"
+      },
+      "errorCode": "NO_PACKAGE_ID",
+      "cause": "No published AgentOS package id is configured, so the on-chain module cannot be targeted.",
+      "remediation": "Set NEXT_PUBLIC_AGENTOS_PACKAGE_ID (or AGENTOS_PACKAGE_ID) to a published 0x package id."
+    },
+    {
+      "nodeId": "alpha-call",
+      "type": "call-sub-agent",
+      "status": "skipped",
+      "output": {
+        "note": "Call Sub-Agent: skipped — upstream skipped"
+      },
+      "errorCode": "BLOCKED_UPSTREAM",
+      "cause": "An upstream node skipped, so this node had nothing to act on.",
+      "remediation": "Resolve the upstream skip (e.g. set the package id / wire the relayer) to enable this node."
+    },
+    {
+      "nodeId": "alpha-attest",
+      "type": "attest",
+      "status": "skipped",
+      "output": {
+        "note": "Attest: skipped — upstream skipped"
+      },
+      "errorCode": "BLOCKED_UPSTREAM",
+      "cause": "An upstream node skipped, so this node had nothing to act on.",
+      "remediation": "Resolve the upstream skip (e.g. set the package id / wire the relayer) to enable this node."
+    }
+  ],
+  "createdAt": "2026-06-21T11:29:46.767Z"
+}
