@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { RadialLiquidClient, ParallaxPillsClient } from "./landing-clients";
+import {
+  RadialLiquidClient,
+  ParallaxPillsClient,
+  SquircleShiftClient,
+  PortalClient,
+} from "./landing-clients";
 import { InlinePillsText } from "./inline-pills-text";
 import { AppPreview } from "./app-preview";
 import type { ParallaxPillItem } from "./parallax-pills";
+import { ScrollReveal, RevealGroup, RevealChild } from "./scroll-reveal";
+import { ScrollProgress } from "./scroll-progress";
 
 /* ------------------------------------------------------------------ */
 /* Small inline icons (no lucide-react dependency in this package)     */
@@ -123,21 +130,37 @@ function Hero() {
 
       {/* Hero content */}
       <div className="relative z-10 mx-auto flex min-h-[112svh] max-w-container flex-col px-margin pt-24 pb-0">
-        <div className="flex flex-1 flex-col justify-center">
-          <div className="mb-8 inline-flex w-fit items-center gap-2 border-2 border-pure-black bg-off-white px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-pure-black shadow-[2px_2px_0_0_#000]">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-electric-purple" />
-            Sui-native · Powered by SuiNS
-          </div>
+        {/* On-mount cascade: fires once after the preloader curtain lifts, so the
+            hero "arrives" rather than snapping in. Uses animate (not whileInView)
+            since the hero is above the fold. */}
+        <RevealGroup
+          onMount
+          className="flex flex-1 flex-col justify-center"
+          stagger={0.12}
+          delayChildren={0.15}
+        >
+          <RevealChild as="div" className="w-fit">
+            <div className="mb-8 inline-flex w-fit items-center gap-2 border-2 border-pure-black bg-off-white px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-pure-black shadow-[2px_2px_0_0_#000]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-electric-purple" />
+              Sui-native · Powered by SuiNS
+            </div>
+          </RevealChild>
 
-          <h1 className="max-w-4xl font-display text-5xl font-bold uppercase leading-[0.92] tracking-tight text-pure-black sm:text-6xl md:text-8xl">
+          <RevealChild
+            as="h1"
+            className="max-w-4xl font-display text-5xl font-bold uppercase leading-[0.92] tracking-tight text-pure-black sm:text-6xl md:text-8xl"
+          >
             Identity for
             <br />
             AI Agents.
             <br />
             <span className="text-electric-purple">Openly yours.</span>
-          </h1>
+          </RevealChild>
 
-          <div className="mt-10 grid max-w-5xl grid-cols-1 items-end gap-8 lg:grid-cols-2">
+          <RevealChild
+            as="div"
+            className="mt-10 grid max-w-5xl grid-cols-1 items-end gap-8 lg:grid-cols-2"
+          >
             <p className="max-w-xl font-mono text-base leading-relaxed text-on-surface-variant md:text-lg">
               Sui-native identity, skills, delegation, and storage for autonomous
               agents. Every agent gets an on-chain{" "}
@@ -161,10 +184,11 @@ function Hero() {
                 Explore agents
               </Link>
             </div>
-          </div>
+          </RevealChild>
 
           {/* Feature nav — horizontal icon+label items, one active pill */}
-          <nav
+          <RevealChild
+            as="nav"
             aria-label="AgentOS primitives"
             className="mt-12 flex flex-wrap items-center gap-x-1 gap-y-2 border-y-2 border-pure-black/15 py-2"
           >
@@ -184,18 +208,21 @@ function Hero() {
                 {item.label}
               </span>
             ))}
-          </nav>
-        </div>
+          </RevealChild>
+        </RevealGroup>
 
-        {/* Product preview — rises from the bottom, partially cut off (peek). */}
-        <div className="relative mt-12">
+        {/* Product preview — rises from the bottom, partially cut off (peek).
+            Centered in its own max-w-4xl box that matches the AppPreview window
+            width, so the peek and the next section share one centered column and
+            line up cleanly (no stray padding / off-center drift). */}
+        <div className="relative mx-auto mt-16 w-full max-w-4xl">
           {/* Soft top glow so the preview reads as floating up from below. */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 -top-16 z-10 h-16 bg-gradient-to-b from-transparent to-off-white/70"
           />
           {/* Negative bottom margin clips the window so it peeks above the fold. */}
-          <div className="relative z-0 -mb-24 px-2 sm:-mb-28 md:-mb-32">
+          <div className="relative z-0 -mb-28 sm:-mb-32 md:-mb-36">
             <AppPreview />
           </div>
         </div>
@@ -207,7 +234,7 @@ function Hero() {
 function ParallaxBand() {
   return (
     <section className="relative w-full overflow-hidden border-b-2 border-pure-black bg-pure-black">
-      <div className="mx-auto max-w-container px-margin pt-16">
+      <ScrollReveal className="mx-auto max-w-container px-margin pt-16">
         <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-off-white/50">
           One protocol · every primitive
         </p>
@@ -215,7 +242,7 @@ function ParallaxBand() {
           The building blocks for{" "}
           <span className="text-soft-lavender">agentic identity</span>.
         </h2>
-      </div>
+      </ScrollReveal>
 
       {/* Parallax pills (client-only) — bouncy concept pills that drift on hover */}
       <div className="relative w-full">
@@ -234,6 +261,66 @@ function ParallaxBand() {
   );
 }
 
+/* Portal moment — "step into the agent economy". WebGL portal behind a CTA. */
+function PortalSection() {
+  return (
+    <section className="relative w-full overflow-hidden border-b-2 border-pure-black bg-pure-black py-28 md:py-40">
+      {/* Centered WebGL portal (client-only) behind the headline. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[120vmin] w-[120vmin] -translate-x-1/2 -translate-y-1/2"
+      >
+        <PortalClient
+          primaryColor="#6800FF"
+          secondaryColor="#9D5CFF"
+          centerColor="#CAB1FF"
+          speed={1.1}
+          density={1.1}
+          layerCount={7}
+          brightness={1.15}
+          scale={1.1}
+        />
+      </div>
+
+      <RevealGroup
+        className="relative z-10 mx-auto max-w-container px-margin text-center"
+        stagger={0.12}
+        amount={0.4}
+      >
+        <RevealChild
+          as="p"
+          className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-soft-lavender"
+        >
+          Step through
+        </RevealChild>
+        <RevealChild
+          as="h2"
+          className="mx-auto mt-4 max-w-3xl font-display text-4xl font-bold uppercase leading-[0.95] tracking-tight text-off-white md:text-6xl"
+        >
+          A portal into the
+          <br />
+          <span className="text-soft-lavender">agent economy</span>.
+        </RevealChild>
+        <RevealChild
+          as="p"
+          className="mx-auto mt-6 max-w-xl font-mono text-sm leading-relaxed text-off-white/70 md:text-base"
+        >
+          One name resolves an agent, its skills, and its delegated authority —
+          discoverable on-chain, openly yours.
+        </RevealChild>
+        <RevealChild as="div" className="mt-10 flex justify-center">
+          <Link
+            href="/create"
+            className="inline-flex items-center gap-2 border-2 border-off-white bg-electric-purple px-8 py-4 font-mono text-sm font-bold uppercase text-off-white shadow-[4px_4px_0_0_#CAB1FF] transition-transform neo-hover"
+          >
+            Enter the economy {icon.arrow}
+          </Link>
+        </RevealChild>
+      </RevealGroup>
+    </section>
+  );
+}
+
 function ClosingCta() {
   return (
     <section className="relative overflow-hidden border-b-2 border-pure-black bg-electric-purple py-24 text-off-white md:py-32">
@@ -245,17 +332,27 @@ function ClosingCta() {
             "repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 1px, transparent 14px)",
         }}
       />
-      <div className="relative z-10 mx-auto max-w-container px-margin text-center">
-        <h2 className="mx-auto max-w-3xl font-display text-4xl font-bold uppercase leading-[0.95] tracking-tight md:text-6xl">
+      <RevealGroup
+        className="relative z-10 mx-auto max-w-container px-margin text-center"
+        stagger={0.1}
+        amount={0.4}
+      >
+        <RevealChild
+          as="h2"
+          className="mx-auto max-w-3xl font-display text-4xl font-bold uppercase leading-[0.95] tracking-tight md:text-6xl"
+        >
           Give your agent a name
           <br />
           the chain can verify.
-        </h2>
-        <p className="mx-auto mt-6 max-w-xl font-mono text-base leading-relaxed text-off-white/80">
+        </RevealChild>
+        <RevealChild
+          as="p"
+          className="mx-auto mt-6 max-w-xl font-mono text-base leading-relaxed text-off-white/80"
+        >
           Mint an AgentPassport, publish verifiable skills, and delegate scoped
           authority — on Sui, resolvable by SuiNS.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+        </RevealChild>
+        <RevealChild as="div" className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
             href="/create"
             className="inline-flex items-center gap-2 border-2 border-pure-black bg-off-white px-8 py-4 font-mono text-sm font-bold uppercase text-pure-black shadow-[4px_4px_0_0_#000] transition-transform neo-hover"
@@ -268,36 +365,71 @@ function ClosingCta() {
           >
             Explore agents
           </Link>
-        </div>
-      </div>
+        </RevealChild>
+      </RevealGroup>
     </section>
   );
 }
 
 function Footer() {
   return (
-    <footer className="bg-off-white py-12">
-      <div className="mx-auto flex max-w-container flex-col items-start justify-between gap-6 px-margin md:flex-row md:items-center">
+    <footer className="relative overflow-hidden border-t-2 border-pure-black bg-[#0A0612] py-16">
+      {/* Animated shader background (client-only). Both light/dark backgrounds
+          are pinned to the footer's dark tone so it reads correctly even when
+          no next-themes provider is mounted (resolvedTheme === undefined).
+          Brightness / wave intensity are kept low so the shader stays a quiet
+          texture behind the links rather than competing with them. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 opacity-80">
+        <SquircleShiftClient
+          width="100%"
+          height="100%"
+          colorTint="#6800FF"
+          lightBackground="#0A0612"
+          darkBackground="#0A0612"
+          speed={0.18}
+          brightness={1.05}
+          gridFrequency={22}
+          waveIntensity={0.06}
+          spiralIntensity={0.7}
+          lineThickness={0.05}
+        />
+      </div>
+      {/* Legibility scrim over the shader — stronger toward the bottom where the
+          links sit, so the footer nav stays high-contrast. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-[#0A0612] via-[#0A0612]/65 to-[#0A0612]/25"
+      />
+
+      <ScrollReveal
+        as="div"
+        distance={18}
+        blur={4}
+        className="relative z-10 mx-auto flex max-w-container flex-col items-start justify-between gap-6 px-margin md:flex-row md:items-center"
+      >
         <div>
-          <Link href="/" className="font-display text-lg font-bold uppercase tracking-tight text-pure-black">
+          <Link
+            href="/"
+            className="font-display text-lg font-bold uppercase tracking-tight text-off-white"
+          >
             AgentOS
           </Link>
-          <p className="mt-1 font-mono text-xs text-on-surface-variant/70">
+          <p className="mt-1 font-mono text-xs text-off-white/60">
             Sui-native identity for AI agents.
           </p>
         </div>
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs font-bold uppercase">
-          <Link href="/create" className="text-pure-black hover:text-electric-purple">
+          <Link href="/create" className="text-off-white hover:text-soft-lavender">
             App
           </Link>
-          <Link href="/explore" className="text-pure-black hover:text-electric-purple">
+          <Link href="/explore" className="text-off-white hover:text-soft-lavender">
             Explore
           </Link>
           <a
             href="https://github.com/Huc06/SuiNS-AgentOS"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-pure-black hover:text-electric-purple"
+            className="text-off-white hover:text-soft-lavender"
           >
             GitHub
           </a>
@@ -305,12 +437,12 @@ function Footer() {
             href="https://github.com/Huc06/SuiNS-AgentOS#readme"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-pure-black hover:text-electric-purple"
+            className="text-off-white hover:text-soft-lavender"
           >
             Docs
           </a>
         </nav>
-      </div>
+      </ScrollReveal>
     </footer>
   );
 }
@@ -322,9 +454,11 @@ function Footer() {
 export function AgentOSLanding() {
   return (
     <main className="bg-off-white">
+      <ScrollProgress />
       <Hero />
       <ParallaxBand />
       <InlinePillsText />
+      <PortalSection />
       <ClosingCta />
       <Footer />
     </main>
