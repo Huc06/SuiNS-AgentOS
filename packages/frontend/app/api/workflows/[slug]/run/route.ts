@@ -201,10 +201,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // secret-agnostic: it receives this uploader as `ctx.harbor`, never the env.
   const harborApiKey = process.env.HARBOR_API_KEY?.trim();
   const harborSpaceId = process.env.HARBOR_SPACE_ID?.trim();
-  const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim() || 'default';
+  const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim();
   const harborBaseUrl = process.env.HARBOR_BASE_URL?.trim();
   const harbor =
-    harborApiKey && harborSpaceId
+    harborApiKey && harborSpaceId && harborBucketId
       ? {
           upload: async (content: Uint8Array, filename: string) => {
             const client = new HarborClient({
@@ -216,6 +216,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
               harborBucketId,
               content,
               filename,
+              { attempts: 60, intervalMs: 1000 }, // 60 seconds timeout
             );
             const base = (
               harborBaseUrl ?? 'https://api.testnet.harbor.walrus.xyz'
