@@ -157,12 +157,80 @@ export default async function AgentPortfolioPage({ params }: Props) {
 
         <Separator />
 
-        {/* ===== Code Snippet ===== */}
+        {/* ===== Skills Showcase (plugin-style) ===== */}
         <section className="border-x border-pure-black/10 px-6 py-6">
-          <h2 className="mb-3 text-sm font-bold text-black">Quick Start</h2>
-          <CodeSnippet
-            code={`npm install @agentos/sdk\n\n// Resolve — look up by SuiNS name\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\n\n// Execute — run a skill\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}
-          />
+          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
+            Skills
+            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
+              {skills.length}
+            </span>
+          </h2>
+          {skills.length === 0 ? (
+            <p className="font-mono text-sm text-black/50">
+              No skills published yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {skills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className="overflow-hidden rounded-xl border border-pure-black/10 bg-white"
+                >
+                  {/* Skill header */}
+                  <div className="border-b border-pure-black/5 px-5 py-4">
+                    <h3 className="text-lg font-bold text-black">
+                      {skill.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-black/60">
+                      <span className="capitalize">{agent.suinsName}</span>{" "}
+                      performs{" "}
+                      <span className="font-medium text-black">
+                        {skill.name.replace(/-/g, " ")}
+                      </span>{" "}
+                      with on-chain verification, encrypted storage, and
+                      delegated execution through AgentOS.
+                    </p>
+                  </div>
+                  {/* Metadata row */}
+                  <div className="grid grid-cols-3 divide-x divide-pure-black/5 px-1 py-3">
+                    <div className="px-4">
+                      <p className="font-mono text-[10px] text-black/40">
+                        Install in
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold text-black">
+                        AgentOS
+                      </p>
+                    </div>
+                    <div className="px-4">
+                      <p className="font-mono text-[10px] text-black/40">
+                        Published by
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold text-black">
+                        {agent.suinsName}
+                      </p>
+                    </div>
+                    <div className="px-4">
+                      <p className="font-mono text-[10px] text-black/40">
+                        Executions
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold text-black">0</p>
+                    </div>
+                  </div>
+                  {/* Install command */}
+                  <div className="border-t border-pure-black/5 bg-black/[0.02] px-5 py-3">
+                    <div className="flex items-center justify-between">
+                      <code className="font-mono text-[11px] text-black">
+                        agentos skill install {skill.mvrPackage}
+                      </code>
+                      <CopyButton
+                        text={`agentos skill install ${skill.mvrPackage}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <Separator />
@@ -293,82 +361,6 @@ export default async function AgentPortfolioPage({ params }: Props) {
             <div className="h-[10px] w-[10px] rounded-sm bg-electric-purple" />
             <span>More</span>
           </div>
-        </section>
-
-        <Separator />
-
-        {/* ===== Stack (Skills as tech stack) ===== */}
-        <section className="border-x border-pure-black/10 px-6 py-6">
-          <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
-            Stack
-            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
-              {skills.length}
-            </span>
-          </h2>
-          {skills.length === 0 ? (
-            <p className="font-mono text-sm text-black/50">
-              No skills published yet.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {skills.map((skill) => (
-                <div
-                  key={skill.id}
-                  className="flex items-center gap-3 rounded-lg border border-pure-black/10 bg-white px-3 py-3 transition-colors hover:border-electric-purple/30 hover:bg-electric-purple/[0.02]"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pure-black/10 bg-black/[0.02] text-black/60">
-                    {skill.icon === "token" ? (
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 6v12M6 12h12" />
-                      </svg>
-                    ) : skill.icon === "wallet" ? (
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <rect x="2" y="6" width="20" height="14" rx="2" />
-                        <path d="M22 10H18a2 2 0 000 4h4" />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M16 3l5 5-5 5" />
-                        <path d="M21 8H9" />
-                        <path d="M8 21l-5-5 5-5" />
-                        <path d="M3 16h12" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-black">
-                      {skill.name}
-                    </p>
-                    <p className="truncate font-mono text-[10px] text-black/40">
-                      {skill.mvrPackage}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </section>
 
         <Separator />
@@ -606,17 +598,4 @@ function generateContributions(): number[] {
     else data.push(Math.floor(rand * 12) + 5);
   }
   return data;
-}
-
-function CodeSnippet({ code }: { code: string }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-pure-black/10">
-      <div className="flex items-center justify-end border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
-        <CopyButton text={code} />
-      </div>
-      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-black">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
 }
