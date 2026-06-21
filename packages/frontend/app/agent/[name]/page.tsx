@@ -94,27 +94,27 @@ export default async function AgentPortfolioPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Overview + Plugin info — single unified card */}
-          <div className="grid grid-cols-2 gap-4 border-t border-pure-black/10 px-6 py-4 sm:grid-cols-4">
-            <OverviewItem label="Version" value={agent.passportVersion} />
-            <OverviewItem label="Network" value={agent.network} />
-            <OverviewItem label="Skills" value={String(skills.length)} />
-            <OverviewItem
-              label="Delegations"
-              value={String(agent.delegations?.length ?? 0)}
-            />
-          </div>
-
-          {/* Agent description + metadata row */}
+          {/* Description + metadata */}
           <div className="flex flex-col gap-6 border-t border-pure-black/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-md">
-              <h2 className="text-lg font-bold text-black">
-                {agent.suinsName}
-              </h2>
-              <p className="mt-1 text-sm leading-relaxed text-black/60">
+              <p className="text-sm leading-relaxed text-black/60">
                 {agent.description ||
                   `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
               </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  {agent.passportVersion}
+                </span>
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  {agent.network}
+                </span>
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  {skills.length} skills
+                </span>
+                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                  {agent.delegations?.length ?? 0} delegations
+                </span>
+              </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2.5 sm:items-end">
               <MetaRow icon="terminal" label="Install in" value="AgentOS" />
@@ -132,27 +132,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
                     : agent.passportId
                 }
               />
-              <MetaRow
-                icon="download"
-                label="Skills"
-                value={String(skills.length)}
-              />
             </div>
-          </div>
-
-          {/* Quick Start code */}
-          <div className="border-t border-pure-black/10 bg-black/[0.02] px-6 py-4">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] font-bold uppercase text-black/40">
-                Quick Start
-              </span>
-              <CopyButton
-                text={`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}
-              />
-            </div>
-            <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed text-black/70">
-              <code>{`npm install @agentos/sdk\n\nimport { agentOS } from '@agentos/sdk/node';\nconst agent = await agentOS.resolve('${agent.suinsName}');\nawait agent.execute('${skills[0]?.name ?? "skill-name"}', { input: {} });`}</code>
-            </pre>
           </div>
 
           {/* Social Links */}
