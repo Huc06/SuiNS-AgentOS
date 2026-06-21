@@ -119,7 +119,7 @@ export function EditPanel({
         {tab === "skills" ? (
           <SkillsTab skills={skills} agentSlug={agentSlug} />
         ) : tab === "delegate" ? (
-          <div className="p-4">
+          <div className="p-4 [&_h1]:text-sm [&_h1]:font-bold [&_h1]:mb-3 [&_.neo-shadow]:shadow-none [&_form]:border [&_form]:border-pure-black/10 [&_form]:p-4 [&_form]:space-y-3 [&_h2]:text-[11px] [&_input]:text-xs [&_input]:py-1.5 [&_input]:px-2 [&_button]:text-[10px] [&_button]:px-2 [&_button]:py-1 [&_.space-y-8]:space-y-4 [&_fieldset]:space-y-1.5 [&_legend]:text-[10px] [&_label]:text-[10px]">
             <DelegateContent agentSlug={agentSlug} passportId={passportId} />
           </div>
         ) : (
