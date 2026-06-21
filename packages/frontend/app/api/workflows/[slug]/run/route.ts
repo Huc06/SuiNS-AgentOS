@@ -291,7 +291,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const build: RunBuildBundle = {
     buildCallSubAgentTx: async (options) => {
-      const built = await agentClient.buildExecuteSkillTx(options);
+      // A bare agent name (e.g. "alpha.sui") is NOT a skill; map it to that
+      // agent's real seeded skill so the delegated call resolves a real skill
+      // (skillResolved:true) instead of degrading to "did not resolve". Names
+      // that already carry a skill prefix ("web-search.alpha.sui") pass through.
+      const normalizeSkill = (name: string): string => {
+        const slug = (name ?? '').replace(/\.sui$/i, '');
+        if (!slug || slug.includes('.')) return name;
+        const seeded: Record<string, string> = {
+          alpha: 'web-search',
+          'beta-agent': 'sandbox-tool',
+          'walrus-bot': 'walrus-read',
+        };
+        return `${seeded[slug] ?? 'web-search'}.${slug}.sui`;
+      };
+      const built = await agentClient.buildExecuteSkillTx({
+        ...options,
+        suinsName: normalizeSkill(options.suinsName),
+      });
       return {
         transaction: built.transaction,
         manifestHash: built.manifestHash,
