@@ -201,7 +201,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // secret-agnostic: it receives this uploader as `ctx.harbor`, never the env.
   const harborApiKey = process.env.HARBOR_API_KEY?.trim();
   const harborSpaceId = process.env.HARBOR_SPACE_ID?.trim();
-  const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim() || 'Default';
+  const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim() || 'default';
   const harborBaseUrl = process.env.HARBOR_BASE_URL?.trim();
   const harbor =
     harborApiKey && harborSpaceId

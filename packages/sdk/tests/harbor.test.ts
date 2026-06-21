@@ -176,13 +176,13 @@ describe("HarborClient", () => {
 
     it("resolves a bucket NAME to its UUID via the space bucket list, then uploads", async () => {
       mockFetch
-        // 1) list buckets in the space → find "Default" → its UUID.
+        // 1) list buckets in the space → find "default" → its UUID.
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
             data: [
-              { id: "11111111-1111-4111-8111-111111111111", name: "Other" },
-              { id: BUCKET, name: "Default" },
+              { id: "11111111-1111-4111-8111-111111111111", name: "other" },
+              { id: BUCKET, name: "default" },
             ],
           }),
         })
@@ -194,7 +194,7 @@ describe("HarborClient", () => {
 
       const result = await client.uploadBlob(
         "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
-        "Default",
+        "default",
         new Uint8Array([1]),
         "f.json",
       );
@@ -215,7 +215,7 @@ describe("HarborClient", () => {
         // list → no matching name.
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ data: [{ id: BUCKET, name: "Other" }] }),
+          json: async () => ({ data: [{ id: BUCKET, name: "other" }] }),
         })
         // upload proceeds with the original name.
         .mockResolvedValueOnce({
@@ -225,14 +225,14 @@ describe("HarborClient", () => {
 
       const result = await client.uploadBlob(
         "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
-        "Default",
+        "nonexistent",
         new Uint8Array([1]),
         "f.json",
       );
 
       expect(result.blobId).toBe("WAL");
       const uploadUrl = (mockFetch.mock.calls[1] as [string])[0];
-      expect(uploadUrl).toContain("/buckets/Default/files");
+      expect(uploadUrl).toContain("/buckets/nonexistent/files");
     });
   });
 
