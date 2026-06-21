@@ -296,40 +296,64 @@ function InfoTab({
 
   return (
     <div className="space-y-4 p-4">
-      {/* Description (editable) */}
-      <div>
-        <label
-          htmlFor="edit-desc"
-          className="mb-1.5 block font-mono text-[10px] font-bold uppercase text-black/40"
-        >
-          Description
-        </label>
-        <textarea
-          id="edit-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          className="w-full resize-none rounded border border-pure-black/10 bg-white px-3 py-2 text-sm text-black outline-none focus:border-electric-purple"
-          placeholder="Describe your agent..."
-        />
+      {/* Editable fields */}
+      <div className="space-y-3">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+          Editable
+        </p>
+
+        <EditableField label="Description" multiline>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded border border-pure-black/10 bg-white px-2.5 py-1.5 text-xs text-black outline-none focus:border-electric-purple"
+            placeholder="Describe your agent..."
+          />
+        </EditableField>
+
+        <EditableField label="Display Name">
+          <input
+            type="text"
+            defaultValue={suinsName}
+            disabled
+            className="w-full rounded border border-pure-black/10 bg-black/[0.02] px-2.5 py-1.5 font-mono text-xs text-black/50 outline-none"
+            title="SuiNS name — change via SuiNS"
+          />
+          <p className="mt-0.5 font-mono text-[9px] text-black/30">
+            Bound to SuiNS — not editable here
+          </p>
+        </EditableField>
+
+        <EditableField label="Network">
+          <input
+            type="text"
+            defaultValue={network}
+            disabled
+            className="w-full rounded border border-pure-black/10 bg-black/[0.02] px-2.5 py-1.5 font-mono text-xs text-black/50 outline-none"
+          />
+          <p className="mt-0.5 font-mono text-[9px] text-black/30">
+            Set at passport creation
+          </p>
+        </EditableField>
       </div>
 
-      {/* Identity */}
+      {/* Read-only identity */}
       <div className="space-y-2">
         <p className="font-mono text-[10px] font-bold uppercase text-black/40">
           Identity
         </p>
-        <InfoRow label="Name" value={suinsName} />
-        <InfoRow label="Status" value={status} badge />
-        <InfoRow label="Network" value={network} />
-        <InfoRow label="Version" value={passportVersion} />
-        <InfoRow
-          label="Created"
-          value={new Date(createdAt).toLocaleDateString()}
-        />
+        <div className="space-y-1.5">
+          <InfoRow label="Status" value={status} badge />
+          <InfoRow label="Version" value={passportVersion} />
+          <InfoRow
+            label="Created"
+            value={new Date(createdAt).toLocaleDateString()}
+          />
+        </div>
       </div>
 
-      {/* On-chain */}
+      {/* On-chain IDs */}
       <div className="space-y-2">
         <p className="font-mono text-[10px] font-bold uppercase text-black/40">
           On-chain
@@ -362,15 +386,15 @@ function InfoTab({
           Stats
         </p>
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-2 py-2 text-center">
             <p className="text-lg font-bold text-black">{skillCount}</p>
             <p className="font-mono text-[9px] text-black/40">Skills</p>
           </div>
-          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-2 py-2 text-center">
             <p className="text-lg font-bold text-black">{delegationCount}</p>
             <p className="font-mono text-[9px] text-black/40">Delegates</p>
           </div>
-          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-2 py-2 text-center">
             <p className="text-lg font-bold text-black">0</p>
             <p className="font-mono text-[9px] text-black/40">Executions</p>
           </div>
@@ -404,6 +428,25 @@ function InfoTab({
       >
         {saving ? "Saving..." : "Save Changes"}
       </button>
+    </div>
+  );
+}
+
+function EditableField({
+  label,
+  multiline,
+  children,
+}: {
+  label: string;
+  multiline?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block font-mono text-[10px] font-bold uppercase text-black/40">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
