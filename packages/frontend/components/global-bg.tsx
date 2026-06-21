@@ -9,7 +9,7 @@ const LiquidAscii = dynamic(
 
 export function GlobalBg() {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[9999] h-screen w-screen">
+    <div className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen">
       <LiquidAscii
         width="100%"
         height="100%"
@@ -17,7 +17,7 @@ export function GlobalBg() {
         cellSize={14}
         gravity={-15}
         fillHeight={0.9}
-        color="#000000"
+        color="#003eff"
         backgroundColor="transparent"
         characters="·:-~=+*#%@"
         opacity={0.12}
