@@ -204,13 +204,30 @@ export class HarborClient {
     fileId: string,
   ): Promise<string | undefined> {
     const url = `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}`;
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${this.apiKey}` },
-    });
-    if (!res.ok) return undefined;
-    const summary = ((await res.json()) as HarborFileEnvelope).data;
-    return summary?.blob_id ?? undefined;
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(
+          `[Harbor] getFileBlobId failed: ${res.status} ${body}`,
+        );
+        return undefined;
+      }
+      const summary = ((await res.json()) as HarborFileEnvelope).data;
+      const blobId = summary?.blob_id;
+      if (!blobId) {
+        console.warn(
+          `[Harbor] getFileBlobId returned no blob_id: fileId=${fileId}, response=${JSON.stringify(summary)}`,
+        );
+      }
+      return blobId ?? undefined;
+    } catch (err) {
+      console.error(`[Harbor] getFileBlobId error:`, err);
+      return undefined;
+    }
   }
 
   /**
