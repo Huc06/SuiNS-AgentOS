@@ -1,9 +1,5 @@
-import { Hero } from "../components/landing/hero";
+import { AgentOSLanding } from "../components/landing/agentos-landing";
 
 export default function Home() {
-  return (
-    <main>
-      <Hero />
-    </main>
-  );
+  return <AgentOSLanding />;
 }
