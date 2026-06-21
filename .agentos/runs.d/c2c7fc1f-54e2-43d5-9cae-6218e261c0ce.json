@@ -1,0 +1,35 @@
+{
+  "runId": "c2c7fc1f-54e2-43d5-9cae-6218e261c0ce",
+  "agentSlug": "beta-agent",
+  "status": "error",
+  "steps": [
+    {
+      "nodeId": "beta-trigger",
+      "type": "trigger",
+      "status": "done",
+      "output": {
+        "started": true,
+        "params": {}
+      }
+    },
+    {
+      "nodeId": "beta-exec",
+      "type": "sui",
+      "status": "error",
+      "error": "Request to Enoki API failed (status: 400)",
+      "errorCode": "SPONSOR_REJECTED",
+      "errorHint": "Enoki rejected the sponsored transaction.",
+      "cause": "The runtime sender is not on the Enoki allowlist, or the network does not match the Enoki app config.",
+      "remediation": "Add the runtime address to the Enoki app's allowed senders and confirm NEXT_PUBLIC_SUI_NETWORK matches the Enoki network."
+    },
+    {
+      "nodeId": "beta-memory",
+      "type": "memory",
+      "status": "pending",
+      "errorCode": "BLOCKED_UPSTREAM",
+      "cause": "Blocked by an upstream failure — this node never ran.",
+      "remediation": "Fix the upstream error, then re-run the workflow."
+    }
+  ],
+  "createdAt": "2026-06-21T09:02:25.933Z"
+}

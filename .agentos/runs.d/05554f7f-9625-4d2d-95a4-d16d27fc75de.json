@@ -1,0 +1,65 @@
+{
+  "runId": "05554f7f-9625-4d2d-95a4-d16d27fc75de",
+  "agentSlug": "beta-agent",
+  "status": "error",
+  "steps": [
+    {
+      "nodeId": "demo-trigger",
+      "type": "trigger",
+      "status": "done",
+      "output": {
+        "started": true,
+        "params": {}
+      }
+    },
+    {
+      "nodeId": "demo-import",
+      "type": "import-agent",
+      "status": "done",
+      "output": {
+        "agent": "beta-agent.sui",
+        "passportId": "0x7eb037b984bd9617e929c7849f3dea48975544c454119c5f346cdb867aaf60eb",
+        "runtimeWallet": "0x626574612d6167656e7472756e74696d6577616c6c6574000000000000000000",
+        "skillCount": 1,
+        "catalog": [
+          {
+            "skillId": "sandbox-tool",
+            "name": "sandbox-tool",
+            "version": "v0.9.0",
+            "manifestHash": "0xb18a771a92eeeda16bcbf4c29de0cb7b1e09ab9eb147e1bf8228bee73917738c",
+            "verified": false,
+            "requiredCapabilities": [],
+            "error": "Manifest integrity check failed: expected 0xb18a771a92eeeda16bcbf4c29de0cb7b1e09ab9eb147e1bf8228bee73917738c, got b18a771a92eeeda16bcbf4c29de0cb7b1e09ab9eb147e1bf8228bee73917738c"
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "demo-delegate",
+      "type": "delegate",
+      "status": "error",
+      "error": "Request to Enoki API failed (status: 400)",
+      "errorCode": "SPONSOR_REJECTED",
+      "errorHint": "Enoki rejected the sponsored transaction.",
+      "cause": "The runtime sender is not on the Enoki allowlist, or the network does not match the Enoki app config.",
+      "remediation": "Add the runtime address to the Enoki app's allowed senders and confirm NEXT_PUBLIC_SUI_NETWORK matches the Enoki network."
+    },
+    {
+      "nodeId": "demo-call",
+      "type": "call-sub-agent",
+      "status": "pending",
+      "errorCode": "BLOCKED_UPSTREAM",
+      "cause": "Blocked by an upstream failure — this node never ran.",
+      "remediation": "Fix the upstream error, then re-run the workflow."
+    },
+    {
+      "nodeId": "demo-attest",
+      "type": "attest",
+      "status": "pending",
+      "errorCode": "BLOCKED_UPSTREAM",
+      "cause": "Blocked by an upstream failure — this node never ran.",
+      "remediation": "Fix the upstream error, then re-run the workflow."
+    }
+  ],
+  "createdAt": "2026-06-21T09:03:04.335Z"
+}

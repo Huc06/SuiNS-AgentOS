@@ -108,12 +108,9 @@ export class HarborClient {
     filename: string,
     pollOptions: { attempts?: number; intervalMs?: number } = {},
   ): Promise<HarborFileUploadResult> {
-    // Harbor keys the upload path by bucket UUID. HARBOR_BUCKET_ID is often set
-    // to the bucket NAME (e.g. "Default"); a non-UUID name makes Harbor 500 with
-    // "Error creating UUID". Resolve a name to its UUID via the space's bucket
-    // list before uploading.
-    const resolvedBucketId = await this.resolveBucketId(spaceId, bucketId);
-    const url = `${this.baseUrl}/api/v1/buckets/${resolvedBucketId}/files`;
+    // Harbor keys the upload path by bucket UUID. HARBOR_BUCKET_ID must be a
+    // UUID; the list-buckets endpoint is not stable, so we require UUID directly.
+    const url = `${this.baseUrl}/api/v1/buckets/${bucketId}/files`;
 
     const form = new FormData();
     // Copy into a standalone ArrayBuffer-backed view so Blob never sees a
@@ -153,48 +150,11 @@ export class HarborClient {
 
     // Async path: poll the upload job to completion, then read back blob_id.
     const { state, blobId } = await this.waitForUpload(
-      resolvedBucketId,
+      bucketId,
       fileId,
       pollOptions,
     );
     return { fileId, blobId: blobId ?? "", state };
-  }
-
-  /**
-   * Resolve a bucket identifier to a Harbor bucket UUID. The upload/status paths
-   * require a UUID; if HARBOR_BUCKET_ID is a friendly NAME (e.g. "Default"), look
-   * it up in the space's bucket list. UUIDs pass through unchanged. Throws a
-   * clear, actionable error when it can't resolve (the workflow Harbor node then
-   * falls back to a plain Walrus put, so the run still completes).
-   */
-  private async resolveBucketId(
-    spaceId: string,
-    bucketId: string,
-  ): Promise<string> {
-    const UUID_RE =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (UUID_RE.test(bucketId)) return bucketId;
-    if (!spaceId) return bucketId; // can't resolve without a space — pass through.
-    // Best-effort: look the name up in the space's bucket list. On ANY failure,
-    // pass the original value through (the upload then either succeeds or the
-    // caller's Walrus fallback kicks in) — never make the upload path worse.
-    try {
-      const res = await fetch(
-        `${this.baseUrl}/api/v1/spaces/${spaceId}/buckets`,
-        { headers: { Authorization: `Bearer ${this.apiKey}` } },
-      );
-      if (!res.ok) return bucketId;
-      const json = (await res.json()) as {
-        data?: Array<{ id?: string; name?: string }>;
-      };
-      const list = Array.isArray(json?.data) ? json.data : [];
-      const match = list.find(
-        (b) => b?.name?.toLowerCase() === bucketId.toLowerCase(),
-      );
-      return match?.id ?? bucketId;
-    } catch {
-      return bucketId;
-    }
   }
 
   /**
