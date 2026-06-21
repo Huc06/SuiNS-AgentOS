@@ -1,4 +1,5 @@
 import React from "react";
+import { ScrollReveal } from "./scroll-reveal";
 
 /**
  * A standout text section: a large paragraph where key AgentOS concepts are
@@ -88,7 +89,7 @@ export function InlinePillsText() {
           backgroundSize: "20px 20px",
         }}
       />
-      <div className="relative z-10 mx-auto max-w-4xl px-margin">
+      <ScrollReveal className="relative z-10 mx-auto max-w-4xl px-margin" blur={8}>
         <p className="mb-6 font-mono text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant/60">
           What AgentOS gives every agent
         </p>
@@ -136,7 +137,7 @@ export function InlinePillsText() {
             that settle on-chain — resolvable anywhere by a single *.sui name.
           </span>
         </p>
-      </div>
+      </ScrollReveal>
     </section>
   );
 }
