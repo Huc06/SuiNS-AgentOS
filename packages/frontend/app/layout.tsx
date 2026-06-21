@@ -55,7 +55,7 @@ export default function RootLayout({
         </a>
         <Providers>
           <GlobalBg />
-          <div className="relative flex min-h-screen">
+          <div className="relative z-10 flex min-h-screen">
             <AppSidebar />
             <div id="main-content" className="ml-16 flex-1 md:ml-56">
               {children}

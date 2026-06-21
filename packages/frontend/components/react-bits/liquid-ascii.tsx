@@ -810,7 +810,7 @@ const LiquidAscii: React.FC<LiquidAsciiProps> = ({
           const ci = Math.min(Math.floor(val * len), len - 1);
           line += chars[ci];
         }
-        out += line + "";
+        out += line + "\n";
       }
 
       pre.textContent = out;
