@@ -356,7 +356,7 @@ export default function DelegationsPage() {
               Delegations
             </h1>
             <p className="mt-1 font-mono text-xs text-black/60">
-              Parent agents granting scoped sub-agent capabilities — click an
+              Parent agents granting scoped, revocable sub-agent capabilities — click an
               agent name to manage it. Source:{" "}
               <code className="text-black/80">/api/delegations</code>
             </p>
