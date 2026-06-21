@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HarborClient } from "../src/harbor.js";
 
+// A bucket UUID — uploadBlob resolves non-UUID names to a UUID first (extra
+// list-buckets fetch), so the upload-flow tests pass a UUID to exercise the
+// upload path directly. Name resolution has its own dedicated test below.
+const BUCKET = "00000000-0000-4000-8000-000000000001";
+
 // Mock global fetch
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -39,10 +44,10 @@ describe("HarborClient", () => {
         json: async () => ({ data: { id: "file1", blob_id: "blob123" } }),
       });
 
-      await c.uploadBlob("space1", "bucket1", new Uint8Array([1]), "f.json");
+      await c.uploadBlob("space1", BUCKET, new Uint8Array([1]), "f.json");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://example.com/api/v1/buckets/bucket1/files",
+        `https://example.com/api/v1/buckets/${BUCKET}/files`,
         expect.anything(),
       );
     });
@@ -61,7 +66,7 @@ describe("HarborClient", () => {
       const content = new TextEncoder().encode('{"name":"test"}');
       const result = await client.uploadBlob(
         "space-1",
-        "bucket-2",
+        BUCKET,
         content,
         "manifest.json",
       );
@@ -70,7 +75,7 @@ describe("HarborClient", () => {
       // The real Harbor path is keyed by bucket id only (no space segment).
       const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(url).toBe(
-        "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/bucket-2/files",
+        `https://api.testnet.harbor.walrus.xyz/api/v1/buckets/${BUCKET}/files`,
       );
       expect(init.method).toBe("POST");
       // Bearer auth, and NO Content-Type (fetch derives the multipart boundary).
@@ -107,7 +112,7 @@ describe("HarborClient", () => {
 
       const result = await client.uploadBlob(
         "space",
-        "bucket-7",
+        BUCKET,
         new Uint8Array([1, 2, 3]),
         "f.seal",
         { attempts: 5, intervalMs: 0 },
@@ -122,7 +127,7 @@ describe("HarborClient", () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
       const statusUrl = (mockFetch.mock.calls[1] as [string])[0];
       expect(statusUrl).toBe(
-        "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/bucket-7/files/file-async/status",
+        `https://api.testnet.harbor.walrus.xyz/api/v1/buckets/${BUCKET}/files/file-async/status`,
       );
     });
 
@@ -134,7 +139,7 @@ describe("HarborClient", () => {
       });
 
       await expect(
-        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json"),
+        client.uploadBlob("s", BUCKET, new Uint8Array([1]), "f.json"),
       ).rejects.toThrow("Harbor upload failed: 404 Not Found");
     });
 
@@ -146,7 +151,7 @@ describe("HarborClient", () => {
       });
 
       await expect(
-        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json"),
+        client.uploadBlob("s", BUCKET, new Uint8Array([1]), "f.json"),
       ).rejects.toThrow("Harbor upload failed: 403 Forbidden: invalid API key");
     });
 
@@ -162,11 +167,72 @@ describe("HarborClient", () => {
         });
 
       await expect(
-        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json", {
+        client.uploadBlob("s", BUCKET, new Uint8Array([1]), "f.json", {
           attempts: 3,
           intervalMs: 0,
         }),
       ).rejects.toThrow("Harbor upload failed: job f1 reported failed");
+    });
+
+    it("resolves a bucket NAME to its UUID via the space bucket list, then uploads", async () => {
+      mockFetch
+        // 1) list buckets in the space → find "Default" → its UUID.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: "11111111-1111-4111-8111-111111111111", name: "Other" },
+              { id: BUCKET, name: "Default" },
+            ],
+          }),
+        })
+        // 2) upload POST → blob_id present.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: { id: "f9", blob_id: "WAL_OK" } }),
+        });
+
+      const result = await client.uploadBlob(
+        "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
+        "Default",
+        new Uint8Array([1]),
+        "f.json",
+      );
+
+      expect(result.blobId).toBe("WAL_OK");
+      const listUrl = (mockFetch.mock.calls[0] as [string])[0];
+      expect(listUrl).toBe(
+        "https://api.testnet.harbor.walrus.xyz/api/v1/spaces/00b9f6ae-952d-4971-9ddb-c02acf53e0df/buckets",
+      );
+      const uploadUrl = (mockFetch.mock.calls[1] as [string])[0];
+      expect(uploadUrl).toBe(
+        `https://api.testnet.harbor.walrus.xyz/api/v1/buckets/${BUCKET}/files`,
+      );
+    });
+
+    it("passes the bucket name through when it can't be resolved (Walrus fallback then handles any real 500)", async () => {
+      mockFetch
+        // list → no matching name.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [{ id: BUCKET, name: "Other" }] }),
+        })
+        // upload proceeds with the original name.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: { id: "f", blob_id: "WAL" } }),
+        });
+
+      const result = await client.uploadBlob(
+        "00b9f6ae-952d-4971-9ddb-c02acf53e0df",
+        "Default",
+        new Uint8Array([1]),
+        "f.json",
+      );
+
+      expect(result.blobId).toBe("WAL");
+      const uploadUrl = (mockFetch.mock.calls[1] as [string])[0];
+      expect(uploadUrl).toContain("/buckets/Default/files");
     });
   });
 

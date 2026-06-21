@@ -102,7 +102,7 @@ describe("AgentOSClient skill lifecycle", () => {
       const result = await client.publishSkill({
         signer: signer as never,
         manifest,
-        bucketId: "bucket-1",
+        bucketId: "00000000-0000-4000-8000-000000000001",
         agentName: "alpha.sui",
       });
 
@@ -127,7 +127,7 @@ describe("AgentOSClient skill lifecycle", () => {
       const result = await client.publishSkill({
         signer: signer as never,
         manifest,
-        bucketId: "bucket-1",
+        bucketId: "00000000-0000-4000-8000-000000000001",
         agentName: "alpha.sui",
         walrusManifestBlob: "pre-uploaded-blob",
       });
@@ -159,7 +159,7 @@ describe("AgentOSClient skill lifecycle", () => {
       const result = await client.publishSkill({
         signer: signer as never,
         manifest,
-        bucketId: "bucket-1",
+        bucketId: "00000000-0000-4000-8000-000000000001",
         agentName: "alpha.sui",
         private: { sealPolicyId: "0xpolicy123" },
       });
@@ -185,7 +185,7 @@ describe("AgentOSClient skill lifecycle", () => {
         client.publishSkill({
           signer: signer as never,
           manifest: invalidManifest,
-          bucketId: "bucket-1",
+          bucketId: "00000000-0000-4000-8000-000000000001",
           agentName: "alpha.sui",
         }),
       ).rejects.toThrow(
