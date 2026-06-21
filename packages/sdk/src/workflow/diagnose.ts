@@ -81,6 +81,15 @@ interface ErrorRule {
    * SPONSOR_REJECTED sub-cases keep their own copy.
    */
   ownerMismatchRemediation?: boolean;
+  /**
+   * When true, {@link diagnoseStep} replaces the static `cause`/`remediation`
+   * with {@link moveAbortDiagnosis}, which DECODES the Move module, function
+   * name, and abort code out of the raw `MoveAbort(...)` location and special-
+   * cases the known delegation aborts (e.g. E_NOT_PARENT_OWNER). Used by the
+   * contract-abort rule so an Enoki `dry_run_failed` carrying a `MoveAbort` is
+   * classified as a CONTRACT abort, never an Enoki allowlist/config issue.
+   */
+  moveAbortDecode?: boolean;
 }
 
 /**
@@ -134,13 +143,28 @@ const ERROR_RULES: ErrorRule[] = [
       "Run on testnet for the public publisher, or configure an authenticated publisher / upload relay.",
   },
   {
+    // More specific than the generic MEMWAL_UNSET below: a 404 on the LEGACY
+    // bare `/remember` (or `/recall`) path. The official Walrus Memory relayer
+    // only serves the SIGNED `/api/*` routes — the legacy bare path does not
+    // exist (returns 404). This happens when the run used MEMWAL_API_KEY (the
+    // legacy bearer scheme) instead of the signed scheme. Keep BEFORE the broad
+    // MEMWAL_UNSET rule so the 404 gets the switch-to-signed-scheme fix.
+    code: "MEMWAL_UNSET",
+    test: /memwal \/(?:remember|recall) failed:\s*404/i,
+    hint: "Legacy /remember path is 404 — use the signed /api/* scheme.",
+    cause:
+      "The relayer 404'd the legacy bare /remember (or /recall) path. The official Walrus Memory relayer only serves the SIGNED /api/remember + /api/recall routes — the legacy bearer path does not exist. The run used MEMWAL_API_KEY (legacy bearer) instead of the signed scheme.",
+    remediation:
+      "Switch to the SIGNED scheme: set MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY (NOT the legacy MEMWAL_API_KEY) so the client signs requests to /api/remember + /api/recall. Leave MEMWAL_RELAYER_URL unset to use the official testnet relayer (https://relayer-staging.memory.walrus.xyz), or set it to https://relayer.memory.walrus.xyz for mainnet.",
+  },
+  {
     code: "MEMWAL_UNSET",
     test: /memwal .*failed/i,
     hint: "Memory relayer rejected the write.",
     cause:
       "The Memwal relayer returned a non-2xx (bad credentials, relayer down, or namespace rejected).",
     remediation:
-      "Verify the memwal credentials (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY for the signed scheme, or a legacy MEMWAL_API_KEY) and MEMWAL_RELAYER_URL if overriding the default staging relayer, and that the relayer is up.",
+      "Verify the memwal credentials (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY for the signed scheme — NOT the legacy MEMWAL_API_KEY) and MEMWAL_RELAYER_URL if overriding the default testnet relayer (https://relayer-staging.memory.walrus.xyz), and that the relayer is up.",
   },
   {
     code: "RESOLVE_FAILED",
@@ -185,6 +209,23 @@ const ERROR_RULES: ErrorRule[] = [
     remediation:
       "The agent's AgentPassport is owned by a different address than the runtime signer. The passport must be owned by the SUI_PRIVATE_KEY (runtime) address. Re-seed/transfer the passport to the runtime wallet so the sponsored sender owns it.",
     ownerMismatchRemediation: true,
+  },
+  {
+    // A CONTRACT abort surfaced through Enoki's dry-run. Enoki reports an
+    // on-chain Move assertion failure as `dry_run_failed: ... MoveAbort(...)`
+    // — this is the CONTRACT rejecting the call (a failed `assert!`), NOT an
+    // Enoki allowlist/config problem. It MUST sit before the generic
+    // `enoki|sponsor` SPONSOR_REJECTED rule below so a MoveAbort is never
+    // misclassified as an allowlist issue. The cause/remediation are decoded
+    // per-abort (module::function + code) by moveAbortDiagnosis.
+    code: "MOVE_ABORT",
+    test: /moveabort|dry_run_failed.*abort|move_?abort_?code|abort code\s*\d+/i,
+    hint: "On-chain Move call aborted (contract assertion failed).",
+    cause:
+      "A Move `assert!` in the target package failed during execution — the contract rejected the call.",
+    remediation:
+      "Decode the abort: the module::function and abort code in the error identify the failing assertion. Fix the on-chain precondition (e.g. re-seed so the passport's runtime_wallet = the sponsored signer) and ensure AGENTOS_PACKAGE_ID points at the republished package.",
+    moveAbortDecode: true,
   },
   {
     code: "SPONSOR_REJECTED",
@@ -317,6 +358,105 @@ function ownerMismatchRemediation(rawError: string | undefined): string {
   );
 }
 
+/** A decoded Move abort location: module, function name (when present), code. */
+interface MoveAbortInfo {
+  module?: string;
+  functionName?: string;
+  abortCode?: number;
+}
+
+/**
+ * Decode a Sui `MoveAbort(...)` location out of a raw (Enoki dry-run) error.
+ * Sui renders the abort as e.g.
+ *   `MoveAbort(MoveLocation { module: ModuleId { address: 0x.., name:
+ *    Identifier("delegation") }, function: 0, instruction: 15, function_name:
+ *    Some("grant") }, 1)`
+ * and Enoki echoes that string under `dry_run_failed`. We pull the module name,
+ * the `function_name` (when the node names it), and the trailing abort code.
+ * Every field is optional — we only surface what the error already exposed
+ * (stays signer/env-agnostic). The abort code is the integer immediately after
+ * the closing `}` of the MoveLocation, or any `abort code N` phrasing some
+ * tooling uses (e.g. the Walrus Memory runbook's "ENotEnough, abort code 2").
+ */
+function decodeMoveAbort(rawError: string | undefined): MoveAbortInfo {
+  const raw = rawError ?? "";
+  const module =
+    raw.match(/name:\s*Identifier\("([^"]+)"\)/)?.[1] ??
+    // Fallback for a `module::function` rendering.
+    raw.match(/\b([a-z_][a-z0-9_]*)::[a-z_][a-z0-9_]*/i)?.[1];
+  const functionName =
+    raw.match(/function_name:\s*Some\("([^"]+)"\)/)?.[1] ??
+    raw.match(/\b[a-z_][a-z0-9_]*::([a-z_][a-z0-9_]*)/i)?.[1];
+  // Abort code: prefer the `}, N)` tail of a MoveLocation; else `abort code N`.
+  const codeStr =
+    raw.match(/MoveAbort\([\s\S]*?\}\s*,\s*(\d+)\s*\)/)?.[1] ??
+    raw.match(/abort\s+code\s*[:=]?\s*(\d+)/i)?.[1];
+  const abortCode = codeStr !== undefined ? Number(codeStr) : undefined;
+  return { module, functionName, abortCode };
+}
+
+/**
+ * Build a `{ cause, remediation }` for a CONTRACT abort surfaced through Enoki's
+ * dry-run. Decodes the failing `module::function` + abort code and special-cases
+ * the known delegation aborts:
+ *   - `delegation::grant` / `delegation::record_subagent_execution` abort code 1
+ *     is `E_NOT_PARENT_OWNER`: the AgentPassport's owner/runtime_wallet does not
+ *     match the sponsored signer. Tell the operator to re-seed so the passport's
+ *     runtime_wallet = the SUI_PRIVATE_KEY (runtime) address, and confirm the
+ *     package id points at the REPUBLISHED package (the runtime_wallet check
+ *     ships in the new delegation.move).
+ * Falls back to a generic decoded message otherwise. Pure: only echoes what the
+ * raw error exposed; never reads env/secrets.
+ */
+function moveAbortDiagnosis(rawError: string | undefined): {
+  cause: string;
+  remediation: string;
+} {
+  const { module, functionName, abortCode } = decodeMoveAbort(rawError);
+  const where =
+    module && functionName
+      ? `${module}::${functionName}`
+      : (module ?? functionName);
+  const codeLabel = abortCode !== undefined ? ` (abort code ${abortCode})` : "";
+  const target = where ? `${where}${codeLabel}` : "the target Move function";
+
+  const isDelegationOwnerAbort =
+    module === "delegation" &&
+    (functionName === "grant" ||
+      functionName === "record_subagent_execution") &&
+    abortCode === 1;
+
+  if (isDelegationOwnerAbort) {
+    return {
+      cause:
+        `${target} aborted with E_NOT_PARENT_OWNER: the AgentPassport's ` +
+        "owner/runtime_wallet does not match the sponsored signer. Sponsored " +
+        "execution signs as the agent's runtime wallet (the server key), not " +
+        "the minter, so the on-chain owner check rejected it.",
+      remediation:
+        "Re-seed the agent's AgentPassport so its runtime_wallet = the " +
+        "SUI_PRIVATE_KEY (sponsored signer) address, then the delegation " +
+        "owner||runtime_wallet check passes. Also confirm AGENTOS_PACKAGE_ID " +
+        "points at the REPUBLISHED package — the runtime_wallet-aware " +
+        "delegation::grant / record_subagent_execution ship in the new " +
+        "delegation.move (the old package only accepted the owner).",
+    };
+  }
+
+  return {
+    cause:
+      `${target} failed a Move \`assert!\` — the contract rejected the call.` +
+      (where
+        ? ""
+        : " The error did not name the module/function; inspect the raw MoveAbort location."),
+    remediation:
+      `The on-chain precondition for ${target} was not met. Fix the failing ` +
+      "assertion's input (the cap/passport/object state it checks) and make " +
+      "sure AGENTOS_PACKAGE_ID points at the republished package that contains " +
+      "the called module.",
+  };
+}
+
 /**
  * Read a `{ note?: string }` out of a step's output (skipped steps carry a
  * human note there).
@@ -340,6 +480,18 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
     const { code } = classifyError(step.error);
     const rule = ERROR_RULES.find((r) => r.test.test(step.error ?? ""));
     if (rule) {
+      // Rules flagged `moveAbortDecode` (the contract-abort rule) DECODE the
+      // module::function + abort code out of the raw MoveAbort and override
+      // BOTH cause and remediation (special-casing the delegation aborts).
+      if (rule.moveAbortDecode) {
+        const decoded = moveAbortDiagnosis(step.error);
+        return {
+          code: rule.code,
+          cause: decoded.cause,
+          remediation: decoded.remediation,
+          severity: "error",
+        };
+      }
       return {
         code: rule.code,
         cause: rule.cause,

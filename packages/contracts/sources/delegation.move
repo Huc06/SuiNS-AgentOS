@@ -23,7 +23,13 @@ const E_PASSPORT_MISMATCH: u64 = 8;
 public struct DelegationCap has key, store {
     id: UID,
     parent_passport: ID,
+    /// The parent passport's `owner` at grant time.
     parent_owner: address,
+    /// The parent passport's `runtime_wallet` at grant time. Stored alongside
+    /// `parent_owner` so that downstream authorization checks (revoke, …) can
+    /// accept the sponsored RUNTIME wallet as well as the owner — consistent
+    /// with `agent_passport::record_execution` (sender == owner || runtime_wallet).
+    parent_runtime: address,
     child_agent: address,
     allowed_skills: vector<vector<u8>>,
     allowed_capabilities: vector<vector<u8>>,
@@ -59,7 +65,13 @@ public struct DelegationConsumed has copy, drop {
 // ===== Public Functions =====
 
 /// Grant a delegation capability from a parent passport to a child agent address.
-/// The caller must be the passport owner and the passport must be active.
+/// The caller must be the passport's owner OR its `runtime_wallet`, and the
+/// passport must be active.
+///
+/// Accepting the `runtime_wallet` (not just the owner) is what makes the
+/// Import->Delegate->Call->Attest flow work under Enoki-sponsored execution,
+/// where the server signs as the agent's runtime wallet rather than the minter
+/// — mirroring `agent_passport::record_execution`'s authorization rule.
 public fun grant(
     parent: &agentos::agent_passport::AgentPassport,
     child: address,
@@ -70,13 +82,16 @@ public fun grant(
     ctx: &mut TxContext,
 ): DelegationCap {
     let parent_owner = agentos::agent_passport::owner(parent);
-    assert!(parent_owner == ctx.sender(), E_NOT_PARENT_OWNER);
+    let parent_runtime = agentos::agent_passport::runtime_wallet(parent);
+    let sender = ctx.sender();
+    assert!(sender == parent_owner || sender == parent_runtime, E_NOT_PARENT_OWNER);
     assert!(agentos::agent_passport::is_active(parent), E_PASSPORT_NOT_ACTIVE);
 
     let cap = DelegationCap {
         id: object::new(ctx),
         parent_passport: object::id(parent),
         parent_owner,
+        parent_runtime,
         child_agent: child,
         allowed_skills,
         allowed_capabilities,
@@ -165,9 +180,16 @@ public fun record_subagent_execution(
     agentos::agent_passport::record_execution_internal(passport);
 }
 
-/// Revoke a delegation cap. Only the parent owner can revoke.
+/// Revoke a delegation cap. The parent owner OR the parent's `runtime_wallet`
+/// (both recorded on the cap at grant time) can revoke — this is the agent's
+/// own delegation lifecycle, which a sponsored runtime manages during execution,
+/// so it follows the same owner-||-runtime_wallet rule as `grant`.
 public fun revoke(cap: &mut DelegationCap, ctx: &TxContext) {
-    assert!(cap.parent_owner == ctx.sender(), E_NOT_PARENT_OWNER);
+    let sender = ctx.sender();
+    assert!(
+        sender == cap.parent_owner || sender == cap.parent_runtime,
+        E_NOT_PARENT_OWNER,
+    );
     cap.revoked = true;
 
     event::emit(DelegationRevoked {
@@ -185,6 +207,10 @@ public fun parent_passport(cap: &DelegationCap): ID {
 
 public fun parent_owner(cap: &DelegationCap): address {
     cap.parent_owner
+}
+
+public fun parent_runtime(cap: &DelegationCap): address {
+    cap.parent_runtime
 }
 
 public fun child_agent(cap: &DelegationCap): address {

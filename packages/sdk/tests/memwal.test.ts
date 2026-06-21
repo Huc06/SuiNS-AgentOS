@@ -149,8 +149,13 @@ describe("MemwalClient — signed delegate-key scheme", () => {
     const h = init.headers as Record<string, string>;
     expect(h["x-public-key"]).toMatch(/^[0-9a-f]{64}$/);
     expect(h["x-signature"]).toMatch(/^[0-9a-f]{128}$/);
-    expect(h["x-delegate-key"]).toBe(DELEGATE_KEY_HEX);
     expect(h["x-account-id"]).toBe(ACCOUNT_ID);
+    // A UUID v4 nonce is sent for replay protection.
+    expect(h["x-nonce"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    // The deprecated decrypt credential is NOT transmitted.
+    expect(h["x-delegate-key"]).toBeUndefined();
 
     // Timestamp is unix seconds within the request window.
     const ts = Number(h["x-timestamp"]);
@@ -158,9 +163,10 @@ describe("MemwalClient — signed delegate-key scheme", () => {
     expect(ts).toBeLessThanOrEqual(after);
 
     // The signature must verify against the exact body sent, reproducing the
-    // relayer's check: sign("{ts}.POST./api/remember.{sha256hex(body)}").
+    // relayer's canonical check:
+    //   sign("{ts}.POST./api/remember.{sha256hex(body)}.{nonce}.{accountId}").
     const bodySha = createHash("sha256").update(init.body).digest("hex");
-    const message = `${h["x-timestamp"]}.POST./api/remember.${bodySha}`;
+    const message = `${h["x-timestamp"]}.POST./api/remember.${bodySha}.${h["x-nonce"]}.${ACCOUNT_ID}`;
     const publicKey = createPublicKey({
       key: Buffer.concat([
         Buffer.from("302a300506032b6570032100", "hex"),
@@ -206,17 +212,20 @@ describe("MemwalClient — signed delegate-key scheme", () => {
     expect(pk1).toBe(pk2);
   });
 
-  it("accepts a 0x-prefixed delegate key", async () => {
+  it("accepts a 0x-prefixed delegate key (derives the same public key)", async () => {
     const c = new MemwalClient({
       baseUrl: "https://relayer.memwal.test",
       accountId: ACCOUNT_ID,
       delegateKey: `0x${DELEGATE_KEY_HEX}`,
     });
+    mockFetch.mockReset();
     mockFetch.mockResolvedValue(okJson({}));
     await c.remember("ns", "t");
-    expect(mockFetch.mock.calls[0][1].headers["x-delegate-key"]).toBe(
-      DELEGATE_KEY_HEX,
-    );
+    const h = mockFetch.mock.calls[0][1].headers as Record<string, string>;
+    // The 0x-prefix is stripped, so the same public key is derived as the
+    // bare-hex seed; the deprecated delegate-key header is not sent.
+    expect(h["x-public-key"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(h["x-delegate-key"]).toBeUndefined();
   });
 
   it("surfaces a descriptive error on a non-2xx response", async () => {
@@ -286,8 +295,10 @@ describe("memwalFromEnv", () => {
     restore("MEMWAL_DELEGATE_KEY", prevDelegate);
   });
 
-  it("exposes the public staging relayer as the default URL", () => {
-    expect(DEFAULT_MEMWAL_RELAYER_URL).toBe("https://relayer.staging.memwal.ai");
+  it("exposes the Walrus Foundation hosted staging/testnet relayer as the default URL", () => {
+    expect(DEFAULT_MEMWAL_RELAYER_URL).toBe(
+      "https://relayer-staging.memory.walrus.xyz",
+    );
   });
 
   it("builds the SIGNED client from MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY", async () => {
