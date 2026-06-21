@@ -33,6 +33,15 @@ export function AppSidebar() {
         />
       </nav>
 
+      <div className="mt-4 px-4 py-2">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+          Resources
+        </p>
+      </div>
+      <nav className="space-y-1 px-2">
+        <SidebarLink href="/" label="Home" active={pathname === "/"} />
+      </nav>
+
       <div className="flex-1" />
 
       <div className="px-2">
