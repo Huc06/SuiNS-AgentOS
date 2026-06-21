@@ -177,11 +177,19 @@ async function main() {
       }
     }
 
-    // Generate a runtime wallet address
-    const runtimeWallet = `0x${Buffer.from(agent.name + "runtimewallet")
-      .toString("hex")
-      .padEnd(64, "0")
-      .slice(0, 64)}`;
+    // Runtime wallet = the address that will OWN the AgentPassport on-chain.
+    // It MUST be the server's signing address (the SUI_PRIVATE_KEY used by the
+    // sponsored-execute runtime), otherwise on-chain nodes that take the passport
+    // as an owned input (delegate/record_execution) fail Enoki's dry-run with
+    // "Transaction was not signed by the correct sender". Set RUNTIME_WALLET_ADDRESS
+    // to that address. The ASCII-derived value below is a dev-only placeholder that
+    // produces an unspendable owner — do NOT use it for real on-chain runs.
+    const runtimeWallet =
+      process.env.RUNTIME_WALLET_ADDRESS?.trim() ||
+      `0x${Buffer.from(agent.name + "runtimewallet")
+        .toString("hex")
+        .padEnd(64, "0")
+        .slice(0, 64)}`;
 
     let passportId: string;
     let mintDigest: string | undefined;
