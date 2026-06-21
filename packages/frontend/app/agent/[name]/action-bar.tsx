@@ -22,11 +22,11 @@ export function ActionBar({
 
   return (
     <>
-      {/* Push content left when panel is open */}
+      {/* Center content between sidebar (left) and edit panel (right) */}
       <style>
         {editOpen
-          ? `main[data-portfolio] { margin-right: 320px; transition: margin-right 0.2s ease; }`
-          : `main[data-portfolio] { margin-right: 0; transition: margin-right 0.2s ease; }`}
+          ? `main[data-portfolio] { margin-right: 320px; max-width: none; transition: margin-right 0.2s ease; }`
+          : `main[data-portfolio] { margin-right: auto; max-width: 48rem; transition: margin-right 0.2s ease; }`}
       </style>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-pure-black/10 px-6 py-4">
