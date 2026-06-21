@@ -1,37 +1,184 @@
 /**
- * Memwal — a thin REST client for the agent-memory relayer (Walrus-backed
- * vector memory for agents).
+ * Memwal — a thin REST client for the Walrus Memory ("memwal") relayer
+ * (Walrus-backed, SEAL-encrypted vector memory for agents).
  *
- * The relayer exposes two endpoints, both `POST` with a Bearer token:
- *   - `POST {baseUrl}/remember` `{ namespace, text }`        — persist a memory
- *   - `POST {baseUrl}/recall`   `{ namespace, query, limit }` — semantic recall
+ * The relayer is the managed/self-hosted Rust service that does all the heavy
+ * lifting server-side (embedding, SEAL encryption, Walrus upload, vector
+ * indexing). The SDK just authenticates and sends text.
  *
- * `memwalFromEnv()` reads `MEMWAL_RELAYER_URL` + `MEMWAL_API_KEY` and returns
- * `null` when either is unset, so callers (e.g. the workflow memory executor)
- * can gracefully skip memory rather than crash when no relayer is configured.
+ * ## Authentication — two schemes
  *
- * Node-only: re-exported from `@agentos/sdk/node` (reads `process.env`).
+ * The REAL Walrus Memory relayer protects its `/api/*` routes with **signed
+ * Ed25519 headers**, NOT a plain bearer token. Each request carries:
+ *   - `x-public-key` — hex Ed25519 public key (32 bytes, derived from the
+ *     delegate key)
+ *   - `x-signature`  — hex Ed25519 signature (64 bytes) over the message
+ *     `{timestamp}.{method}.{path}.{body_sha256}`
+ *   - `x-timestamp`  — unix seconds (the relayer enforces a 5-minute window)
+ *   - `x-account-id` — the `MemWalAccount` object id (account hint)
+ *   - `x-delegate-key` — the delegate private key (hex), used server-side for
+ *     SEAL decrypt flows
+ *
+ * The relayer recomputes `sha256(body)`, verifies the Ed25519 signature against
+ * `x-public-key`, then resolves the owner by looking the public key up in the
+ * on-chain `MemWalAccount.delegate_keys`. The protected endpoints are
+ * `POST {baseUrl}/api/remember` and `POST {baseUrl}/api/recall`.
+ *
+ * The client picks the scheme from how it is constructed:
+ *   - **Delegate-key (signed) scheme** — when an `accountId` + `delegateKey`
+ *     are supplied. This is the real Walrus Memory auth. Targets `/api/*`.
+ *   - **Legacy bearer scheme** — when only an `apiKey` is supplied. Kept for
+ *     backward-compatibility with any custom/self-hosted relayer that still
+ *     accepts `Authorization: Bearer`. Targets `/remember` / `/recall`.
+ *
+ * `memwalFromEnv()` reads, in priority order:
+ *   - `MEMWAL_ACCOUNT_ID` + `MEMWAL_DELEGATE_KEY` ⇒ signed scheme, or
+ *   - `MEMWAL_API_KEY` ⇒ legacy bearer scheme.
+ * Plus `MEMWAL_RELAYER_URL` (optional — defaults to the public STAGING relayer,
+ * see {@link DEFAULT_MEMWAL_RELAYER_URL}). It returns `null` only when NEITHER
+ * credential is configured, so callers (e.g. the workflow memory executor) skip
+ * memory gracefully rather than crashing.
+ *
+ * Node-only: re-exported from `@agentos/sdk/node` (reads `process.env` and uses
+ * Node's built-in `crypto` for Ed25519 — no extra dependency, no browser
+ * bundle). The signing is standard RFC 8032 Ed25519, byte-for-byte identical to
+ * the `@noble/ed25519` the reference memwal SDK uses.
  */
 
-export interface MemwalClientOptions {
+import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
+
+/**
+ * Public Walrus Memory (memwal) STAGING relayer base URL — the testnet-facing
+ * managed relayer. AgentOS targets Sui testnet, so the testnet/staging relayer
+ * is the right default here.
+ *
+ * Source (the memwal monorepo `docs/relayer/public-relayer.md` "Walrus
+ * Foundation hosted endpoints" table): Staging/testnet =
+ * `https://relayer.staging.memwal.ai`; the matching production (mainnet) relayer
+ * is `https://relayer.memwal.ai`.
+ *
+ * Override via `MEMWAL_RELAYER_URL` for production / a self-hosted relayer.
+ */
+export const DEFAULT_MEMWAL_RELAYER_URL = "https://relayer.staging.memwal.ai";
+
+/**
+ * Options for the **delegate-key (signed)** scheme — the real Walrus Memory
+ * auth. Every `/api/*` request is signed with the Ed25519 delegate key.
+ */
+export interface MemwalDelegateOptions {
+  /** Base URL of the Memwal relayer (no trailing slash required). */
+  baseUrl: string;
+  /** `MemWalAccount` object id (`0x…`) — sent as the `x-account-id` hint. */
+  accountId: string;
+  /**
+   * Ed25519 delegate private key. Accepts a 32-byte hex seed (with or without a
+   * `0x` prefix) or a Sui `suiprivkey1…` bech32 string.
+   */
+  delegateKey: string;
+}
+
+/**
+ * Options for the **legacy bearer** scheme — kept for backward-compat with any
+ * relayer that still accepts `Authorization: Bearer {apiKey}`.
+ */
+export interface MemwalApiKeyOptions {
   /** Base URL of the Memwal relayer (no trailing slash required). */
   baseUrl: string;
   /** Bearer API key for the relayer. */
   apiKey: string;
 }
 
+/** Constructor options — either the signed scheme or the legacy bearer scheme. */
+export type MemwalClientOptions = MemwalDelegateOptions | MemwalApiKeyOptions;
+
+/** DER (PKCS#8) prefix for an Ed25519 private key carrying a raw 32-byte seed. */
+const ED25519_PKCS8_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
+
+/** Strip a leading `0x`/`0X` and surrounding whitespace from a hex string. */
+function stripHexPrefix(hex: string): string {
+  const trimmed = hex.trim();
+  return trimmed.startsWith("0x") || trimmed.startsWith("0X")
+    ? trimmed.slice(2)
+    : trimmed;
+}
+
+function lowerHex(buf: Buffer | Uint8Array): string {
+  return Buffer.from(buf).toString("hex");
+}
+
 /**
- * Minimal REST client for the Memwal relayer. Every request carries a Bearer
- * token (`Authorization: Bearer {apiKey}`) and a JSON body.
+ * Decode a delegate key into its raw 32-byte Ed25519 seed. Accepts a hex seed
+ * (with/without `0x`) or a Sui `suiprivkey1…` bech32 string.
+ */
+async function decodeDelegateKey(key: string): Promise<Uint8Array> {
+  const trimmed = key.trim();
+  if (trimmed.startsWith("suiprivkey1")) {
+    // Lazy-import keeps @mysten/sui an optional/external dep (Node-only path).
+    const { decodeSuiPrivateKey } = await import("@mysten/sui/cryptography");
+    const { secretKey } = decodeSuiPrivateKey(trimmed);
+    // decodeSuiPrivateKey returns the 32-byte Ed25519 seed.
+    return secretKey;
+  }
+  const hex = stripHexPrefix(trimmed);
+  if (hex.length !== 64 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(
+      "MEMWAL_DELEGATE_KEY must be a 32-byte hex Ed25519 seed or a suiprivkey1… string",
+    );
+  }
+  return Uint8Array.from(Buffer.from(hex, "hex"));
+}
+
+/**
+ * A pre-derived Ed25519 delegate key: the Node `KeyObject` used to sign, plus
+ * the raw seed/public-key hex sent as headers.
+ */
+interface DelegateKeyMaterial {
+  privateKey: import("node:crypto").KeyObject;
+  publicKeyHex: string;
+  delegateKeyHex: string;
+  accountId: string;
+}
+
+/**
+ * Minimal REST client for the Memwal relayer.
+ *
+ * - **Signed scheme** (`accountId` + `delegateKey`): targets `/api/remember`
+ *   and `/api/recall`, signing each request with the Ed25519 delegate key.
+ * - **Legacy bearer scheme** (`apiKey`): targets `/remember` and `/recall` with
+ *   `Authorization: Bearer {apiKey}`.
  */
 export class MemwalClient {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly apiKey?: string;
+  private readonly delegateOptions?: MemwalDelegateOptions;
+  /** Lazily-derived signing material (Ed25519 key derivation is one-time). */
+  private delegate?: Promise<DelegateKeyMaterial>;
 
   constructor(options: MemwalClientOptions) {
     // Trim a trailing slash so path concatenation stays predictable.
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
-    this.apiKey = options.apiKey;
+    if ("delegateKey" in options) {
+      if (!options.accountId?.trim()) {
+        throw new Error("Memwal delegate scheme requires a non-empty accountId");
+      }
+      if (!options.delegateKey?.trim()) {
+        throw new Error("Memwal delegate scheme requires a non-empty delegateKey");
+      }
+      this.delegateOptions = options;
+    } else {
+      if (!options.apiKey?.trim()) {
+        throw new Error("Memwal bearer scheme requires a non-empty apiKey");
+      }
+      this.apiKey = options.apiKey;
+    }
+  }
+
+  /** True when this client uses the signed delegate-key scheme. */
+  get usesSignedScheme(): boolean {
+    return this.delegateOptions !== undefined;
   }
 
   /**
@@ -40,7 +187,7 @@ export class MemwalClient {
    * @throws if the relayer responds with a non-2xx status.
    */
   async remember(namespace: string, text: string): Promise<unknown> {
-    return this.post("/remember", { namespace, text });
+    return this.request("remember", { namespace, text });
   }
 
   /**
@@ -53,14 +200,91 @@ export class MemwalClient {
     query: string,
     limit?: number,
   ): Promise<unknown> {
-    return this.post("/recall", {
+    return this.request("recall", {
       namespace,
       query,
       ...(limit !== undefined ? { limit } : {}),
     });
   }
 
-  private async post(
+  /** Dispatch to the signed or bearer transport depending on configuration. */
+  private async request(
+    op: "remember" | "recall",
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    if (this.delegateOptions) {
+      // The real relayer namespaces protected routes under /api.
+      return this.signedPost(`/api/${op}`, body);
+    }
+    return this.bearerPost(`/${op}`, body);
+  }
+
+  /** Derive (once) the Ed25519 signing material from the delegate key. */
+  private getDelegate(): Promise<DelegateKeyMaterial> {
+    if (!this.delegate) {
+      const opts = this.delegateOptions!;
+      this.delegate = (async () => {
+        const seed = await decodeDelegateKey(opts.delegateKey);
+        const privateKey = createPrivateKey({
+          key: Buffer.concat([ED25519_PKCS8_PREFIX, Buffer.from(seed)]),
+          format: "der",
+          type: "pkcs8",
+        });
+        const spki = createPublicKey(privateKey).export({
+          format: "der",
+          type: "spki",
+        });
+        // The raw 32-byte public key is the SPKI suffix.
+        const publicKeyHex = lowerHex(spki.subarray(spki.length - 32));
+        return {
+          privateKey,
+          publicKeyHex,
+          delegateKeyHex: lowerHex(seed),
+          accountId: opts.accountId,
+        };
+      })();
+    }
+    return this.delegate;
+  }
+
+  /**
+   * Signed-header request. The signed message is
+   * `{timestamp}.{method}.{path}.{sha256hex(body)}` and the body hashed is the
+   * EXACT JSON string sent on the wire (byte-for-byte), matching the relayer's
+   * server-side recomputation.
+   */
+  private async signedPost(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    const { privateKey, publicKeyHex, delegateKeyHex, accountId } =
+      await this.getDelegate();
+
+    const method = "POST";
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const bodyStr = JSON.stringify(body);
+    const bodySha256 = createHash("sha256").update(bodyStr).digest("hex");
+    const message = `${timestamp}.${method}.${path}.${bodySha256}`;
+    const signatureHex = lowerHex(sign(null, Buffer.from(message), privateKey));
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "x-public-key": publicKeyHex,
+        "x-signature": signatureHex,
+        "x-timestamp": timestamp,
+        "x-account-id": accountId,
+        "x-delegate-key": delegateKeyHex,
+      },
+      body: bodyStr,
+    });
+
+    return this.handle(path, response);
+  }
+
+  /** Legacy bearer-token request. */
+  private async bearerPost(
     path: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
@@ -73,25 +297,46 @@ export class MemwalClient {
       body: JSON.stringify(body),
     });
 
+    return this.handle(path, response);
+  }
+
+  private async handle(path: string, response: Response): Promise<unknown> {
     if (!response.ok) {
       const errBody = await response.text();
       throw new Error(`Memwal ${path} failed: ${response.status} ${errBody}`);
     }
-
     return response.json();
   }
 }
 
 /**
- * Construct a {@link MemwalClient} from the environment, or `null` when the
- * relayer is not configured.
+ * Construct a {@link MemwalClient} from the environment, or `null` when no
+ * credentials are configured.
  *
- * Reads `MEMWAL_RELAYER_URL` (base URL) and `MEMWAL_API_KEY` (bearer key);
- * returns `null` if either is missing/blank so the memory step can skip.
+ * Credential precedence:
+ *   1. `MEMWAL_ACCOUNT_ID` + `MEMWAL_DELEGATE_KEY` ⇒ the real **signed** Walrus
+ *      Memory scheme (each request Ed25519-signed by the delegate key).
+ *   2. `MEMWAL_API_KEY` ⇒ the **legacy bearer** scheme (backward-compat).
+ *
+ * `MEMWAL_RELAYER_URL` (optional) overrides the base URL; when unset/blank it
+ * falls back to {@link DEFAULT_MEMWAL_RELAYER_URL} (the public staging relayer).
+ * Returns `null` ONLY when neither credential set is present, so the memory step
+ * skips gracefully when memwal is not configured.
  */
 export function memwalFromEnv(): MemwalClient | null {
-  const baseUrl = process.env.MEMWAL_RELAYER_URL?.trim();
+  const baseUrl =
+    process.env.MEMWAL_RELAYER_URL?.trim() || DEFAULT_MEMWAL_RELAYER_URL;
+
+  const accountId = process.env.MEMWAL_ACCOUNT_ID?.trim();
+  const delegateKey = process.env.MEMWAL_DELEGATE_KEY?.trim();
+  if (accountId && delegateKey) {
+    return new MemwalClient({ baseUrl, accountId, delegateKey });
+  }
+
   const apiKey = process.env.MEMWAL_API_KEY?.trim();
-  if (!baseUrl || !apiKey) return null;
-  return new MemwalClient({ baseUrl, apiKey });
+  if (apiKey) {
+    return new MemwalClient({ baseUrl, apiKey });
+  }
+
+  return null;
 }

@@ -119,8 +119,20 @@ const walrus: StepExecutor = async (node, ctx) => {
 };
 
 /**
- * Harbor: for private skills, Seal-encrypt the payload and upload the
- * ciphertext; for public skills there is nothing to encrypt, so skip.
+ * Harbor: for private skills, Seal-encrypt the payload and store the ciphertext
+ * in the user's Walrus Harbor account. For public skills there is nothing to
+ * encrypt, so skip.
+ *
+ * Upload backend precedence:
+ *   1. `ctx.harbor.upload` — the REAL Harbor uploader injected by the host
+ *      (HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID). The encrypted blob
+ *      lands in the user's Harbor space and we surface the real fileId + URL.
+ *   2. `ctx.uploadManifest` — host's generic uploader (Walrus blob).
+ *   3. a direct Walrus upload (no host wiring at all).
+ *
+ * When HARBOR_API_KEY is unset the host injects no `ctx.harbor`, so a private
+ * skill still uploads (to Walrus) and never crashes — the blob just does not
+ * land in a Harbor account.
  */
 const harbor: StepExecutor = async (node, ctx) => {
   const isPrivate = Boolean(node.params?.private);
@@ -144,8 +156,30 @@ const harbor: StepExecutor = async (node, ctx) => {
     };
   }
 
+  // NOTE: sealEncrypt is the AES DEMO Seal envelope (see seal.ts). Swap for a
+  // real Seal threshold-encrypt before production.
   const encrypted = await sealEncrypt(toBytes(pickPayload(node, ctx)), sealPolicyId);
 
+  // 1. Real Harbor: store the ciphertext in the user's Walrus Harbor account.
+  if (ctx.harbor) {
+    const filename =
+      strParam(node, "filename") ?? `${sealPolicyId}-${Date.now()}.seal`;
+    const r = await ctx.harbor.upload(encrypted, filename);
+    return {
+      status: "done",
+      blobId: r.blobId,
+      output: {
+        blobId: r.blobId,
+        sealPolicyId,
+        encryptedBytes: encrypted.length,
+        storage: "harbor",
+        ...(r.fileId ? { fileId: r.fileId } : {}),
+        ...(r.url ? { url: r.url } : {}),
+      },
+    };
+  }
+
+  // 2/3. Fallback: host uploader or a direct Walrus put (no Harbor account).
   let blobId: string | undefined;
   if (ctx.uploadManifest) {
     const r = await ctx.uploadManifest({
@@ -161,7 +195,12 @@ const harbor: StepExecutor = async (node, ctx) => {
   return {
     status: "done",
     blobId,
-    output: { blobId, sealPolicyId, encryptedBytes: encrypted.length },
+    output: {
+      blobId,
+      sealPolicyId,
+      encryptedBytes: encrypted.length,
+      storage: "walrus",
+    },
   };
 };
 

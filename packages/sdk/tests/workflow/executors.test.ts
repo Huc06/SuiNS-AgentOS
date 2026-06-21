@@ -100,6 +100,8 @@ describe("harbor executor", () => {
     expect(r.status).toBe("done");
     expect(r.blobId).toBe("ENC_1");
     expect(uploadManifest).toHaveBeenCalledOnce();
+    // No real Harbor uploader → it falls back to the generic uploader (Walrus).
+    expect((r.output as { storage?: string }).storage).toBe("walrus");
 
     const arg = uploadManifest.mock.calls[0]?.[0] as {
       encrypted: number[];
@@ -110,6 +112,51 @@ describe("harbor executor", () => {
     const magic = new TextDecoder().decode(
       new Uint8Array(arg.encrypted.slice(0, 7)),
     );
+    expect(magic).toBe("AOSEAL1");
+  });
+
+  it("uploads the ciphertext to REAL Harbor via the injected ctx.harbor uploader", async () => {
+    const upload = vi.fn(async (_bytes: Uint8Array, _name: string) => ({
+      blobId: "HARBOR_BLOB_1",
+      fileId: "HARBOR_BLOB_1",
+      url: "https://api.testnet.harbor.walrus.xyz/api/v1/blobs/HARBOR_BLOB_1",
+    }));
+    // A generic uploader is also wired; the harbor uploader MUST take precedence.
+    const uploadManifest = vi.fn(async () => ({ blobId: "WALRUS_FALLBACK" }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        filename: "secret.seal",
+        manifest: { secret: "hi" },
+      }),
+      makeCtx({ harbor: { upload }, uploadManifest }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.blobId).toBe("HARBOR_BLOB_1");
+    // Real Harbor took precedence; the Walrus fallback was never called.
+    expect(upload).toHaveBeenCalledOnce();
+    expect(uploadManifest).not.toHaveBeenCalled();
+
+    const out = r.output as {
+      storage: string;
+      fileId: string;
+      url: string;
+      sealPolicyId: string;
+    };
+    expect(out.storage).toBe("harbor");
+    expect(out.fileId).toBe("HARBOR_BLOB_1");
+    expect(out.url).toContain("/api/v1/blobs/HARBOR_BLOB_1");
+    expect(out.sealPolicyId).toBe("0xpolicy");
+
+    // The uploaded bytes are the Seal ciphertext (carry the envelope magic),
+    // and the explicit filename is forwarded.
+    const [bytes, filename] = upload.mock.calls[0] as [Uint8Array, string];
+    expect(filename).toBe("secret.seal");
+    const magic = new TextDecoder().decode(bytes.slice(0, 7));
     expect(magic).toBe("AOSEAL1");
   });
 });
