@@ -52,6 +52,29 @@ export {
 } from "./suiperpower.js";
 export type { SuiperpowerBuildResult } from "./suiperpower.js";
 
+// Real Mysten Seal encryption (write path only). Node-only — pulls @mysten/seal
+// + a read-only SuiClient; deliberately NOT in the browser entry or the
+// signer-agnostic workflow engine (the engine reaches it via injected ctx.seal).
+export { sealEncryptReal, isRealSeal, SEAL_REAL_MAGIC } from "./seal-real.js";
+export type {
+  SealEncryptRealOptions,
+  SealEncryptRealResult,
+  SealNetwork,
+} from "./seal-real.js";
+
+// Real Mysten Seal DECRYPTION (read path). CLIENT-SIDE only — needs a user
+// wallet-signed SessionKey + a key-server round-trip + the on-chain seal_approve
+// check, so it is NOT run by the signer-agnostic workflow engine. Exposed from
+// the Node entry for a dApp / CLI that holds the user's wallet.
+export {
+  sealDecryptReal,
+  stripRealSealMarker,
+} from "./seal-decrypt-real.js";
+export type {
+  SealDecryptRealOptions,
+  SignPersonalMessage,
+} from "./seal-decrypt-real.js";
+
 // Workflow engine (signer-agnostic; host injects execute/upload/memory).
 export { runWorkflow } from "./workflow/run.js";
 export type {
