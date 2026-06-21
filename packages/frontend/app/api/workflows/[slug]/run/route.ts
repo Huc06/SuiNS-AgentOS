@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import {
   AgentOSClient,
   contracts,
+  HarborClient,
   memwalFromEnv,
   resolveAgentAddress,
   runWorkflow,
@@ -192,6 +193,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     : null;
 
+  // Real Harbor uploader (the user's Walrus Harbor account). Built from
+  // HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID. `null` when any is
+  // unset → the harbor executor falls back to a plain Walrus upload (the blob
+  // just does not land in a Harbor account). The SDK engine stays
+  // secret-agnostic: it receives this uploader as `ctx.harbor`, never the env.
+  const harborApiKey = process.env.HARBOR_API_KEY?.trim();
+  const harborSpaceId = process.env.HARBOR_SPACE_ID?.trim();
+  const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim() || 'Default';
+  const harborBaseUrl = process.env.HARBOR_BASE_URL?.trim();
+  const harbor =
+    harborApiKey && harborSpaceId
+      ? {
+          upload: async (content: Uint8Array, filename: string) => {
+            const client = new HarborClient({
+              apiKey: harborApiKey,
+              ...(harborBaseUrl ? { baseUrl: harborBaseUrl } : {}),
+            });
+            const { blobId } = await client.uploadBlob(
+              harborSpaceId,
+              harborBucketId,
+              content,
+              filename,
+            );
+            const base = (
+              harborBaseUrl ?? 'https://api.testnet.harbor.walrus.xyz'
+            ).replace(/\/+$/, '');
+            return {
+              blobId,
+              fileId: blobId,
+              url: `${base}/api/v1/blobs/${blobId}`,
+            };
+          },
+        }
+      : null;
+
   // A server-side AgentOSClient backs the read-only `resolve` bundle and the
   // unsigned-PTB `build` bundle. It shares the one registry file with the rest
   // of the surfaces and never signs/submits — every on-chain commit still flows
@@ -290,6 +326,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     resolve,
     build,
     ...(memory ? { memory } : {}),
+    ...(harbor ? { harbor } : {}),
   };
 
   try {

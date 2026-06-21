@@ -252,7 +252,7 @@ function diagnoseFromError(error?: string): string | undefined {
     return "Server key not loaded — add SUI_PRIVATE_KEY (root .env must reach the route).";
   if (/ENOKI_SECRET_KEY/i.test(error)) return "Enoki sponsor key missing (ENOKI_SECRET_KEY).";
   if (/memwal not configured/i.test(error))
-    return "Memory relayer not set (skipped, not a failure).";
+    return "Memory API key not set (MEMWAL_API_KEY) — skipped, not a failure.";
   if (/Missing required capability/i.test(error))
     return "Agent lacks a capability the skill requires.";
   if (/integrity check failed/i.test(error)) return "Manifest hash mismatch — re-publish.";
@@ -1190,13 +1190,13 @@ const initialNodes: Node[] = [
     id: "walrus-store",
     type: "skill",
     position: { x: 320, y: 250 },
-    data: { label: "Walrus", subtitle: "Store blob" },
+    data: { label: "Walrus", subtitle: "Store file (Walrus)" },
   },
   {
     id: "harbor-seal",
     type: "skill",
     position: { x: 560, y: 150 },
-    data: { label: "Harbor", subtitle: "Encrypt (DEMO)" },
+    data: { label: "Harbor", subtitle: "Encrypt + store (DEMO)" },
   },
   {
     id: "sui-exec",
@@ -1208,7 +1208,7 @@ const initialNodes: Node[] = [
     id: "memory",
     type: "skill",
     position: { x: 800, y: 250 },
-    data: { label: "Memory", subtitle: "Remember" },
+    data: { label: "Memory", subtitle: "Save to agent memory" },
   },
 ];
 
@@ -2515,15 +2515,15 @@ export default function WorkflowEditorPage() {
                 {
                   category: "storage",
                   tools: [
-                    { label: "Walrus", subtitle: "Store blob" },
-                    { label: "Memory", subtitle: "Remember" },
-                    { label: "Memory Recall", subtitle: "Recall" },
+                    { label: "Walrus", subtitle: "Store file (Walrus)" },
+                    { label: "Memory", subtitle: "Save to agent memory" },
+                    { label: "Memory Recall", subtitle: "Recall agent memory" },
                   ],
                   count: 3,
                 },
                 {
                   category: "security",
-                  tools: [{ label: "Harbor", subtitle: "Seal encrypt" }],
+                  tools: [{ label: "Harbor", subtitle: "Encrypt + store (DEMO)" }],
                   count: 1,
                 },
                 {

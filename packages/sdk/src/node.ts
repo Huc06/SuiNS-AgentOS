@@ -21,7 +21,11 @@ export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
 export { WalrusClient } from "./walrus.js";
 export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
-export { MemwalClient, memwalFromEnv } from "./memwal.js";
+export {
+  MemwalClient,
+  memwalFromEnv,
+  DEFAULT_MEMWAL_RELAYER_URL,
+} from "./memwal.js";
 export type { MemwalClientOptions } from "./memwal.js";
 export {
   serializeManifest,

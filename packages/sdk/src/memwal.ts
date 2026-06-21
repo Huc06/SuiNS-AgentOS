@@ -6,12 +6,33 @@
  *   - `POST {baseUrl}/remember` `{ namespace, text }`        — persist a memory
  *   - `POST {baseUrl}/recall`   `{ namespace, query, limit }` — semantic recall
  *
- * `memwalFromEnv()` reads `MEMWAL_RELAYER_URL` + `MEMWAL_API_KEY` and returns
- * `null` when either is unset, so callers (e.g. the workflow memory executor)
- * can gracefully skip memory rather than crash when no relayer is configured.
+ * `memwalFromEnv()` reads `MEMWAL_API_KEY` (required) and `MEMWAL_RELAYER_URL`
+ * (optional — defaults to the public Walrus Memory STAGING relayer, see
+ * {@link DEFAULT_MEMWAL_RELAYER_URL}). It returns a client whenever the API key
+ * is present (even with no relayer URL), and `null` only when the key is unset —
+ * so callers (e.g. the workflow memory executor) skip memory gracefully when no
+ * key is configured rather than crashing.
  *
  * Node-only: re-exported from `@agentos/sdk/node` (reads `process.env`).
  */
+
+/**
+ * Public Walrus Memory (memwal) STAGING relayer base URL — the testnet-facing
+ * managed relayer hosted by the Walrus Foundation. AgentOS targets Sui testnet
+ * (Harbor → api.testnet.harbor.walrus.xyz), so the testnet/staging relayer is
+ * the right default here.
+ *
+ * Source (verified, two independent points): the memwal monorepo
+ * `packages/mcp/src/index.ts` ENV table
+ * (`staging: { relayer: "https://relayer-staging.memory.walrus.xyz" }`) and the
+ * `docs/relayer/public-relayer.md` "Walrus Foundation hosted endpoints" table
+ * (Staging/testnet = `https://relayer-staging.memory.walrus.xyz`). The matching
+ * production (mainnet) relayer is `https://relayer.memory.walrus.xyz`.
+ *
+ * Override via `MEMWAL_RELAYER_URL` for production / a self-hosted relayer.
+ */
+export const DEFAULT_MEMWAL_RELAYER_URL =
+  "https://relayer-staging.memory.walrus.xyz";
 
 export interface MemwalClientOptions {
   /** Base URL of the Memwal relayer (no trailing slash required). */
@@ -83,15 +104,19 @@ export class MemwalClient {
 }
 
 /**
- * Construct a {@link MemwalClient} from the environment, or `null` when the
- * relayer is not configured.
+ * Construct a {@link MemwalClient} from the environment, or `null` when no API
+ * key is configured.
  *
- * Reads `MEMWAL_RELAYER_URL` (base URL) and `MEMWAL_API_KEY` (bearer key);
- * returns `null` if either is missing/blank so the memory step can skip.
+ * Reads `MEMWAL_API_KEY` (bearer key — REQUIRED) and `MEMWAL_RELAYER_URL` (base
+ * URL — OPTIONAL). When the relayer URL is unset/blank it falls back to
+ * {@link DEFAULT_MEMWAL_RELAYER_URL} (the public staging relayer), so a user
+ * only needs to set `MEMWAL_API_KEY` to enable memory. Returns `null` ONLY when
+ * the API key is missing/blank, so the memory step skips only on a missing key.
  */
 export function memwalFromEnv(): MemwalClient | null {
-  const baseUrl = process.env.MEMWAL_RELAYER_URL?.trim();
   const apiKey = process.env.MEMWAL_API_KEY?.trim();
-  if (!baseUrl || !apiKey) return null;
+  if (!apiKey) return null;
+  const baseUrl =
+    process.env.MEMWAL_RELAYER_URL?.trim() || DEFAULT_MEMWAL_RELAYER_URL;
   return new MemwalClient({ baseUrl, apiKey });
 }

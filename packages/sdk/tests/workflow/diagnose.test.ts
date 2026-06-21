@@ -121,7 +121,41 @@ describe("diagnoseStep", () => {
     );
     expect(d.code).toBe("MEMWAL_SKIP");
     expect(d.severity).toBe("skip");
-    expect(d.cause).toMatch(/relayer/i);
+    expect(d.cause).toMatch(/MEMWAL_API_KEY/i);
+    // The remediation tells the user the URL defaults to staging.
+    expect(d.remediation).toMatch(/staging/i);
+  });
+
+  it("SPONSOR_REJECTED: names the EXACT runtime sender from the error", () => {
+    const d = diagnoseStep(
+      mk({
+        status: "error",
+        error:
+          "Enoki: sender address not allowed: 0x010030a0afc40b6d8fe99cee368cab5652baa0d36b7be60a9b017d5228c0bdfd",
+      }),
+    );
+    expect(d.code).toBe("SPONSOR_REJECTED");
+    expect(d.severity).toBe("error");
+    // The exact runtime sender from the error is echoed into the fix text.
+    expect(d.remediation).toContain(
+      "0x010030a0afc40b6d8fe99cee368cab5652baa0d36b7be60a9b017d5228c0bdfd",
+    );
+    // ...alongside the portal, the move-call targets, and the network.
+    expect(d.remediation).toMatch(/portal\.enoki\.mystenlabs\.com/);
+    expect(d.remediation).toMatch(/move-call targets/i);
+    expect(d.remediation).toMatch(/testnet/i);
+  });
+
+  it("SPONSOR_REJECTED: falls back to SUI_PRIVATE_KEY when no address in error", () => {
+    const d = diagnoseStep(
+      mk({
+        status: "error",
+        error: "Enoki sponsor rejected: sender not allowed",
+      }),
+    );
+    expect(d.code).toBe("SPONSOR_REJECTED");
+    expect(d.remediation).toMatch(/SUI_PRIVATE_KEY/);
+    expect(d.remediation).toMatch(/portal\.enoki\.mystenlabs\.com/);
   });
 
   it("labels a pending node as BLOCKED_UPSTREAM (info), distinct from skip", () => {
