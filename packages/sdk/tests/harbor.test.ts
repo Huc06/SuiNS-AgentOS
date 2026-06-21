@@ -33,25 +33,29 @@ describe("HarborClient", () => {
         apiKey: "hbr_key",
         baseUrl: "https://example.com///",
       });
+      // Sync path: blob_id already present → no status polling.
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ blobId: "blob123" }),
+        json: async () => ({ data: { id: "file1", blob_id: "blob123" } }),
       });
 
       await c.uploadBlob("space1", "bucket1", new Uint8Array([1]), "f.json");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://example.com/api/v1/spaces/space1/buckets/bucket1/files",
+        "https://example.com/api/v1/buckets/bucket1/files",
         expect.anything(),
       );
     });
   });
 
   describe("uploadBlob", () => {
-    it("POSTs to correct endpoint with Bearer auth and returns blobId", async () => {
+    it("POSTs multipart to the bucket files endpoint with Bearer auth and returns the blobId", async () => {
+      // 202 with blob_id already present (no async polling needed).
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ blobId: "abc123", size: 42 }),
+        json: async () => ({
+          data: { id: "file-9", blob_id: "abc123", status: "completed" },
+        }),
       });
 
       const content = new TextEncoder().encode('{"name":"test"}');
@@ -62,21 +66,79 @@ describe("HarborClient", () => {
         "manifest.json",
       );
 
-      expect(result).toEqual({ blobId: "abc123" });
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.testnet.harbor.walrus.xyz/api/v1/spaces/space-1/buckets/bucket-2/files",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: "Bearer hbr_test_key_123",
-            "Content-Type": "application/octet-stream",
-            "X-Filename": "manifest.json",
+      expect(result).toMatchObject({ blobId: "abc123", fileId: "file-9" });
+      // The real Harbor path is keyed by bucket id only (no space segment).
+      const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(
+        "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/bucket-2/files",
+      );
+      expect(init.method).toBe("POST");
+      // Bearer auth, and NO Content-Type (fetch derives the multipart boundary).
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer hbr_test_key_123");
+      expect(headers["Content-Type"]).toBeUndefined();
+      // The body is multipart/form-data carrying the file.
+      expect(init.body).toBeInstanceOf(FormData);
+      expect((init.body as FormData).has("file")).toBe(true);
+    });
+
+    it("polls the upload status job for an async upload and reads back blob_id", async () => {
+      mockFetch
+        // POST → 202 accepted, blob_id null (async).
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: { id: "file-async", blob_id: null, status: "queued" },
           }),
-        }),
+        })
+        // status poll 1 → still active.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ state: "active", progress: 0.5 }),
+        })
+        // status poll 2 → completed, blob_id surfaced.
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            state: "completed",
+            data: { id: "file-async", blob_id: "WAL_DONE" },
+          }),
+        });
+
+      const result = await client.uploadBlob(
+        "space",
+        "bucket-7",
+        new Uint8Array([1, 2, 3]),
+        "f.seal",
+        { attempts: 5, intervalMs: 0 },
+      );
+
+      expect(result).toMatchObject({
+        fileId: "file-async",
+        blobId: "WAL_DONE",
+        state: "completed",
+      });
+      // POST + 2 status polls.
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      const statusUrl = (mockFetch.mock.calls[1] as [string])[0];
+      expect(statusUrl).toBe(
+        "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/bucket-7/files/file-async/status",
       );
     });
 
-    it("throws on non-2xx response with status and body", async () => {
+    it("throws a HARBOR-labelled error on a non-2xx upload (404) — not 'Walrus upload failed'", async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => "Not Found",
+      });
+
+      await expect(
+        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json"),
+      ).rejects.toThrow("Harbor upload failed: 404 Not Found");
+    });
+
+    it("throws a HARBOR-labelled error on auth failure (403)", async () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 403,
@@ -85,19 +147,26 @@ describe("HarborClient", () => {
 
       await expect(
         client.uploadBlob("s", "b", new Uint8Array([1]), "f.json"),
-      ).rejects.toThrow("Walrus upload failed: 403 Forbidden: invalid API key");
+      ).rejects.toThrow("Harbor upload failed: 403 Forbidden: invalid API key");
     });
 
-    it("throws on server error with status and body", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => "Internal Server Error",
-      });
+    it("throws a HARBOR-labelled error when the upload job reports failed", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: { id: "f1", blob_id: null } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ state: "failed" }),
+        });
 
       await expect(
-        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json"),
-      ).rejects.toThrow("Walrus upload failed: 500 Internal Server Error");
+        client.uploadBlob("s", "b", new Uint8Array([1]), "f.json", {
+          attempts: 3,
+          intervalMs: 0,
+        }),
+      ).rejects.toThrow("Harbor upload failed: job f1 reported failed");
     });
   });
 
@@ -145,7 +214,7 @@ describe("HarborClient", () => {
       });
 
       await expect(client.downloadBlob("some-blob")).rejects.toThrow(
-        "Walrus download failed: 502 Bad Gateway",
+        "Harbor download failed: 502 Bad Gateway",
       );
     });
   });

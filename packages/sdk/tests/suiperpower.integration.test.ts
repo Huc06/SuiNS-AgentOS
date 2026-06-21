@@ -84,12 +84,23 @@ function createHarborRouter(): HarborRouter {
     async (url: string, init?: { method?: string; body?: unknown }) => {
       const method = init?.method ?? "GET";
 
-      // Upload: POST .../buckets/{bucket}/files
+      // Upload: POST .../buckets/{bucket}/files (multipart/form-data, field "file").
       if (method === "POST" && url.includes("/files")) {
-        const body = init?.body as Buffer | Uint8Array;
         const blobId = `blob-${++counter}`;
-        blobStore.set(blobId, new Uint8Array(body));
-        return { ok: true, status: 200, json: async () => ({ blobId }) };
+        const form = init?.body as FormData;
+        const file = form?.get?.("file") as Blob | undefined;
+        const bytes = file
+          ? new Uint8Array(await file.arrayBuffer())
+          : new Uint8Array();
+        blobStore.set(blobId, bytes);
+        // Harbor's real 202 shape: { data: FileSummary } with blob_id present.
+        return {
+          ok: true,
+          status: 202,
+          json: async () => ({
+            data: { id: `file-${counter}`, blob_id: blobId, status: "completed" },
+          }),
+        };
       }
 
       // Download: GET .../blobs/{blobId}

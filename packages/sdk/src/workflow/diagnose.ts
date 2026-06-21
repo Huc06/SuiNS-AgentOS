@@ -65,6 +65,22 @@ interface ErrorRule {
   hint: string;
   cause: string;
   remediation: string;
+  /**
+   * When true, {@link diagnoseStep} replaces the static `remediation` with a
+   * dynamically-built one (e.g. {@link sponsorRemediation}, which threads the
+   * EXACT runtime sender out of the raw error). Rules that carry their own
+   * specific remediation (like the passport-ownership mismatch) leave this off
+   * so their copy is preserved.
+   */
+  dynamicRemediation?: boolean;
+  /**
+   * When true, {@link diagnoseStep} replaces the static `remediation` with
+   * {@link ownerMismatchRemediation}, which names BOTH the passport owner and
+   * the runtime signer pulled out of the raw Enoki error. Distinct from
+   * {@link ErrorRule.dynamicRemediation} (the allowlist case) so the two
+   * SPONSOR_REJECTED sub-cases keep their own copy.
+   */
+  ownerMismatchRemediation?: boolean;
 }
 
 /**
@@ -122,8 +138,9 @@ const ERROR_RULES: ErrorRule[] = [
     test: /memwal .*failed/i,
     hint: "Memory relayer rejected the write.",
     cause:
-      "The Memwal relayer returned a non-2xx (bad API key, relayer down, or namespace rejected).",
-    remediation: "Verify MEMWAL_API_KEY (and MEMWAL_RELAYER_URL if overriding the default staging relayer) and that the relayer is up.",
+      "The Memwal relayer returned a non-2xx (bad credentials, relayer down, or namespace rejected).",
+    remediation:
+      "Verify the memwal credentials (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY for the signed scheme, or a legacy MEMWAL_API_KEY) and MEMWAL_RELAYER_URL if overriding the default staging relayer, and that the relayer is up.",
   },
   {
     code: "RESOLVE_FAILED",
@@ -151,6 +168,25 @@ const ERROR_RULES: ErrorRule[] = [
       "Set AGENTOS_PACKAGE_ID to a published package with the needed modules; use a valid, unexpired cap and on-chain objects.",
   },
   {
+    // More specific than the generic SPONSOR_REJECTED below: Enoki's dry-run
+    // fails because an owned input (the AgentPassport) belongs to a DIFFERENT
+    // address than the sponsored sender. This happens when the passport was
+    // seeded owned by a synthetic placeholder address (e.g. ascii
+    // 'alpharuntimewallet') instead of the server runtime signer, so the
+    // sponsored sender cannot use it as an owned input. Keep this BEFORE the
+    // broad SPONSOR_REJECTED rule so it wins.
+    code: "SPONSOR_REJECTED",
+    test: /not signed by the correct sender|is owned by account address|owned by .* but given (owner|signer)|incorrect sender/i,
+    hint: "Passport owned by a different address than the sponsored sender.",
+    cause:
+      "The AgentPassport (an owned input) belongs to a different address than the sponsored sender — it was seeded owned by a synthetic placeholder (e.g. ascii 'alpharuntimewallet'), not the server runtime signer.",
+    // Static fallback; replaced by ownerMismatchRemediation when the two
+    // addresses are present in the raw error (they almost always are).
+    remediation:
+      "The agent's AgentPassport is owned by a different address than the runtime signer. The passport must be owned by the SUI_PRIVATE_KEY (runtime) address. Re-seed/transfer the passport to the runtime wallet so the sponsored sender owns it.",
+    ownerMismatchRemediation: true,
+  },
+  {
     code: "SPONSOR_REJECTED",
     test: /sender address not allowed|not allowed|enoki|sponsor/i,
     hint: "Enoki rejected the sponsored transaction.",
@@ -158,6 +194,7 @@ const ERROR_RULES: ErrorRule[] = [
       "The runtime sender is not on the Enoki allowlist, or the network does not match the Enoki app config.",
     remediation:
       "In portal.enoki.mystenlabs.com, allowlist the SUI_PRIVATE_KEY runtime address + the AgentOS package move-call targets, and confirm the Enoki app network = testnet (NEXT_PUBLIC_SUI_NETWORK).",
+    dynamicRemediation: true,
   },
   {
     code: "MISSING_CONFIG",
@@ -230,6 +267,57 @@ function sponsorRemediation(rawError: string | undefined): string {
 }
 
 /**
+ * Pull the passport OWNER and the runtime SIGNER out of an Enoki
+ * passport-ownership mismatch error. Enoki phrases it as:
+ *   "Object 0x..passport is owned by account address 0x<owner> ...,
+ *    but given owner/signer address is 0x<signer>"
+ * We capture the address right after "owned by account address" (the owner the
+ * passport is currently held by — often a synthetic placeholder) and the one
+ * after "owner/signer address is" (the runtime signer the sponsored tx used).
+ * Either may be absent; we only echo what the error already exposed (stays
+ * signer/env-agnostic — never reads the key).
+ */
+function ownerAndSignerAddresses(rawError: string | undefined): {
+  owner?: string;
+  signer?: string;
+} {
+  const raw = rawError ?? "";
+  const owner = raw.match(
+    /owned by account address\s+(0x[0-9a-fA-F]{1,64})/i,
+  )?.[1];
+  const signer = raw.match(
+    /(?:owner|signer)\s+address\s+is\s+(0x[0-9a-fA-F]{1,64})/i,
+  )?.[1];
+  return { owner, signer };
+}
+
+/**
+ * Build the passport-ownership-mismatch remediation. Names BOTH the address the
+ * passport is currently owned by and the runtime signer the sponsored tx used,
+ * when the Enoki error exposes them, so the operator can see exactly which
+ * wallet must own the passport. The passport must be owned by the runtime
+ * SUI_PRIVATE_KEY address (the sponsored sender) — re-seed / transfer it there.
+ */
+function ownerMismatchRemediation(rawError: string | undefined): string {
+  const { owner, signer } = ownerAndSignerAddresses(rawError);
+  const detail =
+    owner && signer
+      ? ` The passport is currently owned by ${owner}, but the runtime signer is ${signer}.`
+      : owner
+        ? ` The passport is currently owned by ${owner}, not the runtime signer.`
+        : signer
+          ? ` The runtime signer is ${signer}, which does not own the passport.`
+          : "";
+  return (
+    "The agent's AgentPassport is owned by a different address than the runtime signer." +
+    detail +
+    " The passport must be owned by the SUI_PRIVATE_KEY (runtime) address. Re-seed/transfer the passport to the runtime wallet" +
+    (signer ? ` (${signer})` : "") +
+    " so the sponsored sender owns it."
+  );
+}
+
+/**
  * Read a `{ note?: string }` out of a step's output (skipped steps carry a
  * human note there).
  */
@@ -255,10 +343,15 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
       return {
         code: rule.code,
         cause: rule.cause,
-        // SPONSOR_REJECTED: thread the EXACT runtime sender from the raw error
-        // into the fix text (Enoki echoes it); fall back to the static rule copy.
-        remediation:
-          rule.code === "SPONSOR_REJECTED"
+        // Rules flagged `dynamicRemediation` (the generic Enoki-allowlist
+        // SPONSOR_REJECTED) thread the EXACT runtime sender from the raw error
+        // into the fix text (Enoki echoes it). Rules flagged
+        // `ownerMismatchRemediation` (the passport-ownership SPONSOR_REJECTED)
+        // name BOTH the current passport owner and the runtime signer. Every
+        // other rule keeps its static copy.
+        remediation: rule.ownerMismatchRemediation
+          ? ownerMismatchRemediation(step.error)
+          : rule.dynamicRemediation
             ? sponsorRemediation(step.error)
             : rule.remediation,
         severity: "error",
@@ -277,9 +370,10 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
     if (/memwal not configured/i.test(note)) {
       return {
         code: "MEMWAL_SKIP",
-        cause: "No memory API key configured (MEMWAL_API_KEY unset).",
+        cause:
+          "No memory credentials configured (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY, or a legacy MEMWAL_API_KEY, unset).",
         remediation:
-          "This is not a failure. Set MEMWAL_API_KEY to enable agent memory — the relayer URL defaults to the public staging relayer (override with MEMWAL_RELAYER_URL).",
+          "This is not a failure. Set MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY (or a legacy MEMWAL_API_KEY) to enable agent memory — the relayer URL defaults to the public staging relayer (override with MEMWAL_RELAYER_URL).",
         severity: "skip",
       };
     }
@@ -365,9 +459,10 @@ export interface PreflightEnv {
   /** ENOKI_SECRET_KEY present server-side (gas sponsorship). */
   enokiKey: boolean;
   /**
-   * MEMWAL memory configured. True when MEMWAL_API_KEY is present — the relayer
-   * URL is optional (defaults to the public staging relayer), so the host should
-   * key this off the API key alone.
+   * MEMWAL memory configured. True when memwal credentials are present —
+   * MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY (the signed scheme) OR a legacy
+   * MEMWAL_API_KEY. The relayer URL is optional (defaults to the public staging
+   * relayer), so the host should key this off the credentials alone.
    */
   memwal: boolean;
   /** A non-placeholder AGENTOS package id is configured. */
@@ -501,7 +596,7 @@ export function preflight(
         if (!env.memwal) {
           return mk(
             "will-skip",
-            "No memory API key (MEMWAL_API_KEY) configured (skipped, not a failure).",
+            "No memory credentials (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY, or legacy MEMWAL_API_KEY) configured (skipped, not a failure).",
             "MEMWAL_SKIP",
           );
         }
@@ -512,7 +607,7 @@ export function preflight(
         if (!env.memwal) {
           return mk(
             "will-skip",
-            "No memory API key (MEMWAL_API_KEY) configured (skipped, not a failure).",
+            "No memory credentials (MEMWAL_ACCOUNT_ID + MEMWAL_DELEGATE_KEY, or legacy MEMWAL_API_KEY) configured (skipped, not a failure).",
             "MEMWAL_SKIP",
           );
         }
