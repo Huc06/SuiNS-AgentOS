@@ -26,6 +26,15 @@ function selectedBackend(): StorageBackend {
 }
 
 /**
+ * Path to the bundled demo runs that ship with the build. On a cold/ephemeral
+ * filesystem the SDK store seeds these once so the Analytics dashboard shows
+ * meaningful data out of the box (mirrors `registry.seed.json`). Real runs
+ * (user workflow executions) are never overwritten — seeding only fills an
+ * empty store.
+ */
+const BUNDLED_RUNS = join(process.cwd(), "lib", "runs.seed.json");
+
+/**
  * Process-wide cached store. The in-memory backend must be cached (a fresh
  * instance per call would lose every run); the file backend caches to reuse its
  * per-path async lock that serializes concurrent appends.
@@ -41,6 +50,7 @@ function getRunsStore(): RunsStore {
     cwd: process.cwd(),
     repoRoot: join(process.cwd(), "../.."),
     inMemoryFallback: backend === "memory",
+    bundledRuns: BUNDLED_RUNS,
   });
   cached = { backend, store };
   return store;

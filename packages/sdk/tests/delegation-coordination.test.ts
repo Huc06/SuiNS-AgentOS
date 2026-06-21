@@ -200,6 +200,121 @@ describe("buildExecuteSkillTx — delegated path", () => {
     expect(moveCallOrder(transaction)).toEqual(["mod::run"]);
   });
 
+  it("OMITS the skill entry call for a placeholder movePackage but STILL runs the delegation accounting", async () => {
+    // A manifest whose move target is a non-0x placeholder (e.g. a seeded skill
+    // that documents an intended target but isn't directly move-callable).
+    const client = await setupClient(
+      validManifest({
+        sui: {
+          movePackage: "0xYOUR_NFT_PACKAGE",
+          entry: "nft::mint",
+          policyRequired: [],
+        },
+      }),
+    );
+
+    const { transaction } = await client.buildExecuteSkillTx({
+      suinsName: "trade.alpha.sui",
+      delegationCapId: CAP_ID,
+      cost: 0,
+      subjectPassportId: PASSPORT_ID,
+    });
+
+    // No `nft::mint` / `mod::run` skill entry call — only the 3 delegation calls,
+    // in order. The Call still produces a real on-chain tx.
+    expect(moveCallOrder(transaction)).toEqual([
+      "delegation::assert_valid",
+      "delegation::consume",
+      "delegation::record_subagent_execution",
+    ]);
+  });
+
+  it("throws (does not build an empty PTB) for a placeholder skill with NO delegation cap", async () => {
+    const client = await setupClient(
+      validManifest({
+        sui: {
+          movePackage: "0xYOUR_NFT_PACKAGE",
+          entry: "nft::mint",
+          policyRequired: [],
+        },
+      }),
+    );
+
+    await expect(
+      client.buildExecuteSkillTx({ suinsName: "trade.alpha.sui" }),
+    ).rejects.toThrow(/placeholder move target/);
+  });
+
+  it("OMITS the entry call when the skill targets the AgentOS package with a non-AgentOS module (seeded `main::execute`)", async () => {
+    // The seeded `web-search` manifest points movePackage at the published
+    // AgentOS package (`PKG`) with a DOCUMENTARY `main::execute` entry the
+    // package does not expose. Calling it would abort on-chain — so the skill's
+    // own entry is omitted and only the real delegation accounting runs.
+    const client = await setupClient(
+      validManifest({
+        sui: {
+          movePackage: PKG,
+          entry: "main::execute",
+          policyRequired: [],
+        },
+      }),
+    );
+
+    const { transaction } = await client.buildExecuteSkillTx({
+      suinsName: "web-search.alpha.sui",
+      delegationCapId: CAP_ID,
+      cost: 0,
+      subjectPassportId: PASSPORT_ID,
+    });
+
+    expect(moveCallOrder(transaction)).toEqual([
+      "delegation::assert_valid",
+      "delegation::consume",
+      "delegation::record_subagent_execution",
+    ]);
+  });
+
+  it("EMITS the entry call when the skill targets the AgentOS package with a REAL AgentOS module", async () => {
+    // A real AgentOS module (e.g. `skill_descriptor`) IS callable on that
+    // package — the entry stays in the PTB alongside the accounting calls.
+    const client = await setupClient(
+      validManifest({
+        sui: {
+          movePackage: PKG,
+          entry: "skill_descriptor::touch",
+          policyRequired: [],
+        },
+      }),
+    );
+
+    const { transaction } = await client.buildExecuteSkillTx({
+      suinsName: "trade.alpha.sui",
+      delegationCapId: CAP_ID,
+      cost: 0,
+      subjectPassportId: PASSPORT_ID,
+    });
+
+    expect(moveCallOrder(transaction)).toEqual([
+      "delegation::assert_valid",
+      "skill_descriptor::touch",
+      "delegation::consume",
+      "delegation::record_subagent_execution",
+    ]);
+  });
+
+  it("throws for the seeded AgentOS-placeholder skill when called WITHOUT a delegation cap", async () => {
+    // No cap + non-callable entry = empty PTB → fail loudly rather than submit.
+    const client = await setupClient(
+      validManifest({
+        sui: { movePackage: PKG, entry: "main::execute", policyRequired: [] },
+      }),
+    );
+
+    await expect(
+      client.buildExecuteSkillTx({ suinsName: "web-search.alpha.sui" }),
+    ).rejects.toThrow(/placeholder move target/);
+  });
+
   it("binds an object-ref param via tx.object and a primitive via pure", async () => {
     const objArg =
       "0x0000000000000000000000000000000000000000000000000000000000000abc";

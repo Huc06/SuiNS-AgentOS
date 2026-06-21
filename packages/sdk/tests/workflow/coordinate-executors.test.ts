@@ -394,6 +394,100 @@ describe("call-sub-agent executor", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
+  it("threads the UPSTREAM delegate step's capId + parentPassportId into the delegated call", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    // An upstream `delegate` step that produced a cap (as the real executor does).
+    const delegateStep = {
+      nodeId: "delegate",
+      type: "delegate" as const,
+      status: "done" as const,
+      output: { capId: CAP_ID, parentPassportId: SUBJECT_ID },
+    };
+
+    const r = await executors["call-sub-agent"](
+      // No delegationCapId / subjectPassportId on the node — they come from the
+      // upstream delegate step (this is the coordinate Import→Delegate→Call flow).
+      node("call-sub-agent", { skill: "web-search.alpha.sui" }),
+      ctx,
+      [delegateStep],
+    );
+
+    expect(r.status).toBe("done");
+    expect((r.output as { delegated: boolean }).delegated).toBe(true);
+    const call = (build.buildCallSubAgentTx as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.delegationCapId).toBe(CAP_ID);
+    // Subject defaults to the grant's parent passport recorded by the delegate.
+    expect(call.subjectPassportId).toBe(SUBJECT_ID);
+  });
+
+  it("falls back to ctx.passport.id for subject when the upstream delegate omitted parentPassportId", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const delegateStep = {
+      nodeId: "delegate",
+      type: "delegate" as const,
+      status: "done" as const,
+      output: { capId: CAP_ID },
+    };
+
+    await executors["call-sub-agent"](
+      node("call-sub-agent", { skill: "web-search.alpha.sui" }),
+      ctx,
+      [delegateStep],
+    );
+    const call = (build.buildCallSubAgentTx as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.delegationCapId).toBe(CAP_ID);
+    expect(call.subjectPassportId).toBe(PASSPORT_ID);
+  });
+
+  it("an explicit node delegationCapId wins over an upstream delegate cap", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const OTHER_CAP =
+      "0x0000000000000000000000000000000000000000000000000000000000000fff";
+    const delegateStep = {
+      nodeId: "delegate",
+      type: "delegate" as const,
+      status: "done" as const,
+      output: { capId: OTHER_CAP, parentPassportId: SUBJECT_ID },
+    };
+
+    await executors["call-sub-agent"](
+      node("call-sub-agent", {
+        skill: "web-search.alpha.sui",
+        delegationCapId: CAP_ID,
+      }),
+      ctx,
+      [delegateStep],
+    );
+    const call = (build.buildCallSubAgentTx as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.delegationCapId).toBe(CAP_ID);
+  });
+
+  it("ignores a SKIPPED upstream delegate (no cap threaded → non-delegated)", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const skippedDelegate = {
+      nodeId: "delegate",
+      type: "delegate" as const,
+      status: "skipped" as const,
+      output: { note: "skipped" },
+    };
+
+    await executors["call-sub-agent"](
+      node("call-sub-agent", { skill: "web-search.alpha.sui" }),
+      ctx,
+      [skippedDelegate],
+    );
+    const call = (build.buildCallSubAgentTx as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.delegationCapId).toBeUndefined();
+  });
+
   it("errors when no skill name is provided", async () => {
     const ctx = makeCtx();
     const r = await executors["call-sub-agent"](

@@ -574,14 +574,56 @@ const delegate: StepExecutor = async (node, ctx) => {
 };
 
 /**
+ * Find the DelegationCap id produced by an UPSTREAM `delegate` step. The
+ * `delegate` executor records `output.capId` (the created `delegation::Cap`).
+ * Threading it into the downstream Call is what makes the coordinate flow run
+ * the real delegated path (assert_valid → consume → record_subagent_execution)
+ * instead of a bare skill call. Scans newest-first so the most recent grant wins.
+ *
+ * Also returns the grant's `parentPassportId` (the subject passport whose
+ * exec_count `record_subagent_execution` bumps) when the delegate step recorded
+ * one, so the caller does not have to derive it.
+ */
+function upstreamDelegation(prevOutputs: StepResult[]): {
+  capId: string;
+  parentPassportId?: string;
+} | undefined {
+  for (let i = prevOutputs.length - 1; i >= 0; i -= 1) {
+    const step = prevOutputs[i];
+    if (
+      step?.type !== "delegate" ||
+      step.status !== "done" ||
+      typeof step.output !== "object" ||
+      step.output === null
+    ) {
+      continue;
+    }
+    const out = step.output as Record<string, unknown>;
+    const capId = typeof out.capId === "string" ? out.capId : undefined;
+    if (!capId) continue;
+    const parentPassportId =
+      typeof out.parentPassportId === "string"
+        ? out.parentPassportId
+        : undefined;
+    return parentPassportId ? { capId, parentPassportId } : { capId };
+  }
+  return undefined;
+}
+
+/**
  * call-sub-agent: run a skill under a delegation. Builds the atomic PTB
  * (assert_valid → entry → consume → record_subagent_execution) via the injected
  * builder, then commits it through `ctx.execute`. Captures the tx digest.
  *
- * Params: `{ skill: "<name>.sui", delegationCapId, subjectPassportId, cost?,
+ * The DelegationCap id is taken from `params.delegationCapId` if present, else
+ * threaded automatically from an upstream `delegate` step's `output.capId` — so
+ * the coordinate flow (Import → Delegate → Call → Attest) runs the real
+ * delegated accounting path without the caller wiring the cap id by hand.
+ *
+ * Params: `{ skill: "<name>.sui", delegationCapId?, subjectPassportId?, cost?,
  *            params?, agentCapabilities? }`.
  */
-const callSubAgent: StepExecutor = async (node, ctx) => {
+const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
   if (!ctx.build) {
     return {
       status: "error",
@@ -607,10 +649,19 @@ const callSubAgent: StepExecutor = async (node, ctx) => {
     };
   }
 
-  const delegationCapId = strParam(node, "delegationCapId");
-  const subjectPassportId =
-    strParam(node, "subjectPassportId") ??
-    (delegationCapId ? ctx.passport?.id : undefined);
+  // Prefer an explicit cap id on the node; otherwise thread the upstream
+  // Delegate node's produced cap so the coordinate flow runs the real delegated
+  // accounting (assert_valid → consume → record_subagent_execution) end-to-end.
+  const upstream = upstreamDelegation(prevOutputs);
+  const delegationCapId = strParam(node, "delegationCapId") ?? upstream?.capId;
+  // The subject passport whose exec_count the delegation accounting bumps. Use
+  // an explicit param, else the parent passport the upstream grant was made
+  // against, else this agent's own passport (the parent in a self-delegation).
+  const subjectPassportId = delegationCapId
+    ? (strParam(node, "subjectPassportId") ??
+      upstream?.parentPassportId ??
+      ctx.passport?.id)
+    : strParam(node, "subjectPassportId");
 
   const built = await ctx.build.buildCallSubAgentTx({
     suinsName,

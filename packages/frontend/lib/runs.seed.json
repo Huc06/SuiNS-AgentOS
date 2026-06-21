@@ -1,0 +1,480 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "runId": "seed-run-01",
+      "agentSlug": "alpha",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "LK2Z0TwyWvN_demo01"
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00001aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "done",
+          "output": {
+            "namespace": "alpha.sui"
+          }
+        }
+      ],
+      "createdAt": "2026-06-14T09:12:00.000Z"
+    },
+    {
+      "runId": "seed-run-02",
+      "agentSlug": "alpha",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "demo-trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "demo-import",
+          "type": "import-agent",
+          "status": "done",
+          "output": {
+            "skills": 2
+          }
+        },
+        {
+          "nodeId": "demo-delegate",
+          "type": "delegate",
+          "status": "done",
+          "output": {
+            "capId": "0xDEM00002aabbccddeeff00112233445566778899",
+            "parentPassportId": "0xDEM00003aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "demo-call",
+          "type": "call-sub-agent",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00004aabbccddeeff00112233445566778899",
+            "skill": "web-search.alpha.sui",
+            "delegated": true
+          }
+        },
+        {
+          "nodeId": "demo-attest",
+          "type": "attest",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00005aabbccddeeff00112233445566778899",
+            "kind": "review",
+            "score": 100
+          }
+        }
+      ],
+      "createdAt": "2026-06-15T14:03:00.000Z"
+    },
+    {
+      "runId": "seed-run-03",
+      "agentSlug": "alpha",
+      "status": "error",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "LK2Z0TwyWvN_demo02"
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "error",
+          "output": {
+            "note": "insufficient gas budget"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "pending"
+        }
+      ],
+      "createdAt": "2026-06-18T08:47:00.000Z"
+    },
+    {
+      "runId": "seed-run-04",
+      "agentSlug": "beta-agent",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "ONCe_demo01"
+          }
+        },
+        {
+          "nodeId": "harbor",
+          "type": "harbor",
+          "status": "skipped",
+          "output": {
+            "note": "Harbor: skipped — no HARBOR_API_KEY"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "done",
+          "output": {
+            "namespace": "beta-agent.sui"
+          }
+        }
+      ],
+      "createdAt": "2026-06-13T11:20:00.000Z"
+    },
+    {
+      "runId": "seed-run-05",
+      "agentSlug": "beta-agent",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "demo-trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "demo-import",
+          "type": "import-agent",
+          "status": "done",
+          "output": {
+            "skills": 1
+          }
+        },
+        {
+          "nodeId": "demo-delegate",
+          "type": "delegate",
+          "status": "done",
+          "output": {
+            "capId": "0xDEM00006aabbccddeeff00112233445566778899",
+            "parentPassportId": "0xDEM00007aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "demo-call",
+          "type": "call-sub-agent",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00008aabbccddeeff00112233445566778899",
+            "skill": "sandbox-tool.beta-agent.sui",
+            "delegated": true
+          }
+        },
+        {
+          "nodeId": "demo-attest",
+          "type": "attest",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00009aabbccddeeff00112233445566778899"
+          }
+        }
+      ],
+      "createdAt": "2026-06-16T16:55:00.000Z"
+    },
+    {
+      "runId": "seed-run-06",
+      "agentSlug": "beta-agent",
+      "status": "error",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "import-agent",
+          "type": "import-agent",
+          "status": "error",
+          "output": {
+            "note": "agent not active"
+          }
+        },
+        {
+          "nodeId": "delegate",
+          "type": "delegate",
+          "status": "pending"
+        }
+      ],
+      "createdAt": "2026-06-19T10:08:00.000Z"
+    },
+    {
+      "runId": "seed-run-07",
+      "agentSlug": "walrus-bot",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "v3dChBEhd9_demo01"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "done",
+          "output": {
+            "namespace": "walrus-bot.sui"
+          }
+        },
+        {
+          "nodeId": "memory-recall",
+          "type": "memory-recall",
+          "status": "done",
+          "output": {
+            "hits": 3
+          }
+        }
+      ],
+      "createdAt": "2026-06-12T07:30:00.000Z"
+    },
+    {
+      "runId": "seed-run-08",
+      "agentSlug": "walrus-bot",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "v3dChBEhd9_demo02"
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00010aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "done",
+          "output": {
+            "namespace": "walrus-bot.sui"
+          }
+        }
+      ],
+      "createdAt": "2026-06-17T13:41:00.000Z"
+    },
+    {
+      "runId": "seed-run-09",
+      "agentSlug": "defi-rebalancer",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00011aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "delegate",
+          "type": "delegate",
+          "status": "done",
+          "output": {
+            "capId": "0xDEM00012aabbccddeeff00112233445566778899",
+            "parentPassportId": "0xDEM00013aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "call-sub-agent",
+          "type": "call-sub-agent",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00014aabbccddeeff00112233445566778899",
+            "delegated": true
+          }
+        }
+      ],
+      "createdAt": "2026-06-14T19:22:00.000Z"
+    },
+    {
+      "runId": "seed-run-10",
+      "agentSlug": "defi-rebalancer",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "walrus",
+          "type": "walrus",
+          "status": "done",
+          "output": {
+            "blobId": "defi_demo01"
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00015aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "attest",
+          "type": "attest",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00016aabbccddeeff00112233445566778899",
+            "kind": "performance",
+            "score": 88
+          }
+        }
+      ],
+      "createdAt": "2026-06-18T21:05:00.000Z"
+    },
+    {
+      "runId": "seed-run-11",
+      "agentSlug": "sui-indexer",
+      "status": "done",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "done",
+          "output": {
+            "digest": "0xDEM00017aabbccddeeff00112233445566778899"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "done",
+          "output": {
+            "namespace": "sui-indexer.sui"
+          }
+        }
+      ],
+      "createdAt": "2026-06-13T05:14:00.000Z"
+    },
+    {
+      "runId": "seed-run-12",
+      "agentSlug": "sui-indexer",
+      "status": "error",
+      "steps": [
+        {
+          "nodeId": "trigger",
+          "type": "trigger",
+          "status": "done",
+          "output": {
+            "started": true
+          }
+        },
+        {
+          "nodeId": "sui",
+          "type": "sui",
+          "status": "error",
+          "output": {
+            "note": "RPC timeout"
+          }
+        },
+        {
+          "nodeId": "memory",
+          "type": "memory",
+          "status": "pending"
+        }
+      ],
+      "createdAt": "2026-06-19T17:33:00.000Z"
+    }
+  ]
+}

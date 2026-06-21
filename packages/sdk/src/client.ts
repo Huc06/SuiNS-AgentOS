@@ -136,6 +136,62 @@ function isResultRef(value: unknown): value is SkillParamResultRef {
   );
 }
 
+/** A concrete on-chain Sui package/address id: `0x` + 1..=64 hex chars. */
+const HEX_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
+
+/**
+ * The Move modules published in the AgentOS package. Seeded/imported skill
+ * manifests frequently point their `movePackage` at the AgentOS package itself
+ * with a DOCUMENTARY entry (`main::execute`) that the package does not actually
+ * expose. Calling such an entry aborts on-chain. We use this allowlist to detect
+ * that case and skip the skill's own entry call (the delegation accounting,
+ * which targets the real `delegation` module, still runs).
+ */
+const AGENTOS_MODULES = new Set([
+  "agent_passport",
+  "attestation",
+  "bucket_policy",
+  "delegation",
+  "skill_descriptor",
+]);
+
+/**
+ * True when `value` is a real, callable on-chain Move package address. Manifest
+ * templates often carry a NON-`0x` placeholder (e.g. `0xYOUR_NFT_PACKAGE`) or a
+ * named MVR package; those are not directly move-callable, so the skill's own
+ * entry call must be omitted (the delegation accounting can still run).
+ */
+function isCallablePackage(value: string | undefined): value is string {
+  return typeof value === "string" && HEX_ADDRESS.test(value.trim());
+}
+
+/**
+ * Decide whether a skill's OWN entry call can actually be emitted on-chain.
+ * It is callable only when:
+ *  - the `movePackage` is a real `0x…` package, AND
+ *  - it does NOT point at the AgentOS package itself with a module that the
+ *    AgentOS package does not expose (the seeded `main::execute` placeholder).
+ *
+ * The second guard catches the common seeded-skill case where `movePackage` is
+ * the published AgentOS package (`0x…`, so `isCallablePackage` is true) but the
+ * entry (`main::execute`) is documentary — calling it would abort. In that case
+ * we omit the entry call and let the delegation accounting be the real work.
+ */
+function isCallableSkillEntry(
+  packageAddr: string | undefined,
+  module: string,
+  agentosPackageId: string | undefined,
+): packageAddr is string {
+  if (!isCallablePackage(packageAddr)) return false;
+  // When the skill targets the configured AgentOS package, only a real AgentOS
+  // module is actually callable; a placeholder module (e.g. `main`) is not.
+  const norm = (v: string | undefined) => v?.trim().toLowerCase();
+  if (agentosPackageId && norm(packageAddr) === norm(agentosPackageId)) {
+    return AGENTOS_MODULES.has(module);
+  }
+  return true;
+}
+
 /**
  * Options for {@link AgentOSClient.buildExecuteSkillTx}.
  *
@@ -778,7 +834,22 @@ export class AgentOSClient {
       manifest.sui.entry,
     );
 
-    const moveCallArgs = this.#bindParams(transaction, params);
+    // Many seeded/imported skills carry a PLACEHOLDER move target (a non-`0x`
+    // package such as `0xYOUR_NFT_PACKAGE`, a named MVR package, OR the AgentOS
+    // package itself with a documentary `main::execute` entry the package does
+    // not expose). None are directly move-callable — including them would build a
+    // PTB that hard-errors / aborts on-chain. When the target is not a real,
+    // callable entry we OMIT the skill's own entry call but still run the
+    // delegation accounting (assert_valid → consume → record_subagent_execution),
+    // so a delegated Call completes as a real on-chain tx instead of erroring.
+    const skillEntryCallable = isCallableSkillEntry(
+      packageAddr,
+      module,
+      this.#packageId,
+    );
+    const moveCallArgs = skillEntryCallable
+      ? this.#bindParams(transaction, params)
+      : [];
 
     // 5a. Delegated path: validate the cap BEFORE the skill runs.
     const cap = delegationCapId
@@ -795,11 +866,14 @@ export class AgentOSClient {
       );
     }
 
-    // 5b. The skill entry call.
-    transaction.moveCall({
-      target: `${packageAddr}::${module}::${func}`,
-      arguments: moveCallArgs,
-    });
+    // 5b. The skill entry call — only when the manifest's move target is a real,
+    // callable `0x` package. (Omitted for placeholder/named targets.)
+    if (skillEntryCallable) {
+      transaction.moveCall({
+        target: `${packageAddr}::${module}::${func}`,
+        arguments: moveCallArgs,
+      });
+    }
 
     // 5c. Delegated path: consume spend, then record the execution against the
     // cap's parent passport (FIX-1) — in that order so a record never lands for
@@ -825,6 +899,17 @@ export class AgentOSClient {
           clock: transaction.object(SUI_CLOCK_OBJECT_ID),
           packageId: this.#packageId,
         }),
+      );
+    }
+
+    // A placeholder skill target with no delegation cap would leave the PTB empty
+    // (no commands) — there is nothing to execute. Fail loudly instead of
+    // submitting an empty tx. (Delegated calls always have accounting commands.)
+    if (!skillEntryCallable && !cap) {
+      throw new Error(
+        `buildExecuteSkillTx: skill "${suinsName}" has a placeholder move target ` +
+          `(${manifest.sui.movePackage}) and no delegationCapId — nothing to execute. ` +
+          `Provide a delegationCapId (delegated exec) or a skill with a real 0x movePackage.`,
       );
     }
 

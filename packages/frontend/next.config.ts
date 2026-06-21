@@ -19,9 +19,10 @@ if (existsSync(rootEnv)) {
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@agentos/sdk"],
-  // Include the seed registry file in serverless function bundles
+  // Include the seed registry + demo runs files in serverless function bundles
+  // so a cold/ephemeral filesystem still seeds the registry and Analytics data.
   outputFileTracingIncludes: {
-    "/**": ["./registry.seed.json"],
+    "/**": ["./registry.seed.json", "./lib/runs.seed.json"],
   },
   async redirects() {
     return [

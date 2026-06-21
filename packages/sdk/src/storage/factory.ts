@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,7 +29,11 @@ import {
   InMemoryRegistryStore,
   InMemoryRunsStore,
 } from "./memory-store.js";
-import type { RegistryStore, RunsStore } from "./types.js";
+import type {
+  RegistryStore,
+  RunsStore,
+  WorkflowRunRecord,
+} from "./types.js";
 
 export interface DefaultStoreOptions {
   /** Working dir to resolve `.agentos/*` from. Defaults to `process.cwd()`. */
@@ -115,6 +120,66 @@ function ensureSeededRegistry(
   }
 }
 
+/**
+ * Shape of the bundled `runs.seed.json`: `{ version: 1, runs: [...] }`. Loaded
+ * once at cold start so the Analytics dashboard is populated even on an
+ * ephemeral filesystem (the demo runs are not user data — purely illustrative).
+ */
+interface RunsSeedFile {
+  version?: number;
+  runs?: WorkflowRunRecord[];
+}
+
+/** Read + parse a bundled runs-seed file. Returns [] on any error/missing. */
+function loadSeedRuns(bundledRuns?: string): WorkflowRunRecord[] {
+  if (!bundledRuns || !existsSync(bundledRuns)) return [];
+  try {
+    const parsed = JSON.parse(
+      readFileSync(bundledRuns, "utf8"),
+    ) as RunsSeedFile;
+    return Array.isArray(parsed.runs) ? parsed.runs : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * On cold start (no per-run files AND no legacy runs file yet), write the
+ * bundled demo runs into the runs dir as per-run files so listings/analytics see
+ * them. Idempotent: once any run file exists the dir is considered seeded and
+ * this is a no-op (so it never clobbers/duplicates real runs on a warm fs).
+ */
+function ensureSeededRuns(
+  dir: string,
+  legacyFile: string | undefined,
+  seedRuns: WorkflowRunRecord[],
+): void {
+  if (seedRuns.length === 0) return;
+  // Already has runs? (a populated dir, or a legacy file) → don't reseed.
+  if (existsSync(dir)) {
+    try {
+      const hasRunFile = readdirSync(dir).some((f) => f.endsWith(".json"));
+      if (hasRunFile) return;
+    } catch {
+      // Unreadable dir: fall through and attempt to seed; failures are ignored.
+    }
+  }
+  if (legacyFile && existsSync(legacyFile)) return;
+
+  try {
+    mkdirSync(dir, { recursive: true });
+    for (const run of seedRuns) {
+      const safe = run.runId.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const target = join(dir, `${safe}.json`);
+      if (existsSync(target)) continue;
+      writeFileSync(target, `${JSON.stringify(run, null, 2)}\n`, "utf8");
+    }
+  } catch {
+    // Read-only fs (no writable /tmp): seeding the file backend isn't possible.
+    // The in-memory fallback path seeds from the same file instead.
+  }
+}
+
 export interface CreateDefaultRegistryStoreOptions extends DefaultStoreOptions {
   /**
    * When the resolved filesystem location is not writable (no `/tmp`, fully
@@ -148,15 +213,31 @@ export function createDefaultRegistryStore(
 export interface CreateDefaultRunsStoreOptions extends DefaultStoreOptions {
   /** Use an ephemeral in-memory runs store instead of files. Defaults to false. */
   inMemoryFallback?: boolean;
+  /**
+   * Path to a bundled `runs.seed.json` (`{ version, runs }`). When provided and
+   * the store has no runs yet (cold start), the demo runs are seeded so the
+   * Analytics dashboard is populated out of the box — including on an ephemeral
+   * serverless filesystem. Real runs are never overwritten (seeding is skipped
+   * once any run exists). Mirrors the registry's `bundledRegistry` seeding.
+   */
+  bundledRuns?: string;
 }
 
 /** Build the default runs store (file-per-run, or in-memory fallback). */
 export function createDefaultRunsStore(
   options: CreateDefaultRunsStoreOptions = {},
 ): RunsStore {
+  const seedRuns = loadSeedRuns(options.bundledRuns);
+
   if (options.inMemoryFallback) {
-    return new InMemoryRunsStore();
+    // The ephemeral store seeds directly from the bundled runs (the fs can't be
+    // written), so Analytics still shows the demo data on a read-only fs.
+    return new InMemoryRunsStore(seedRuns);
   }
+
   const { dir, legacyFile } = resolveRunsDir(options);
+  // Cold start: materialize the demo runs as per-run files (idempotent — never
+  // reseeds once real runs exist).
+  ensureSeededRuns(dir, legacyFile, seedRuns);
   return new FileRunsStore(dir, legacyFile ? { legacyFile } : {});
 }
