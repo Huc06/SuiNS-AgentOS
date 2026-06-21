@@ -48,7 +48,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
 
   return (
     <div className="bg-off-white py-6">
-      <div className="mx-auto max-w-3xl px-4">
+      <main data-portfolio className="mx-auto max-w-3xl px-4">
         {/* ===== Profile Header ===== */}
         <section className="border-x border-b border-pure-black/10">
           <div className="flex items-center gap-5 border-b border-pure-black/10 px-6 py-6">
@@ -421,7 +421,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
         </section>
 
         <div className="h-16" />
-      </div>
+      </main>
     </div>
   );
 }
