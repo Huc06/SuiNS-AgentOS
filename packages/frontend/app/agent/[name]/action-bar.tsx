@@ -1,0 +1,114 @@
+"use client";
+
+import { useState } from "react";
+
+import type { AgentSkillRow } from "../../../lib/agent-types";
+import { EditPanel } from "./edit-panel";
+
+interface ActionBarProps {
+  agentSlug: string;
+  name: string;
+  explorerUrl: string;
+  description: string;
+  skills: AgentSkillRow[];
+  passportId: string;
+  suinsName: string;
+  network: string;
+  passportVersion: string;
+  runtimeWallet: string;
+  status: string;
+  createdAt: string;
+  delegationCount: number;
+}
+
+export function ActionBar({
+  agentSlug,
+  name,
+  explorerUrl,
+  description,
+  skills,
+  passportId,
+  suinsName,
+  network,
+  passportVersion,
+  runtimeWallet,
+  status,
+  createdAt,
+  delegationCount,
+}: ActionBarProps) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"skills" | "delegate" | "info">(
+    "skills",
+  );
+
+  const openTab = (tab: "skills" | "delegate" | "info") => {
+    setActiveTab(tab);
+    setEditOpen(true);
+  };
+
+  return (
+    <>
+      {/* Center content between sidebar and edit panel */}
+      <style>
+        {editOpen
+          ? `main[data-portfolio] { margin-right: 320px; max-width: none; transition: margin-right 0.2s ease; }`
+          : `main[data-portfolio] { margin-right: auto; max-width: 48rem; transition: margin-right 0.2s ease; }`}
+      </style>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-pure-black/10 px-6 py-4">
+        <a
+          href={explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-pure-black/10 px-3 py-1.5 font-mono text-[11px] font-bold text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple"
+        >
+          Suiscan ↗
+        </a>
+        <button
+          type="button"
+          onClick={() => openTab("skills")}
+          className="rounded border border-pure-black/10 px-3 py-1.5 font-mono text-[11px] font-bold text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple"
+        >
+          Skills
+        </button>
+        <button
+          type="button"
+          onClick={() => openTab("delegate")}
+          className="rounded border border-pure-black/10 px-3 py-1.5 font-mono text-[11px] font-bold text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple"
+        >
+          Delegate
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setEditOpen(!editOpen)}
+          className={`rounded border px-3 py-1.5 font-mono text-[11px] font-bold transition-all ${
+            editOpen
+              ? "border-electric-purple bg-electric-purple text-white"
+              : "border-electric-purple/30 bg-electric-purple/5 text-electric-purple hover:bg-electric-purple/10"
+          }`}
+        >
+          {editOpen ? "Close Editor" : "Edit Portfolio"}
+        </button>
+      </div>
+
+      <EditPanel
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        agentSlug={agentSlug}
+        passportId={passportId}
+        initialDescription={description}
+        skills={skills}
+        suinsName={suinsName}
+        network={network}
+        passportVersion={passportVersion}
+        runtimeWallet={runtimeWallet}
+        status={status}
+        createdAt={createdAt}
+        delegationCount={delegationCount}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+    </>
+  );
+}
