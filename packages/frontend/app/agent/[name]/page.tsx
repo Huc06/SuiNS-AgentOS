@@ -135,6 +135,42 @@ export default async function AgentPortfolioPage({ params }: Props) {
               internal
             />
           </div>
+          {/* Owner */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="font-mono text-[10px] font-bold uppercase text-black/40">
+              Owner
+            </span>
+            <code className="rounded bg-black/5 px-2 py-0.5 font-mono text-[11px] text-black">
+              {agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                ? shortObjectId(agent.runtimeWallet)
+                : shortObjectId(agent.passportId)}
+            </code>
+            <CopyButton
+              text={
+                agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                  ? agent.runtimeWallet
+                  : agent.passportId
+              }
+            />
+          </div>
+        </section>
+
+        <Separator />
+
+        {/* ===== Code Snippets ===== */}
+        <section className="border-x border-pure-black/10 px-6 py-6">
+          <h2 className="mb-3 text-sm font-bold text-black">Quick Start</h2>
+          <div className="space-y-3">
+            <CodeSnippet label="Install" code="npm install @agentos/sdk" />
+            <CodeSnippet
+              label="Resolve agent"
+              code={`import { agentOS } from '@agentos/sdk/node';\n\nconst agent = await agentOS.resolve('${agent.suinsName}');`}
+            />
+            <CodeSnippet
+              label="Execute skill"
+              code={`const result = await agentOS.execute({\n  agent: '${agent.suinsName}',\n  skill: '${skills[0]?.name ?? "skill-name"}',\n  input: { /* ... */ }\n});`}
+            />
+          </div>
         </section>
 
         <Separator />
@@ -578,4 +614,20 @@ function generateContributions(): number[] {
     else data.push(Math.floor(rand * 12) + 5);
   }
   return data;
+}
+
+function CodeSnippet({ label, code }: { label: string; code: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-pure-black/10">
+      <div className="flex items-center justify-between border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
+        <span className="font-mono text-[10px] font-bold uppercase text-black/40">
+          {label}
+        </span>
+        <CopyButton text={code} />
+      </div>
+      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-black">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
 }
