@@ -8,7 +8,7 @@
 
 This deploy ships the Move changes from the "A Move" phase **plus** the P4
 `set_memory_namespace` work (they have not yet been published — the live package
-`0xb6fcc783987f8bf72f9c9f817da3308cb9df2d6808921cdc8b5374a9d1e97387` predates
+`0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71` predates
 both). Read the compatibility analysis in §2 first — **one change forces a fresh
 publish rather than an in-place upgrade.**
 

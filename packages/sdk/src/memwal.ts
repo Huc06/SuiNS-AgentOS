@@ -9,20 +9,31 @@
  * ## Authentication — two schemes
  *
  * The REAL Walrus Memory relayer protects its `/api/*` routes with **signed
- * Ed25519 headers**, NOT a plain bearer token. Each request carries:
+ * Ed25519 headers**, NOT a plain bearer token. Per the official docs
+ * (https://docs.wal.app/walrus-memory/relayer/api-reference) each request
+ * carries:
  *   - `x-public-key` — hex Ed25519 public key (32 bytes, derived from the
  *     delegate key)
- *   - `x-signature`  — hex Ed25519 signature (64 bytes) over the message
- *     `{timestamp}.{method}.{path}.{body_sha256}`
+ *   - `x-signature`  — hex Ed25519 signature (64 bytes) over the canonical
+ *     message `{timestamp}.{method}.{path_and_query}.{body_sha256}.{nonce}.{account_id}`
  *   - `x-timestamp`  — unix seconds (the relayer enforces a 5-minute window)
- *   - `x-account-id` — the `MemWalAccount` object id (account hint)
- *   - `x-delegate-key` — the delegate private key (hex), used server-side for
- *     SEAL decrypt flows
+ *   - `x-nonce`      — a UUID v4 nonce; the relayer records it for replay
+ *     protection (`featureFlags["auth.accountBoundNonce"]` is on in production)
+ *   - `x-account-id` — the `MemWalAccount` object id (account hint). Official
+ *     SDKs always send it and include it in the canonical signature.
  *
  * The relayer recomputes `sha256(body)`, verifies the Ed25519 signature against
- * `x-public-key`, then resolves the owner by looking the public key up in the
- * on-chain `MemWalAccount.delegate_keys`. The protected endpoints are
- * `POST {baseUrl}/api/remember` and `POST {baseUrl}/api/recall`.
+ * `x-public-key` (over the canonical message above), then resolves the owner by
+ * looking the public key up in the on-chain `MemWalAccount.delegate_keys`. The
+ * protected endpoints are `POST {baseUrl}/api/remember` and
+ * `POST {baseUrl}/api/recall`.
+ *
+ * NOTE: the relayer-managed (default) flow does NOT send a decrypt credential.
+ * The legacy `x-delegate-key` header is **deprecated** (the live relayer's
+ * `/health` lists it under `deprecations`, removed at API `2.0.0`, superseded by
+ * `x-seal-session`), so this client no longer sends it. The delegate private key
+ * is still used locally to derive the public key and sign requests; it is just
+ * never transmitted.
  *
  * The client picks the scheme from how it is constructed:
  *   - **Delegate-key (signed) scheme** — when an `accountId` + `delegateKey`
@@ -34,10 +45,10 @@
  * `memwalFromEnv()` reads, in priority order:
  *   - `MEMWAL_ACCOUNT_ID` + `MEMWAL_DELEGATE_KEY` ⇒ signed scheme, or
  *   - `MEMWAL_API_KEY` ⇒ legacy bearer scheme.
- * Plus `MEMWAL_RELAYER_URL` (optional — defaults to the public STAGING relayer,
- * see {@link DEFAULT_MEMWAL_RELAYER_URL}). It returns `null` only when NEITHER
- * credential is configured, so callers (e.g. the workflow memory executor) skip
- * memory gracefully rather than crashing.
+ * Plus `MEMWAL_RELAYER_URL` (optional — defaults to the Walrus Foundation hosted
+ * STAGING/Testnet relayer, see {@link DEFAULT_MEMWAL_RELAYER_URL}). It returns
+ * `null` only when NEITHER credential is configured, so callers (e.g. the
+ * workflow memory executor) skip memory gracefully rather than crashing.
  *
  * Node-only: re-exported from `@agentos/sdk/node` (reads `process.env` and uses
  * Node's built-in `crypto` for Ed25519 — no extra dependency, no browser
@@ -45,21 +56,42 @@
  * the `@noble/ed25519` the reference memwal SDK uses.
  */
 
-import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  randomUUID,
+  sign,
+} from "node:crypto";
 
 /**
- * Public Walrus Memory (memwal) STAGING relayer base URL — the testnet-facing
- * managed relayer. AgentOS targets Sui testnet, so the testnet/staging relayer
- * is the right default here.
+ * Walrus Foundation hosted **Staging/Testnet** Walrus Memory relayer base URL.
+ * AgentOS targets Sui testnet, so the testnet/staging relayer is the right
+ * default here.
  *
- * Source (the memwal monorepo `docs/relayer/public-relayer.md` "Walrus
- * Foundation hosted endpoints" table): Staging/testnet =
- * `https://relayer.staging.memwal.ai`; the matching production (mainnet) relayer
- * is `https://relayer.memwal.ai`.
+ * Source: the OFFICIAL Walrus Memory docs, "Public Relayer → Walrus Foundation
+ * hosted endpoints" (https://docs.wal.app/walrus-memory/relayer/public-relayer):
+ *   - Production (Mainnet) = `https://relayer.memory.walrus.xyz`
+ *   - Staging (Testnet)    = `https://relayer-staging.memory.walrus.xyz`
+ * Both are live (`GET /health` → 200). The SDK `MemWalConfig` default
+ * `serverUrl` is the production URL; we default to the testnet/staging one to
+ * match AgentOS's testnet target.
+ *
+ * (The previously-guessed `relayer.staging.memwal.ai` / `relayer.memwal.ai`
+ * hosts are NOT the official endpoints — `*.memory.walrus.xyz` is canonical.)
  *
  * Override via `MEMWAL_RELAYER_URL` for production / a self-hosted relayer.
  */
-export const DEFAULT_MEMWAL_RELAYER_URL = "https://relayer.staging.memwal.ai";
+export const DEFAULT_MEMWAL_RELAYER_URL =
+  "https://relayer-staging.memory.walrus.xyz";
+
+/**
+ * Walrus Foundation hosted **Production/Mainnet** Walrus Memory relayer base URL
+ * (the SDK's own default `serverUrl`). Exported for callers that run on mainnet;
+ * set `MEMWAL_RELAYER_URL` to this value to target it.
+ */
+export const PRODUCTION_MEMWAL_RELAYER_URL =
+  "https://relayer.memory.walrus.xyz";
 
 /**
  * Options for the **delegate-key (signed)** scheme — the real Walrus Memory
@@ -133,12 +165,14 @@ async function decodeDelegateKey(key: string): Promise<Uint8Array> {
 
 /**
  * A pre-derived Ed25519 delegate key: the Node `KeyObject` used to sign, plus
- * the raw seed/public-key hex sent as headers.
+ * the public-key hex (`x-public-key`) and the account id hint (`x-account-id`)
+ * sent as headers. The raw delegate seed is NOT retained here — it is only used
+ * transiently to build `privateKey`, never transmitted (the `x-delegate-key`
+ * header is deprecated).
  */
 interface DelegateKeyMaterial {
   privateKey: import("node:crypto").KeyObject;
   publicKeyHex: string;
-  delegateKeyHex: string;
   accountId: string;
 }
 
@@ -239,7 +273,6 @@ export class MemwalClient {
         return {
           privateKey,
           publicKeyHex,
-          delegateKeyHex: lowerHex(seed),
           accountId: opts.accountId,
         };
       })();
@@ -248,23 +281,28 @@ export class MemwalClient {
   }
 
   /**
-   * Signed-header request. The signed message is
-   * `{timestamp}.{method}.{path}.{sha256hex(body)}` and the body hashed is the
-   * EXACT JSON string sent on the wire (byte-for-byte), matching the relayer's
-   * server-side recomputation.
+   * Signed-header request. The canonical signed message (per the official
+   * Walrus Memory relayer API reference) is
+   * `{timestamp}.{method}.{path_and_query}.{sha256hex(body)}.{nonce}.{account_id}`
+   * and the body hashed is the EXACT JSON string sent on the wire
+   * (byte-for-byte), matching the relayer's server-side recomputation. `path`
+   * here carries any query string (these routes use none, so it is the bare
+   * path). A fresh UUID v4 nonce is generated per request for replay protection
+   * and sent as `x-nonce`. The deprecated `x-delegate-key` decrypt credential is
+   * intentionally NOT sent (relayer-managed flow).
    */
   private async signedPost(
     path: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const { privateKey, publicKeyHex, delegateKeyHex, accountId } =
-      await this.getDelegate();
+    const { privateKey, publicKeyHex, accountId } = await this.getDelegate();
 
     const method = "POST";
     const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonce = randomUUID();
     const bodyStr = JSON.stringify(body);
     const bodySha256 = createHash("sha256").update(bodyStr).digest("hex");
-    const message = `${timestamp}.${method}.${path}.${bodySha256}`;
+    const message = `${timestamp}.${method}.${path}.${bodySha256}.${nonce}.${accountId}`;
     const signatureHex = lowerHex(sign(null, Buffer.from(message), privateKey));
 
     const response = await fetch(`${this.baseUrl}${path}`, {
@@ -274,8 +312,8 @@ export class MemwalClient {
         "x-public-key": publicKeyHex,
         "x-signature": signatureHex,
         "x-timestamp": timestamp,
+        "x-nonce": nonce,
         "x-account-id": accountId,
-        "x-delegate-key": delegateKeyHex,
       },
       body: bodyStr,
     });
@@ -319,9 +357,10 @@ export class MemwalClient {
  *   2. `MEMWAL_API_KEY` ⇒ the **legacy bearer** scheme (backward-compat).
  *
  * `MEMWAL_RELAYER_URL` (optional) overrides the base URL; when unset/blank it
- * falls back to {@link DEFAULT_MEMWAL_RELAYER_URL} (the public staging relayer).
- * Returns `null` ONLY when neither credential set is present, so the memory step
- * skips gracefully when memwal is not configured.
+ * falls back to {@link DEFAULT_MEMWAL_RELAYER_URL} (the Walrus Foundation hosted
+ * staging/testnet relayer). Set it to {@link PRODUCTION_MEMWAL_RELAYER_URL} for
+ * mainnet. Returns `null` ONLY when neither credential set is present, so the
+ * memory step skips gracefully when memwal is not configured.
  */
 export function memwalFromEnv(): MemwalClient | null {
   const baseUrl =
