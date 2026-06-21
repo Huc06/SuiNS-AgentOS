@@ -6,6 +6,7 @@ import { shortObjectId } from "../../../lib/registry-mappers";
 import { explorerObjectUrl } from "../../../lib/explorer-links";
 import { ActionBar } from "./action-bar";
 import { CopyButton } from "./copy-button";
+import { PortfolioBorder } from "./portfolio-border";
 
 interface Props {
   params: Promise<{ name: string }>;
@@ -53,109 +54,111 @@ export default async function AgentPortfolioPage({ params }: Props) {
         className="mx-auto max-w-3xl px-4 transition-all duration-200"
       >
         {/* ===== Profile Header ===== */}
-        <section className="border-x border-b border-pure-black/10">
-          <div className="flex items-center gap-5 border-b border-pure-black/10 px-6 py-6">
-            {/* Avatar */}
-            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-pure-black bg-electric-purple font-display text-2xl font-bold text-white shadow-[4px_4px_0_0_#000]">
-              {agent.slug.charAt(0).toUpperCase()}
-              <span
-                className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white ${agent.status === "active" ? "bg-green-500" : "bg-red-500"}`}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-2xl font-bold tracking-tight text-black">
-                  {agent.suinsName}
-                </h1>
-                {agent.status === "active" && (
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    className="shrink-0 text-electric-purple"
-                  >
-                    <path
-                      d="M9 12l2 2 4-4"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M12 2l2.4 3.6h4.2l-.6 4.2L21 12l-3 2.4.6 4.2h-4.2L12 22l-2.4-3.6H5.4l.6-4.2L3 12l3-2.4-.6-4.2h4.2L12 2z"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      fill="currentColor"
-                      fillOpacity="0.1"
-                    />
-                  </svg>
-                )}
+        <PortfolioBorder>
+          <section className="border-x border-b border-pure-black/10">
+            <div className="flex items-center gap-5 border-b border-pure-black/10 px-6 py-6">
+              {/* Avatar */}
+              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-pure-black bg-electric-purple font-display text-2xl font-bold text-white shadow-[4px_4px_0_0_#000]">
+                {agent.slug.charAt(0).toUpperCase()}
+                <span
+                  className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white ${agent.status === "active" ? "bg-green-500" : "bg-red-500"}`}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold tracking-tight text-black">
+                    {agent.suinsName}
+                  </h1>
+                  {agent.status === "active" && (
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="shrink-0 text-electric-purple"
+                    >
+                      <path
+                        d="M9 12l2 2 4-4"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 2l2.4 3.6h4.2l-.6 4.2L21 12l-3 2.4.6 4.2h-4.2L12 22l-2.4-3.6H5.4l.6-4.2L3 12l3-2.4-.6-4.2h4.2L12 2z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        fill="currentColor"
+                        fillOpacity="0.1"
+                      />
+                    </svg>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Description + metadata */}
-          <div className="flex flex-col gap-6 border-t border-pure-black/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="max-w-md">
-              <p className="text-sm leading-relaxed text-black/60">
-                {agent.description ||
-                  `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  Autonomous Agent
-                </span>
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  {agent.network}
-                </span>
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  Since {createdDate}
-                </span>
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  {agent.passportVersion}
-                </span>
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  {skills.length} skills
-                </span>
-                <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
-                  {agent.delegations?.length ?? 0} delegations
-                </span>
+            {/* Description + metadata */}
+            <div className="flex flex-col gap-6 border-t border-pure-black/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
+              <div className="max-w-md">
+                <p className="text-sm leading-relaxed text-black/60">
+                  {agent.description ||
+                    `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    Autonomous Agent
+                  </span>
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    {agent.network}
+                  </span>
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    Since {createdDate}
+                  </span>
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    {agent.passportVersion}
+                  </span>
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    {skills.length} skills
+                  </span>
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
+                    {agent.delegations?.length ?? 0} delegations
+                  </span>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col gap-2.5 sm:items-end">
+                <MetaRow icon="terminal" label="Install in" value="AgentOS" />
+                <MetaRow
+                  icon="user"
+                  label="Owner"
+                  value={
+                    agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                      ? shortObjectId(agent.runtimeWallet)
+                      : shortObjectId(agent.passportId)
+                  }
+                  copyText={
+                    agent.runtimeWallet && agent.runtimeWallet !== "0x0"
+                      ? agent.runtimeWallet
+                      : agent.passportId
+                  }
+                />
+                <MetaRow
+                  icon="download"
+                  label="Skills"
+                  value={String(skills.length)}
+                />
               </div>
             </div>
-            <div className="flex shrink-0 flex-col gap-2.5 sm:items-end">
-              <MetaRow icon="terminal" label="Install in" value="AgentOS" />
-              <MetaRow
-                icon="user"
-                label="Owner"
-                value={
-                  agent.runtimeWallet && agent.runtimeWallet !== "0x0"
-                    ? shortObjectId(agent.runtimeWallet)
-                    : shortObjectId(agent.passportId)
-                }
-                copyText={
-                  agent.runtimeWallet && agent.runtimeWallet !== "0x0"
-                    ? agent.runtimeWallet
-                    : agent.passportId
-                }
-              />
-              <MetaRow
-                icon="download"
-                label="Skills"
-                value={String(skills.length)}
-              />
-            </div>
-          </div>
 
-          {/* Action Links */}
-          <ActionBar
-            agentSlug={agent.slug}
-            name={name}
-            explorerUrl={explorerObjectUrl(agent.network, agent.passportId)}
-            description={agent.description || ""}
-            skills={skills}
-          />
-        </section>
+            {/* Action Links */}
+            <ActionBar
+              agentSlug={agent.slug}
+              name={name}
+              explorerUrl={explorerObjectUrl(agent.network, agent.passportId)}
+              description={agent.description || ""}
+              skills={skills}
+            />
+          </section>
+        </PortfolioBorder>
 
         <Separator />
 
