@@ -13,6 +13,13 @@ interface ActionBarProps {
   description: string;
   skills: AgentSkillRow[];
   passportId: string;
+  suinsName: string;
+  network: string;
+  passportVersion: string;
+  runtimeWallet: string;
+  status: string;
+  createdAt: string;
+  delegationCount: number;
 }
 
 export function ActionBar({
@@ -22,6 +29,13 @@ export function ActionBar({
   description,
   skills,
   passportId,
+  suinsName,
+  network,
+  passportVersion,
+  runtimeWallet,
+  status,
+  createdAt,
+  delegationCount,
 }: ActionBarProps) {
   const [editOpen, setEditOpen] = useState(false);
 
@@ -76,6 +90,13 @@ export function ActionBar({
         passportId={passportId}
         initialDescription={description}
         skills={skills}
+        suinsName={suinsName}
+        network={network}
+        passportVersion={passportVersion}
+        runtimeWallet={runtimeWallet}
+        status={status}
+        createdAt={createdAt}
+        delegationCount={delegationCount}
       />
     </>
   );

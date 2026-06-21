@@ -13,6 +13,14 @@ interface EditPanelProps {
   skills: AgentSkillRow[];
   open: boolean;
   onClose: () => void;
+  // Full agent info for Info tab
+  suinsName: string;
+  network: string;
+  passportVersion: string;
+  runtimeWallet: string;
+  status: string;
+  createdAt: string;
+  delegationCount: number;
 }
 
 export function EditPanel({
@@ -22,6 +30,13 @@ export function EditPanel({
   passportId,
   initialDescription,
   skills,
+  suinsName,
+  network,
+  passportVersion,
+  runtimeWallet,
+  status,
+  createdAt,
+  delegationCount,
 }: EditPanelProps) {
   const [description, setDescription] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
@@ -114,6 +129,15 @@ export function EditPanel({
             saving={saving}
             saved={saved}
             onSave={handleSave}
+            suinsName={suinsName}
+            network={network}
+            passportVersion={passportVersion}
+            passportId={passportId}
+            runtimeWallet={runtimeWallet}
+            status={status}
+            createdAt={createdAt}
+            skillCount={skills.length}
+            delegationCount={delegationCount}
           />
         )}
       </div>
@@ -242,15 +266,37 @@ function InfoTab({
   saving,
   saved,
   onSave,
+  suinsName,
+  network,
+  passportVersion,
+  passportId,
+  runtimeWallet,
+  status,
+  createdAt,
+  skillCount,
+  delegationCount,
 }: {
   description: string;
   setDescription: (v: string) => void;
   saving: boolean;
   saved: boolean;
   onSave: () => void;
+  suinsName: string;
+  network: string;
+  passportVersion: string;
+  passportId: string;
+  runtimeWallet: string;
+  status: string;
+  createdAt: string;
+  skillCount: number;
+  delegationCount: number;
 }) {
+  const shortId = (id: string) =>
+    id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id;
+
   return (
-    <div className="p-4 space-y-5">
+    <div className="space-y-4 p-4">
+      {/* Description (editable) */}
       <div>
         <label
           htmlFor="edit-desc"
@@ -262,18 +308,89 @@ function InfoTab({
           id="edit-desc"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={4}
+          rows={3}
           className="w-full resize-none rounded border border-pure-black/10 bg-white px-3 py-2 text-sm text-black outline-none focus:border-electric-purple"
           placeholder="Describe your agent..."
         />
       </div>
 
-      <div className="rounded border border-dashed border-pure-black/10 px-4 py-6 text-center">
-        <p className="font-mono text-[10px] text-black/30">
-          More fields coming soon — avatar, links, categories
+      {/* Identity */}
+      <div className="space-y-2">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+          Identity
         </p>
+        <InfoRow label="Name" value={suinsName} />
+        <InfoRow label="Status" value={status} badge />
+        <InfoRow label="Network" value={network} />
+        <InfoRow label="Version" value={passportVersion} />
+        <InfoRow
+          label="Created"
+          value={new Date(createdAt).toLocaleDateString()}
+        />
       </div>
 
+      {/* On-chain */}
+      <div className="space-y-2">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+          On-chain
+        </p>
+        <div className="flex items-center justify-between rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2">
+          <div>
+            <p className="font-mono text-[9px] text-black/40">Passport</p>
+            <code className="font-mono text-[11px] text-black">
+              {shortId(passportId)}
+            </code>
+          </div>
+          <CopyButton text={passportId} />
+        </div>
+        {runtimeWallet && runtimeWallet !== "0x0" && (
+          <div className="flex items-center justify-between rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2">
+            <div>
+              <p className="font-mono text-[9px] text-black/40">Runtime</p>
+              <code className="font-mono text-[11px] text-black">
+                {shortId(runtimeWallet)}
+              </code>
+            </div>
+            <CopyButton text={runtimeWallet} />
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="space-y-2">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
+          Stats
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+            <p className="text-lg font-bold text-black">{skillCount}</p>
+            <p className="font-mono text-[9px] text-black/40">Skills</p>
+          </div>
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+            <p className="text-lg font-bold text-black">{delegationCount}</p>
+            <p className="font-mono text-[9px] text-black/40">Delegates</p>
+          </div>
+          <div className="rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2 text-center">
+            <p className="text-lg font-bold text-black">0</p>
+            <p className="font-mono text-[9px] text-black/40">Executions</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Resolve */}
+      <div>
+        <p className="mb-1 font-mono text-[10px] font-bold uppercase text-black/40">
+          Resolve
+        </p>
+        <div className="flex items-center justify-between rounded border border-pure-black/5 bg-black/[0.02] px-3 py-2">
+          <code className="font-mono text-[11px] text-black">
+            agentos resolve {suinsName}
+          </code>
+          <CopyButton text={`agentos resolve ${suinsName}`} />
+        </div>
+      </div>
+
+      {/* Save */}
       {saved && (
         <p className="font-mono text-[10px] font-bold text-green-700">
           ✓ Saved
@@ -287,6 +404,33 @@ function InfoTab({
       >
         {saving ? "Saving..." : "Save Changes"}
       </button>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="font-mono text-[10px] text-black/40">{label}</span>
+      {badge ? (
+        <span
+          className={`rounded-full px-2 py-0.5 font-mono text-[9px] font-bold ${value === "active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+        >
+          {value}
+        </span>
+      ) : (
+        <span className="font-mono text-[11px] font-bold text-black">
+          {value}
+        </span>
+      )}
     </div>
   );
 }

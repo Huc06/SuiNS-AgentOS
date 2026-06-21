@@ -157,6 +157,13 @@ export default async function AgentPortfolioPage({ params }: Props) {
               description={agent.description || ""}
               skills={skills}
               passportId={agent.passportId}
+              suinsName={agent.suinsName}
+              network={agent.network}
+              passportVersion={agent.passportVersion}
+              runtimeWallet={agent.runtimeWallet}
+              status={agent.status}
+              createdAt={agent.createdAt}
+              delegationCount={agent.delegations?.length ?? 0}
             />
           </section>
 
