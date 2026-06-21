@@ -29,6 +29,25 @@ type TemplateNodeData = {
 
 export type TemplateGraph = { nodes: Node[]; edges: Edge[] };
 
+/**
+ * Dropdown grouping for a template. The canvas groups the Templates menu by
+ * this label (in `CATEGORY_ORDER`). Older templates without a category fall
+ * back to "Core" so nothing is ever orphaned.
+ */
+export type TemplateCategory =
+  | "Core"
+  | "DeFi"
+  | "Token & NFT"
+  | "DAO & Multi-agent";
+
+/** Stable display order for the categorized Templates dropdown. */
+export const CATEGORY_ORDER: TemplateCategory[] = [
+  "Core",
+  "DeFi",
+  "Token & NFT",
+  "DAO & Multi-agent",
+];
+
 export type WorkflowTemplate = {
   /** Stable id (used as the dropdown key). */
   id: string;
@@ -38,9 +57,30 @@ export type WorkflowTemplate = {
   description: string;
   /** What this template shows off (longer; used as a tooltip / aria-label). */
   demonstrates: string;
+  /** Dropdown grouping. Defaults to "Core" when omitted. */
+  category?: TemplateCategory;
   /** Build the concrete graph, seeded with the current agent's `.sui` name. */
   build: (agentName: string) => TemplateGraph;
 };
+
+/** Resolve a template's display category, defaulting unlabelled ones to "Core". */
+export function templateCategory(tpl: WorkflowTemplate): TemplateCategory {
+  return tpl.category ?? "Core";
+}
+
+/**
+ * Group templates by category in `CATEGORY_ORDER`. Used by the canvas to render
+ * a categorized Templates dropdown. Empty categories are omitted.
+ */
+export function templatesByCategory(): {
+  category: TemplateCategory;
+  templates: WorkflowTemplate[];
+}[] {
+  return CATEGORY_ORDER.map((category) => ({
+    category,
+    templates: TEMPLATES.filter((t) => templateCategory(t) === category),
+  })).filter((g) => g.templates.length > 0);
+}
 
 // ===== styling helpers (mirror the canvas' neo-brutalist edge styling) =====
 
@@ -116,6 +156,36 @@ function nftMetadataParam(self: string): string {
 // package + entry to actually mint.
 const NFT_MINT_PACKAGE_PLACEHOLDER = "0xYOUR_NFT_PACKAGE";
 const NFT_MINT_ENTRY_PLACEHOLDER = "nft::mint";
+
+// ===== Sui-native move-call placeholders =====
+//
+// IMPORTANT (honesty): the workflow `sui` node executes ONE `module::function`
+// move-call but binds NO arguments (the executor calls `tx.moveCall({ target,
+// arguments: [] })`). So these templates carry the *intended* real on-chain
+// target + its arg shape as documentation (subtitle/params), while the
+// `movePackage` itself is a NON-`0x` placeholder. The Sui executor treats any
+// non-`0x` package as a clean SKIP (it never crashes and never submits a
+// half-formed tx), so every template below produces a clean done/skipped run
+// out of the box. Swap the placeholder for a real published `0x…` package AND a
+// no-arg (or argument-binding) entry to actually submit on-chain.
+//
+// Each constant names the STANDARD package it stands in for, so the swap target
+// is obvious. (e.g. staking really is `0x3::sui_system::request_add_stake`;
+// coin transfer really is `0x2::coin` / `0x2::transfer`.)
+const STAKE_PACKAGE_PLACEHOLDER = "0xYOUR_SUI_SYSTEM"; // real: 0x3::sui_system
+const STAKE_ENTRY = "sui_system::request_add_stake";
+const TRANSFER_PACKAGE_PLACEHOLDER = "0xYOUR_FRAMEWORK"; // real: 0x2 (coin/transfer)
+const TRANSFER_ENTRY = "pay::split_and_transfer";
+const DEX_PACKAGE_PLACEHOLDER = "0xYOUR_DEX"; // real: DeepBook / Cetus pool pkg
+const DEX_SWAP_ENTRY = "pool::swap";
+const LP_ENTRY = "pool::add_liquidity";
+const AIRDROP_ENTRY = "airdrop::send";
+const KIOSK_PACKAGE_PLACEHOLDER = "0xYOUR_KIOSK"; // real: 0x2::kiosk
+const KIOSK_LIST_ENTRY = "kiosk::list";
+const DAO_PACKAGE_PLACEHOLDER = "0xYOUR_DAO"; // real: your governance pkg
+const DAO_VOTE_ENTRY = "governance::vote";
+const MARKETPLACE_PACKAGE_PLACEHOLDER = "0xYOUR_MARKETPLACE"; // real: pay/escrow pkg
+const MARKETPLACE_BUY_ENTRY = "marketplace::buy";
 
 // ===== templates =====
 
@@ -421,6 +491,358 @@ export const TEMPLATES: WorkflowTemplate[] = [
       const edges: Edge[] = [
         mkEdge("te1", "tpl-trigger", "tpl-mint", ORANGE, "MINT"),
         mkEdge("te2", "tpl-mint", "tpl-harbor", PURPLE, "ARCHIVE"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // ========================================================================
+  // DeFi
+  // ========================================================================
+
+  // 9) Stake SUI — Trigger -> Sui (request_add_stake) -> Attest.
+  {
+    id: "defi-stake-sui",
+    name: "Stake SUI",
+    category: "DeFi",
+    description:
+      "Delegate-stake SUI to a validator (0x3::sui_system::request_add_stake), then attest the action. Skips until you set a real 0x3 package + validator.",
+    demonstrates:
+      "Trigger -> Sui (the STANDARD staking call 0x3::sui_system::request_add_stake — validator address + amount seeded as params) -> Attest (record the stake in reputation). The Sui node skips cleanly until the placeholder package is swapped for the real 0x3 system package (the executor binds no args yet, so seed a no-arg entry or wire args to truly submit); Attest skips until an AGENTOS package id is set — the whole graph stays a clean run.",
+    build: () => {
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "Stake SUI — set 0x3 system pkg",
+          params: {
+            movePackage: STAKE_PACKAGE_PLACEHOLDER,
+            entry: STAKE_ENTRY,
+            // Carried as intent/documentation (executor binds no args yet).
+            validator: "0xVALIDATOR_ADDRESS",
+            amountMist: "1000000000",
+          },
+        }),
+        mkNode("tpl-attest", 540, 240, {
+          label: "Attest",
+          subtitle: "Reputation",
+          params: { kind: "stake", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "STAKE"),
+        mkEdge("te2", "tpl-sui", "tpl-attest", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 10) DeFi swap — Trigger -> Sui (DEX swap) -> Memory.
+  {
+    id: "defi-swap",
+    name: "DeFi swap",
+    category: "DeFi",
+    description:
+      "Swap one coin for another on a DEX (DeepBook/Cetus pool::swap; placeholder package), then remember the trade. Skips until you set a real pool package.",
+    demonstrates:
+      "Trigger -> Sui (a DEX pool::swap move-call — placeholder DeepBook/Cetus package, pool id + amount-in + min-out seeded as params) -> Memory (save a recallable note like 'swapped X for Y'). The Sui node skips cleanly until 0xYOUR_DEX is swapped for a real published pool package; Memory skips when MEMWAL is unset.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "DEX swap — set your pool pkg",
+          params: {
+            movePackage: DEX_PACKAGE_PLACEHOLDER,
+            entry: DEX_SWAP_ENTRY,
+            pool: "0xPOOL_OBJECT_ID",
+            amountIn: "1000000000",
+            minOut: "0",
+          },
+        }),
+        mkNode("tpl-memory", 540, 240, {
+          label: "Memory",
+          subtitle: "Save to agent memory",
+          params: { text: `${self} swapped tokens on a DEX pool.` },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "SWAP"),
+        mkEdge("te2", "tpl-sui", "tpl-memory", PURPLE, "REMEMBER"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 11) Add liquidity — Trigger -> Sui (LP add) -> Attest.
+  {
+    id: "defi-add-liquidity",
+    name: "Add liquidity",
+    category: "DeFi",
+    description:
+      "Provide liquidity to a DEX pool (placeholder pool::add_liquidity), then attest the position. Skips until you set a real pool package.",
+    demonstrates:
+      "Trigger -> Sui (a pool::add_liquidity move-call — placeholder DEX package, pool id + both coin amounts seeded as params) -> Attest (record the LP position in reputation). The Sui node skips cleanly until 0xYOUR_DEX is a real pool package; Attest skips until an AGENTOS package id is set.",
+    build: () => {
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "Add liquidity — set pool pkg",
+          params: {
+            movePackage: DEX_PACKAGE_PLACEHOLDER,
+            entry: LP_ENTRY,
+            pool: "0xPOOL_OBJECT_ID",
+            amountA: "1000000000",
+            amountB: "1000000000",
+          },
+        }),
+        mkNode("tpl-attest", 540, 240, {
+          label: "Attest",
+          subtitle: "Reputation",
+          params: { kind: "liquidity", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "ADD-LP"),
+        mkEdge("te2", "tpl-sui", "tpl-attest", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // ========================================================================
+  // Token & NFT
+  // ========================================================================
+
+  // 12) Transfer SUI — Trigger -> Sui (split + transfer) -> Memory.
+  {
+    id: "token-transfer-sui",
+    name: "Transfer SUI",
+    category: "Token & NFT",
+    description:
+      "Split a coin and transfer SUI to a recipient (standard framework pay/transfer), then remember it. Configurable amount + recipient; skips until a real package is set.",
+    demonstrates:
+      "Trigger -> Sui (a coin split + transfer via the STANDARD framework — recipient address + amount in MIST seeded as params) -> Memory (save a recallable 'sent N SUI to X' note). The Sui node skips cleanly until 0xYOUR_FRAMEWORK is swapped for the real 0x2 framework + a bound-args entry; Memory skips when MEMWAL is unset.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "Transfer SUI — set framework",
+          params: {
+            movePackage: TRANSFER_PACKAGE_PLACEHOLDER,
+            entry: TRANSFER_ENTRY,
+            recipient: "0xRECIPIENT_ADDRESS",
+            amountMist: "1000000000",
+          },
+        }),
+        mkNode("tpl-memory", 540, 240, {
+          label: "Memory",
+          subtitle: "Save to agent memory",
+          params: { text: `${self} transferred SUI to a recipient.` },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "TRANSFER"),
+        mkEdge("te2", "tpl-sui", "tpl-memory", PURPLE, "REMEMBER"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 13) Airdrop — Trigger -> Sui (multi-recipient transfer) -> Attest.
+  {
+    id: "token-airdrop",
+    name: "Airdrop",
+    category: "Token & NFT",
+    description:
+      "Distribute a coin to many recipients in one move-call (placeholder airdrop::send), then attest. Recipients + per-wallet amount seeded; skips until a real package is set.",
+    demonstrates:
+      "Trigger -> Sui (a multi-recipient airdrop move-call — comma-separated recipient list + per-wallet amount seeded as params) -> Attest (record the distribution in reputation). The Sui node skips cleanly until 0xYOUR_FRAMEWORK is a real airdrop package; Attest skips until an AGENTOS package id is set.",
+    build: () => {
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "Airdrop — set your package",
+          params: {
+            movePackage: TRANSFER_PACKAGE_PLACEHOLDER,
+            entry: AIRDROP_ENTRY,
+            recipients: "0xWALLET_A,0xWALLET_B,0xWALLET_C",
+            amountEach: "100000000",
+          },
+        }),
+        mkNode("tpl-attest", 540, 240, {
+          label: "Attest",
+          subtitle: "Reputation",
+          params: { kind: "airdrop", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "AIRDROP"),
+        mkEdge("te2", "tpl-sui", "tpl-attest", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 14) Mint NFT -> Kiosk — Trigger -> Sui (mint) -> Sui (kiosk list) -> Memory.
+  {
+    id: "nft-mint-kiosk",
+    name: "Mint NFT -> Kiosk",
+    category: "Token & NFT",
+    description:
+      "Mint an NFT (placeholder NFT package) then list it in a Kiosk (placeholder 0x2::kiosk), and remember it. Both Sui nodes skip until real packages are set.",
+    demonstrates:
+      "Trigger -> Sui (mint NFT move-call — your published NFT package::function) -> Sui (kiosk::list move-call — kiosk id + price seeded as params; real target is the standard 0x2::kiosk) -> Memory (save 'minted + listed NFT' note). Each Sui node skips cleanly until its placeholder package is swapped for a real 0x… package; Memory skips when MEMWAL is unset.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 40, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-mint", 240, 240, {
+          label: "Sui",
+          subtitle: "Mint NFT — set your package",
+          params: {
+            movePackage: NFT_MINT_PACKAGE_PLACEHOLDER,
+            entry: NFT_MINT_ENTRY_PLACEHOLDER,
+          },
+        }),
+        mkNode("tpl-list", 460, 240, {
+          label: "Sui",
+          subtitle: "Kiosk list — set 0x2::kiosk",
+          params: {
+            movePackage: KIOSK_PACKAGE_PLACEHOLDER,
+            entry: KIOSK_LIST_ENTRY,
+            kiosk: "0xKIOSK_OBJECT_ID",
+            priceMist: "1000000000",
+          },
+        }),
+        mkNode("tpl-memory", 700, 240, {
+          label: "Memory",
+          subtitle: "Save to agent memory",
+          params: { text: `${self} minted an NFT and listed it in a Kiosk.` },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-mint", ORANGE, "MINT"),
+        mkEdge("te2", "tpl-mint", "tpl-list", ORANGE, "LIST"),
+        mkEdge("te3", "tpl-list", "tpl-memory", PURPLE, "REMEMBER"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // ========================================================================
+  // DAO & Multi-agent
+  // ========================================================================
+
+  // 15) DAO vote — Trigger -> Sui (governance vote) -> Attest.
+  {
+    id: "dao-vote",
+    name: "DAO vote",
+    category: "DAO & Multi-agent",
+    description:
+      "Cast a governance vote on a proposal (placeholder governance::vote), then attest the vote. Proposal id + choice seeded; skips until a real DAO package is set.",
+    demonstrates:
+      "Trigger -> Sui (a DAO governance::vote move-call — proposal id + yes/no choice seeded as params) -> Attest (record the vote in reputation). The Sui node skips cleanly until 0xYOUR_DAO is swapped for a real governance package; Attest skips until an AGENTOS package id is set.",
+    build: () => {
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 60, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui", 300, 240, {
+          label: "Sui",
+          subtitle: "DAO vote — set your DAO pkg",
+          params: {
+            movePackage: DAO_PACKAGE_PLACEHOLDER,
+            entry: DAO_VOTE_ENTRY,
+            proposal: "0xPROPOSAL_OBJECT_ID",
+            choice: "yes",
+          },
+        }),
+        mkNode("tpl-attest", 540, 240, {
+          label: "Attest",
+          subtitle: "Reputation",
+          params: { kind: "governance", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "VOTE"),
+        mkEdge("te2", "tpl-sui", "tpl-attest", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 16) Agent buys skill — Import Agent -> Sui (pay seller) -> Call Sub-Agent -> Attest.
+  {
+    id: "marketplace-buy-skill",
+    name: "Agent buys skill",
+    category: "DAO & Multi-agent",
+    description:
+      "The multi-agent marketplace loop: read a seller's catalog, pay the seller, invoke the purchased skill, then attest. Coordinate nodes skip cleanly without an on-chain package.",
+    demonstrates:
+      "Trigger -> Import Agent (read the SELLER's published skill catalog, hash-verified, read-only) -> Sui (pay/transfer to the seller — placeholder marketplace package, seller address + price seeded as params) -> Call Sub-Agent (invoke the just-purchased skill via the existing delegated-exec node) -> Attest (rate the purchase). The full agent-to-agent marketplace flow built only from existing coordinate nodes; each on-chain node skips cleanly until env/packages are set.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 40, 240, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-import", 240, 240, {
+          label: "Import Agent",
+          subtitle: "Read seller catalog",
+          params: { agent: self },
+        }),
+        mkNode("tpl-pay", 460, 240, {
+          label: "Sui",
+          subtitle: "Pay seller — set marketplace",
+          params: {
+            movePackage: MARKETPLACE_PACKAGE_PLACEHOLDER,
+            entry: MARKETPLACE_BUY_ENTRY,
+            seller: "0xSELLER_ADDRESS",
+            priceMist: "1000000000",
+          },
+        }),
+        mkNode("tpl-call", 680, 240, {
+          label: "Call Sub-Agent",
+          subtitle: "Invoke purchased skill",
+          params: { skill: self, cost: "0" },
+        }),
+        mkNode("tpl-attest", 900, 240, {
+          label: "Attest",
+          subtitle: "Reputation",
+          params: { kind: "purchase", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-import", PINK),
+        mkEdge("te2", "tpl-import", "tpl-pay", ORANGE, "PAY"),
+        mkEdge("te3", "tpl-pay", "tpl-call", PINK, "INVOKE"),
+        mkEdge("te4", "tpl-call", "tpl-attest", PINK, "ATTEST"),
       ];
       return { nodes, edges };
     },

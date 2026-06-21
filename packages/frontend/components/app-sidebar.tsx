@@ -27,6 +27,16 @@ export function AppSidebar() {
           active={pathname === "/create" || pathname.startsWith("/create/")}
         />
         <SidebarLink
+          href="/delegations"
+          label="Delegations"
+          active={pathname === "/delegations"}
+        />
+        <SidebarLink
+          href="/analytics"
+          label="Analytics"
+          active={pathname === "/analytics"}
+        />
+        <SidebarLink
           href="/explore"
           label="Portfolio"
           active={pathname === "/explore"}

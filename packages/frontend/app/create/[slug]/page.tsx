@@ -41,7 +41,7 @@ import {
   LABEL_FIELD_KEY,
   type NodeParamField,
 } from "../../../lib/node-config";
-import { TEMPLATES } from "../../../lib/workflow-templates";
+import { TEMPLATES, templatesByCategory } from "../../../lib/workflow-templates";
 import { defaultGraphForSlug } from "../../../lib/agent-workflows";
 
 // ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
@@ -1999,22 +1999,29 @@ export default function WorkflowEditorPage() {
                     Templates
                   </div>
                   <div className="max-h-[60vh] overflow-y-auto">
-                    {TEMPLATES.map((tpl) => (
-                      <button
-                        key={tpl.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => loadTemplate(tpl.id)}
-                        title={tpl.demonstrates}
-                        className="block w-full border-b border-pure-black/10 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-container"
-                      >
-                        <div className="font-mono text-xs font-bold text-black">
-                          {tpl.name}
+                    {templatesByCategory().map((group) => (
+                      <div key={group.category}>
+                        <div className="sticky top-0 z-10 border-b border-pure-black/10 bg-surface-container px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-black/45">
+                          {group.category}
                         </div>
-                        <div className="mt-0.5 font-mono text-[10px] leading-snug text-black/55">
-                          {tpl.description}
-                        </div>
-                      </button>
+                        {group.templates.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => loadTemplate(tpl.id)}
+                            title={tpl.demonstrates}
+                            className="block w-full border-b border-pure-black/10 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-container"
+                          >
+                            <div className="font-mono text-xs font-bold text-black">
+                              {tpl.name}
+                            </div>
+                            <div className="mt-0.5 font-mono text-[10px] leading-snug text-black/55">
+                              {tpl.description}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </div>
                 </div>
