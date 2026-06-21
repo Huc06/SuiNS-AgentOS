@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 import type { AgentSkillRow } from "../../../lib/agent-types";
+import { DelegateContent } from "../../../components/agent/delegate-content";
 import { CopyButton } from "./copy-button";
 
 interface EditPanelProps {
   agentSlug: string;
+  passportId: string;
   initialDescription: string;
   skills: AgentSkillRow[];
   open: boolean;
@@ -17,13 +19,14 @@ export function EditPanel({
   open,
   onClose,
   agentSlug,
+  passportId,
   initialDescription,
   skills,
 }: EditPanelProps) {
   const [description, setDescription] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<"info" | "skills">("skills");
+  const [tab, setTab] = useState<"skills" | "delegate" | "info">("skills");
 
   const handleSave = async () => {
     setSaving(true);
@@ -64,18 +67,29 @@ export function EditPanel({
         <button
           type="button"
           onClick={() => setTab("skills")}
-          className={`flex-1 px-4 py-2.5 font-mono text-[11px] font-bold transition-colors ${
+          className={`flex-1 px-3 py-2.5 font-mono text-[11px] font-bold transition-colors ${
             tab === "skills"
               ? "border-b-2 border-electric-purple text-electric-purple"
               : "text-black/40 hover:text-black"
           }`}
         >
-          Skills ({skills.length})
+          Skills
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("delegate")}
+          className={`flex-1 px-3 py-2.5 font-mono text-[11px] font-bold transition-colors ${
+            tab === "delegate"
+              ? "border-b-2 border-electric-purple text-electric-purple"
+              : "text-black/40 hover:text-black"
+          }`}
+        >
+          Delegate
         </button>
         <button
           type="button"
           onClick={() => setTab("info")}
-          className={`flex-1 px-4 py-2.5 font-mono text-[11px] font-bold transition-colors ${
+          className={`flex-1 px-3 py-2.5 font-mono text-[11px] font-bold transition-colors ${
             tab === "info"
               ? "border-b-2 border-electric-purple text-electric-purple"
               : "text-black/40 hover:text-black"
@@ -89,6 +103,10 @@ export function EditPanel({
       <div className="flex-1 overflow-y-auto">
         {tab === "skills" ? (
           <SkillsTab skills={skills} agentSlug={agentSlug} />
+        ) : tab === "delegate" ? (
+          <div className="p-4">
+            <DelegateContent agentSlug={agentSlug} passportId={passportId} />
+          </div>
         ) : (
           <InfoTab
             description={description}

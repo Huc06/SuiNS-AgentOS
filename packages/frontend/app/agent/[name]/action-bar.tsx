@@ -12,6 +12,7 @@ interface ActionBarProps {
   explorerUrl: string;
   description: string;
   skills: AgentSkillRow[];
+  passportId: string;
 }
 
 export function ActionBar({
@@ -20,6 +21,7 @@ export function ActionBar({
   explorerUrl,
   description,
   skills,
+  passportId,
 }: ActionBarProps) {
   const [editOpen, setEditOpen] = useState(false);
 
@@ -71,6 +73,7 @@ export function ActionBar({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         agentSlug={agentSlug}
+        passportId={passportId}
         initialDescription={description}
         skills={skills}
       />

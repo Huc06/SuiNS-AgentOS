@@ -48,15 +48,15 @@ export default async function AgentPortfolioPage({ params }: Props) {
   const totalContributions = contributions.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="min-h-screen py-6" style={{ backgroundColor: "#120f17" }}>
+    <div className="bg-off-white py-6">
       <main
         data-portfolio
         className="mx-auto max-w-3xl px-4 transition-all duration-200"
       >
         {/* ===== Profile Header ===== */}
         <PortfolioBorder>
-          <section className="border-x border-b border-white/10">
-            <div className="flex items-center gap-5 border-b border-white/10 px-6 py-6">
+          <section className="border-x border-b border-pure-black/10">
+            <div className="flex items-center gap-5 border-b border-pure-black/10 px-6 py-6">
               {/* Avatar */}
               <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-pure-black bg-electric-purple font-display text-2xl font-bold text-white shadow-[4px_4px_0_0_#000]">
                 {agent.slug.charAt(0).toUpperCase()}
@@ -98,29 +98,29 @@ export default async function AgentPortfolioPage({ params }: Props) {
             </div>
 
             {/* Description + metadata */}
-            <div className="flex flex-col gap-6 border-t border-white/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-6 border-t border-pure-black/10 px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
               <div className="max-w-md">
-                <p className="text-sm leading-relaxed text-white/60">
+                <p className="text-sm leading-relaxed text-black/60">
                   {agent.description ||
                     `Autonomous AI agent on Sui with ${skills.length} skill${skills.length !== 1 ? "s" : ""} — resolve by name, execute on-chain.`}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     Autonomous Agent
                   </span>
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     {agent.network}
                   </span>
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     Since {createdDate}
                   </span>
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     {agent.passportVersion}
                   </span>
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     {skills.length} skills
                   </span>
-                  <span className="rounded border border-white/10 px-2 py-0.5 font-mono text-[10px] text-white/50">
+                  <span className="rounded border border-pure-black/10 px-2 py-0.5 font-mono text-[10px] text-black/50">
                     {agent.delegations?.length ?? 0} delegations
                   </span>
                 </div>
@@ -156,37 +156,38 @@ export default async function AgentPortfolioPage({ params }: Props) {
               explorerUrl={explorerObjectUrl(agent.network, agent.passportId)}
               description={agent.description || ""}
               skills={skills}
+              passportId={agent.passportId}
             />
           </section>
 
           <Separator />
 
           {/* ===== Greeting + About ===== */}
-          <section className="border-x border-white/10 px-6 py-8">
+          <section className="border-x border-pure-black/10 px-6 py-8">
             <h2 className="mb-4 text-3xl font-bold tracking-tight text-black">
               {greeting}
             </h2>
-            <ul className="space-y-3 text-sm leading-relaxed text-white/80">
+            <ul className="space-y-3 text-sm leading-relaxed text-black/80">
               <li className="flex gap-2">
-                <span className="mt-1 text-white/30">•</span>
+                <span className="mt-1 text-black/30">•</span>
                 <span>
                   I&apos;m{" "}
-                  <strong className="text-white">{agent.suinsName}</strong> — an
+                  <strong className="text-black">{agent.suinsName}</strong> — an
                   autonomous AI agent on the Sui blockchain with on-chain
                   identity, skills, and delegation capabilities.
                 </span>
               </li>
               {agent.description && (
                 <li className="flex gap-2">
-                  <span className="mt-1 text-white/30">•</span>
+                  <span className="mt-1 text-black/30">•</span>
                   <span>{agent.description}</span>
                 </li>
               )}
               <li className="flex gap-2">
-                <span className="mt-1 text-white/30">•</span>
+                <span className="mt-1 text-black/30">•</span>
                 <span>
                   Equipped with{" "}
-                  <strong className="text-white">
+                  <strong className="text-black">
                     {skills.length} skill{skills.length !== 1 ? "s" : ""}
                   </strong>{" "}
                   including{" "}
@@ -198,14 +199,14 @@ export default async function AgentPortfolioPage({ params }: Props) {
                 </span>
               </li>
               <li className="flex gap-2">
-                <span className="mt-1 text-white/30">•</span>
+                <span className="mt-1 text-black/30">•</span>
                 <span>
                   Passport{" "}
-                  <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs">
+                  <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs">
                     {shortObjectId(agent.passportId)}
                   </code>{" "}
                   verified on{" "}
-                  <strong className="text-white capitalize">
+                  <strong className="text-black capitalize">
                     {agent.network}
                   </strong>
                   .
@@ -217,11 +218,11 @@ export default async function AgentPortfolioPage({ params }: Props) {
           <Separator />
 
           {/* ===== Contributions Graph ===== */}
-          <section className="border-x border-white/10 px-6 py-6">
+          <section className="border-x border-pure-black/10 px-6 py-6">
             <h2 className="mb-1 text-lg font-bold tracking-tight text-black">
               Activity
             </h2>
-            <p className="mb-4 font-mono text-xs text-white/50">
+            <p className="mb-4 font-mono text-xs text-black/50">
               {totalContributions.toLocaleString()} on-chain actions in the past
               365 days.
             </p>
@@ -229,7 +230,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
             {/* Month labels */}
             <div className="mb-1 flex">
               <div className="w-7" />
-              <div className="flex flex-1 justify-between font-mono text-[9px] text-white/40">
+              <div className="flex flex-1 justify-between font-mono text-[9px] text-black/40">
                 {[
                   "Jun",
                   "Jul",
@@ -252,7 +253,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
             {/* Grid */}
             <div className="flex gap-[2px] overflow-x-auto">
               {/* Day labels */}
-              <div className="flex w-7 shrink-0 flex-col justify-between py-[2px] font-mono text-[9px] text-white/40">
+              <div className="flex w-7 shrink-0 flex-col justify-between py-[2px] font-mono text-[9px] text-black/40">
                 <span>Mon</span>
                 <span>Wed</span>
                 <span>Fri</span>
@@ -278,9 +279,9 @@ export default async function AgentPortfolioPage({ params }: Props) {
             </div>
 
             {/* Legend */}
-            <div className="mt-3 flex items-center justify-end gap-1 font-mono text-[9px] text-white/40">
+            <div className="mt-3 flex items-center justify-end gap-1 font-mono text-[9px] text-black/40">
               <span>Less</span>
-              <div className="h-[10px] w-[10px] rounded-sm bg-white/10" />
+              <div className="h-[10px] w-[10px] rounded-sm bg-black/5" />
               <div className="h-[10px] w-[10px] rounded-sm bg-electric-purple/20" />
               <div className="h-[10px] w-[10px] rounded-sm bg-electric-purple/40" />
               <div className="h-[10px] w-[10px] rounded-sm bg-electric-purple/70" />
@@ -292,7 +293,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
           <Separator />
 
           {/* ===== Stack (Skills as tech stack) ===== */}
-          <section className="border-x border-white/10 px-6 py-6">
+          <section className="border-x border-pure-black/10 px-6 py-6">
             <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
               Stack
               <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
@@ -300,7 +301,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
               </span>
             </h2>
             {skills.length === 0 ? (
-              <p className="font-mono text-sm text-white/50">
+              <p className="font-mono text-sm text-black/50">
                 No skills published yet.
               </p>
             ) : (
@@ -308,9 +309,9 @@ export default async function AgentPortfolioPage({ params }: Props) {
                 {skills.map((skill) => (
                   <div
                     key={skill.id}
-                    className="flex items-center gap-3 rounded-lg border border-white/10 bg-white px-3 py-3 transition-colors hover:border-electric-purple/30 hover:bg-electric-purple/[0.02]"
+                    className="flex items-center gap-3 rounded-lg border border-pure-black/10 bg-white px-3 py-3 transition-colors hover:border-electric-purple/30 hover:bg-electric-purple/[0.02]"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pure-black/10 bg-black/[0.02] text-black/60">
                       {skill.icon === "token" ? (
                         <svg
                           width="16"
@@ -355,7 +356,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
                       <p className="truncate text-sm font-bold text-black">
                         {skill.name}
                       </p>
-                      <p className="truncate font-mono text-[10px] text-white/40">
+                      <p className="truncate font-mono text-[10px] text-black/40">
                         {skill.mvrPackage}
                       </p>
                     </div>
@@ -368,7 +369,7 @@ export default async function AgentPortfolioPage({ params }: Props) {
           <Separator />
 
           {/* ===== Identity / On-chain ===== */}
-          <section className="border-x border-white/10 px-6 py-6">
+          <section className="border-x border-pure-black/10 px-6 py-6">
             <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
               On-chain Identity
             </h2>
@@ -388,8 +389,8 @@ export default async function AgentPortfolioPage({ params }: Props) {
                 />
               )}
             </div>
-            <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3">
-              <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+            <div className="mt-4 rounded-lg border border-pure-black/5 bg-black/[0.02] px-4 py-3">
+              <p className="font-mono text-[10px] font-bold uppercase text-black/40">
                 Resolve
               </p>
               <code className="mt-1 block font-mono text-xs text-black">
@@ -401,22 +402,22 @@ export default async function AgentPortfolioPage({ params }: Props) {
           <Separator />
 
           {/* ===== Stats Footer ===== */}
-          <section className="border-x border-b border-white/10 px-6 py-6">
+          <section className="border-x border-b border-pure-black/10 px-6 py-6">
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
               <div>
-                <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/40">
                   Executions
                 </p>
                 <p className="mt-1 text-2xl font-bold text-black">0</p>
               </div>
               <div>
-                <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/40">
                   Reputation
                 </p>
                 <p className="mt-1 text-2xl font-bold text-black">—</p>
               </div>
               <div>
-                <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/40">
                   Since
                 </p>
                 <p className="mt-1 text-2xl font-bold text-black">
@@ -437,14 +438,14 @@ export default async function AgentPortfolioPage({ params }: Props) {
 
 function Separator() {
   return (
-    <div className="h-6 w-full border-x border-white/10 bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(0,0,0,0.03)_4px,rgba(0,0,0,0.03)_5px)]" />
+    <div className="h-6 w-full border-x border-pure-black/10 bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(0,0,0,0.03)_4px,rgba(0,0,0,0.03)_5px)]" />
   );
 }
 
 function OverviewItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+      <p className="font-mono text-[10px] font-bold uppercase text-black/40">
         {label}
       </p>
       <p className="mt-0.5 text-sm font-bold capitalize text-black">{value}</p>
@@ -464,9 +465,9 @@ function IdentityRow({
   href: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-white/10 px-4 py-2.5">
+    <div className="flex items-center justify-between rounded-lg border border-pure-black/10 px-4 py-2.5">
       <div>
-        <p className="font-mono text-[10px] font-bold uppercase text-white/40">
+        <p className="font-mono text-[10px] font-bold uppercase text-black/40">
           {label}
         </p>
         <code className="font-mono text-xs text-black">{value}</code>
@@ -555,7 +556,7 @@ function SocialButton({
   }[icon];
 
   const cls =
-    "flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white text-white/60 transition-all hover:border-electric-purple hover:text-electric-purple hover:shadow-[2px_2px_0_0_#6800FF]";
+    "flex h-8 w-8 items-center justify-center rounded-lg border border-pure-black/10 bg-white text-black/60 transition-all hover:border-electric-purple hover:text-electric-purple hover:shadow-[2px_2px_0_0_#6800FF]";
 
   if (internal) {
     return (
@@ -580,7 +581,7 @@ function SocialButton({
 // ===== Contribution helpers =====
 
 function getContributionColor(level: number): string {
-  if (level === 0) return "bg-white/10";
+  if (level === 0) return "bg-black/5";
   if (level <= 2) return "bg-electric-purple/20";
   if (level <= 5) return "bg-electric-purple/40";
   if (level <= 8) return "bg-electric-purple/70";
@@ -605,8 +606,8 @@ function generateContributions(): number[] {
 
 function CodeSnippet({ code }: { code: string }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-white/10">
-      <div className="flex items-center justify-end border-b border-white/5 bg-white/[0.03] px-3 py-1.5">
+    <div className="overflow-hidden rounded-lg border border-pure-black/10">
+      <div className="flex items-center justify-end border-b border-pure-black/5 bg-black/[0.02] px-3 py-1.5">
         <CopyButton text={code} />
       </div>
       <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-black">
@@ -636,7 +637,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/30"
+        className="text-black/30"
       >
         <polyline points="4 17 10 11 4 5" />
         <line x1="12" y1="19" x2="20" y2="19" />
@@ -650,7 +651,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/30"
+        className="text-black/30"
       >
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
         <circle cx="12" cy="7" r="4" />
@@ -664,7 +665,7 @@ function MetaRow({
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-white/30"
+        className="text-black/30"
       >
         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
@@ -677,7 +678,7 @@ function MetaRow({
     <div className="flex items-center gap-3">
       {icons[icon]}
       <div>
-        <p className="font-mono text-[10px] text-white/40">{label}</p>
+        <p className="font-mono text-[10px] text-black/40">{label}</p>
         <div className="flex items-center gap-1.5">
           <p className="font-mono text-sm font-bold text-black">{value}</p>
           {copyText && <CopyButton text={copyText} />}
