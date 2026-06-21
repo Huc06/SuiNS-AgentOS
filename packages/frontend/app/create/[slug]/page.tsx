@@ -34,6 +34,12 @@ import {
   suiscanObjectLink,
   type DetailField,
 } from "../../../lib/node-output";
+import {
+  fieldsForLabel,
+  validateNodeParams,
+  LABEL_FIELD_KEY,
+  type NodeParamField,
+} from "../../../lib/node-config";
 import { TEMPLATES } from "../../../lib/workflow-templates";
 
 // ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
@@ -168,73 +174,8 @@ const TYPE_LABEL: Record<WfType, string> = {
   attest: "Attest",
 };
 
-// Which param keys are editable per node type, with a label + the run-POST
-// param key. The values flow straight into the run POST body. A field flagged
-// `kind: "namespace"` renders a registry-derived namespace picker (datalist).
-interface NodeParamField {
-  key: string;
-  label: string;
-  placeholder: string;
-  /** "namespace" → render the agent's known-namespaces picker (datalist). */
-  kind?: "namespace";
-}
-const NODE_PARAM_FIELDS: Partial<Record<WfType, NodeParamField[]>> = {
-  memory: [
-    {
-      key: "namespace",
-      label: "Namespace",
-      placeholder: "agent.sui (default)",
-      kind: "namespace",
-    },
-    {
-      key: "text",
-      label: "Text to remember (optional)",
-      placeholder: "defaults to a run digest",
-    },
-  ],
-  "memory-recall": [
-    {
-      key: "namespace",
-      label: "Namespace",
-      placeholder: "agent.sui (default)",
-      kind: "namespace",
-    },
-    { key: "query", label: "Query", placeholder: "what did I store?" },
-    { key: "limit", label: "Limit (optional)", placeholder: "5" },
-  ],
-  "import-agent": [
-    { key: "agent", label: "Target agent (.sui)", placeholder: "alice.sui" },
-  ],
-  delegate: [
-    { key: "child", label: "Child agent (.sui / addr)", placeholder: "alice.sui" },
-    { key: "spendLimit", label: "Spend limit", placeholder: "0" },
-    { key: "expiryMs", label: "Expiry (ms epoch, 0 = none)", placeholder: "0" },
-  ],
-  "call-sub-agent": [
-    { key: "skill", label: "Skill (.sui)", placeholder: "alice.sui" },
-    {
-      key: "delegationCapId",
-      label: "Delegation cap id (0x…, optional)",
-      placeholder: "0x… (from Delegate output)",
-    },
-    {
-      key: "subjectPassportId",
-      label: "Subject passport id (0x…, optional)",
-      placeholder: "0x…",
-    },
-    { key: "cost", label: "Cost", placeholder: "0" },
-  ],
-  attest: [
-    {
-      key: "subjectPassportId",
-      label: "Subject passport id (0x…)",
-      placeholder: "0x…",
-    },
-    { key: "kind", label: "Kind", placeholder: "review" },
-    { key: "score", label: "Score (0-100)", placeholder: "100" },
-    { key: "uri", label: "URI (optional)", placeholder: "" },
-  ],
-};
+// Per-node editable-param schema + validation now lives in lib/node-config.ts
+// (shared, browser-safe). The inline config form below renders those fields.
 
 // Known Walrus-memory namespaces for this agent, derived client-side from the
 // registry (/api/namespaces). The memory nodes' namespace picker consumes this;
@@ -562,6 +503,140 @@ function NodeOutputDetailPopover({
   );
 }
 
+// ===== Inline per-node config field =====
+// Renders one editable field per its `kind` (text / textarea / number / boolean
+// / select / namespace), with the schema's hint and an inline validation error.
+// `boolean` stores "true"/"" (the executors read a truthy string). Edits flow
+// up via onChange → the node's params (or, for the label field, its caption).
+function NodeConfigField({
+  field,
+  nodeId,
+  value,
+  error,
+  knownNamespaces,
+  onChange,
+}: {
+  field: NodeParamField;
+  nodeId: string;
+  value: string;
+  error?: string;
+  knownNamespaces: string[];
+  onChange: (value: string) => void;
+}) {
+  const baseInput =
+    "mt-0.5 w-full border-2 bg-white px-2 py-1 font-mono text-[10px] text-black outline-none placeholder:text-black/30 focus:border-electric-purple";
+  const borderClass = error ? "border-red-500" : "border-pure-black/30";
+
+  if (field.kind === "boolean") {
+    const on = value === "true";
+    return (
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => onChange(e.target.checked ? "true" : "")}
+          className="h-3.5 w-3.5 accent-electric-purple"
+        />
+        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        {field.hint && (
+          <span className="font-mono text-[8px] text-black/35">
+            {field.hint}
+          </span>
+        )}
+      </label>
+    );
+  }
+
+  if (field.kind === "select") {
+    return (
+      <label className="block">
+        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${baseInput} ${borderClass}`}
+        >
+          {(field.options ?? []).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {field.hint && (
+          <span className="mt-0.5 block font-mono text-[8px] text-black/40">
+            {field.hint}
+          </span>
+        )}
+      </label>
+    );
+  }
+
+  if (field.kind === "textarea") {
+    return (
+      <label className="block">
+        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        <textarea
+          value={value}
+          placeholder={field.placeholder}
+          rows={3}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${baseInput} ${borderClass} resize-y`}
+        />
+        {error ? (
+          <span className="mt-0.5 block font-mono text-[8px] text-red-600">
+            {error}
+          </span>
+        ) : (
+          field.hint && (
+            <span className="mt-0.5 block font-mono text-[8px] text-black/40">
+              {field.hint}
+            </span>
+          )
+        )}
+      </label>
+    );
+  }
+
+  const isNamespace = field.kind === "namespace";
+  const listId = isNamespace ? `ns-${nodeId}-${field.key}` : undefined;
+  return (
+    <label className="block">
+      <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+      <input
+        type="text"
+        inputMode={field.kind === "number" ? "numeric" : undefined}
+        value={value}
+        placeholder={field.placeholder}
+        list={listId}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${baseInput} ${borderClass}`}
+      />
+      {isNamespace && knownNamespaces.length > 0 && (
+        <datalist id={listId}>
+          {knownNamespaces.map((ns) => (
+            <option key={ns} value={ns} />
+          ))}
+        </datalist>
+      )}
+      {error ? (
+        <span className="mt-0.5 block font-mono text-[8px] text-red-600">
+          {error}
+        </span>
+      ) : isNamespace && knownNamespaces.length > 0 ? (
+        <span className="mt-0.5 block font-mono text-[8px] text-black/40">
+          default {knownNamespaces[0]} · {knownNamespaces.length} known
+        </span>
+      ) : (
+        field.hint && (
+          <span className="mt-0.5 block font-mono text-[8px] text-black/40">
+            {field.hint}
+          </span>
+        )
+      )}
+    </label>
+  );
+}
+
 // ===== Custom Skill Node =====
 
 function SkillNode({
@@ -579,7 +654,11 @@ function SkillNode({
   const knownNamespaces = useContext(NamespacesContext);
 
   const wfType = LABEL_TO_TYPE[data.label];
-  const paramFields = wfType ? NODE_PARAM_FIELDS[wfType] : undefined;
+  // Editable fields for this node type (shared schema). A field whose key is
+  // LABEL_FIELD_KEY ("label") writes to the node's display label, not params.
+  const paramFields = fieldsForLabel(data.label);
+  // Per-field validation errors for the current values (inline hints below).
+  const fieldErrors = validateNodeParams(data.label, data.params);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -594,7 +673,8 @@ function SkillNode({
     setEditing((p) => !p);
   };
 
-  // Persist an edited param value back onto this node's data.
+  // Persist an edited param value back onto this node's data so it flows into
+  // the run POST body (buildRunnableGraph copies node.data.params).
   const setParam = (key: string, value: string) => {
     setNodes((nds) =>
       nds.map((n) => {
@@ -605,6 +685,19 @@ function SkillNode({
           data: { ...(n.data as SkillNodeData), params: { ...prev, [key]: value } },
         };
       }),
+    );
+  };
+
+  // The "label" pseudo-field edits the node's display CAPTION (data.subtitle).
+  // We never rewrite data.label — it drives LABEL_TO_TYPE — so the trigger stays
+  // a valid, runnable node after editing.
+  const setCaption = (value: string) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === id
+          ? { ...n, data: { ...(n.data as SkillNodeData), subtitle: value } }
+          : n,
+      ),
     );
   };
 
@@ -715,12 +808,34 @@ function SkillNode({
             title={data.status}
           />
         )}
-        {data.label === "Walrus" || data.label === "Memory" ? (
+        {data.label === "Walrus" ? (
+          // Walrus = blob/object store identity (the Walrus brand wordmark).
           <img
             src="/images/logos/walrus-memory.svg"
-            alt="Walrus"
+            alt="Walrus blob store"
             className="h-7 w-auto object-contain"
           />
+        ) : data.label === "Memory" ? (
+          // Memory = AGENT memory (remember/recall) — a brain glyph, NOT the
+          // Walrus mark, so the two are instantly distinguishable.
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-label="Agent memory"
+          >
+            <path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A3 3 0 0 0 6.5 17a3 3 0 0 0 3 3 2.5 2.5 0 0 0 2.5-2.5V5.5A2.5 2.5 0 0 0 9.5 3Z" />
+            <path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2A3 3 0 0 1 17.5 17a3 3 0 0 1-3 3 2.5 2.5 0 0 1-2.5-2.5V5.5A2.5 2.5 0 0 1 14.5 3Z" />
+            <path d="M6.5 6h.5" />
+            <path d="M17 6h.5" />
+            <path d="M5 11.2h1.5" />
+            <path d="M17.5 11.2H19" />
+          </svg>
         ) : data.label === "Harbor" ? (
           <img
             src="/images/logos/harbor-logo.svg"
@@ -919,46 +1034,41 @@ function SkillNode({
       )}
 
       {/* Inline per-node config — edits flow into the run POST body */}
-      {editing && paramFields && (
+      {editing && paramFields.length > 0 && (
         <div
-          className="nodrag absolute left-1/2 top-[110%] z-30 w-60 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 shadow-[3px_3px_0_0_#000]"
+          className="nodrag nowheel absolute left-1/2 top-[110%] z-30 w-64 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 shadow-[3px_3px_0_0_#000]"
           onClick={(e) => e.stopPropagation()}
         >
-          <p className="font-mono text-[10px] font-bold uppercase text-black/50">
-            {data.label} config
-          </p>
-          {paramFields.map((f) => {
-            const isNamespace = f.kind === "namespace";
-            const listId = isNamespace ? `ns-${id}-${f.key}` : undefined;
-            return (
-              <label key={f.key} className="block">
-                <span className="font-mono text-[9px] text-black/60">
-                  {f.label}
-                </span>
-                <input
-                  type="text"
-                  value={data.params?.[f.key] ?? ""}
-                  placeholder={f.placeholder}
-                  list={listId}
-                  onChange={(e) => setParam(f.key, e.target.value)}
-                  className="mt-0.5 w-full border-2 border-pure-black/30 bg-white px-2 py-1 font-mono text-[10px] text-black outline-none placeholder:text-black/30 focus:border-electric-purple"
-                />
-                {isNamespace && knownNamespaces.length > 0 && (
-                  <>
-                    <datalist id={listId}>
-                      {knownNamespaces.map((ns) => (
-                        <option key={ns} value={ns} />
-                      ))}
-                    </datalist>
-                    <span className="mt-0.5 block font-mono text-[8px] text-black/40">
-                      default {knownNamespaces[0]} · {knownNamespaces.length}{" "}
-                      known
-                    </span>
-                  </>
-                )}
-              </label>
-            );
-          })}
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+              {data.label} config
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="font-mono text-xs font-bold text-black/40 hover:text-black"
+              title="Close"
+            >
+              &times;
+            </button>
+          </div>
+          {paramFields.map((f) => (
+            <NodeConfigField
+              key={f.key}
+              field={f}
+              nodeId={id}
+              value={
+                f.key === LABEL_FIELD_KEY
+                  ? (data.subtitle ?? "")
+                  : (data.params?.[f.key] ?? "")
+              }
+              error={fieldErrors[f.key]}
+              knownNamespaces={knownNamespaces}
+              onChange={(v) =>
+                f.key === LABEL_FIELD_KEY ? setCaption(v) : setParam(f.key, v)
+              }
+            />
+          ))}
           <button
             type="button"
             onClick={() => setEditing(false)}
@@ -1070,7 +1180,7 @@ const initialNodes: Node[] = [
     id: "walrus-store",
     type: "skill",
     position: { x: 320, y: 250 },
-    data: { label: "Walrus", subtitle: "Store manifest" },
+    data: { label: "Walrus", subtitle: "Store blob" },
   },
   {
     id: "harbor-seal",
@@ -1088,7 +1198,7 @@ const initialNodes: Node[] = [
     id: "memory",
     type: "skill",
     position: { x: 800, y: 250 },
-    data: { label: "Memory", subtitle: "Walrus storage" },
+    data: { label: "Memory", subtitle: "Remember" },
   },
 ];
 
@@ -2372,9 +2482,9 @@ export default function WorkflowEditorPage() {
                 {
                   category: "storage",
                   tools: [
-                    { label: "Walrus", subtitle: "Store manifest" },
-                    { label: "Memory", subtitle: "Remember (write)" },
-                    { label: "Memory Recall", subtitle: "Semantic recall" },
+                    { label: "Walrus", subtitle: "Store blob" },
+                    { label: "Memory", subtitle: "Remember" },
+                    { label: "Memory Recall", subtitle: "Recall" },
                   ],
                   count: 3,
                 },
