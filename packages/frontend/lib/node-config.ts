@@ -148,24 +148,29 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
     },
   ],
 
+  // Harbor encrypts a blob BEFORE it lands on Walrus, so the stored skill/
+  // manifest is private — only holders allowed by the Seal access policy can
+  // decrypt it. The first field below carries the honest-encryption caveat:
+  // today the encryption is an AES stand-in, not real threshold Seal yet.
   harbor: [
     {
       key: "private",
-      label: "Private (Seal-encrypt)",
+      label: "Encrypt before storing?",
       kind: "boolean",
-      hint: "When off, encryption is skipped (public skill).",
+      hint: "ON: seal the content, then store the ciphertext on Walrus (private skill). OFF: skip this node and store a public blob — skipping is expected.",
     },
     {
       key: "sealPolicyId",
-      label: "Seal policy id",
+      label: "Access policy id (who can decrypt)",
       placeholder: "demo-policy",
-      hint: "Required when Private is on.",
+      hint: "On-chain Seal policy that controls who may decrypt. Required only when 'Encrypt before storing?' is ON.",
     },
     {
       key: "manifest",
-      label: "Manifest / text to encrypt",
+      label: "Content to encrypt (manifest / text)",
       placeholder: '{"name":"my skill"}',
       kind: "textarea",
+      hint: "The actual blob to seal — JSON manifest or plain text. NOTE: encryption is a DEMO (AES stand-in), not real threshold Seal yet.",
     },
   ],
 
@@ -181,69 +186,86 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       key: "entry",
       label: "Entry (module::function)",
       placeholder: "skill::run",
-      hint: "Paired with Move package for a generic call.",
+      hint: "The function to call, paired with the Move package above.",
     },
     {
       key: "passportId",
       label: "Passport id (0x…, optional)",
       placeholder: "0x… (defaults to the agent's passport)",
+      hint: "The on-chain passport to act as. Leave blank to use this agent's own.",
       validate: validateHexId,
     },
     {
       key: "packageId",
       label: "AgentOS package id (0x…, optional)",
       placeholder: "0x… (overrides NEXT_PUBLIC_AGENTOS_PACKAGE_ID)",
+      hint: "Override the deployed AgentOS package. Leave blank to use the configured one.",
       validate: validateHexId,
     },
   ],
 
+  // Memory = save a note into the agent's Walrus-backed memory so a later run
+  // can recall it.
   memory: [
     {
       key: "namespace",
       label: "Namespace",
       placeholder: "agent.sui (default)",
       kind: "namespace",
+      hint: "Which memory bucket to write into. Defaults to this agent's .sui name.",
     },
     {
       key: "text",
       label: "Text to remember (optional)",
       placeholder: "defaults to a run digest",
       kind: "textarea",
+      hint: "The note to save. Leave blank to store an auto digest of this run.",
     },
   ],
 
+  // Memory Recall = search the agent's memory and return matching notes.
   "memory-recall": [
     {
       key: "namespace",
       label: "Namespace",
       placeholder: "agent.sui (default)",
       kind: "namespace",
+      hint: "Which memory bucket to search. Defaults to this agent's .sui name.",
     },
-    { key: "query", label: "Query", placeholder: "what did I store?" },
+    {
+      key: "query",
+      label: "Query",
+      placeholder: "what did I store?",
+      hint: "What to search for. Required — the node errors without a query.",
+    },
     {
       key: "limit",
       label: "Limit (optional)",
       placeholder: "5",
       kind: "number",
+      hint: "Max number of notes to return.",
       validate: validateNonNegInt,
     },
   ],
 
+  // Import Agent = read another agent's published skill catalog (and verify it).
   "import-agent": [
     {
       key: "agent",
       label: "Target agent (.sui)",
       placeholder: "alice.sui",
+      hint: "The agent whose skill catalog to read and hash-verify.",
       validate: validateSuiName,
     },
   ],
 
+  // Delegate = grant a child agent a capability to act on this agent's behalf.
   delegate: [
     {
       key: "child",
       label: "Child agent (.sui / 0x…)",
       placeholder: "alice.sui",
-      hint: "A .sui name is resolved to a 0x address before the grant.",
+      hint: "The agent receiving the grant. A .sui name is resolved to a 0x address first.",
       validate: validateNameOrAddress,
     },
     {
@@ -251,6 +273,7 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Spend limit",
       placeholder: "0",
       kind: "number",
+      hint: "Max the child may spend under this grant. 0 = no spending allowed.",
       validate: validateNonNegInt,
     },
     {
@@ -258,27 +281,32 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Expiry (ms epoch, 0 = none)",
       placeholder: "0",
       kind: "number",
+      hint: "When the grant expires (Unix ms). 0 = never expires.",
       validate: validateNonNegInt,
     },
   ],
 
+  // Call Sub-Agent = run another agent's skill, optionally under a delegation.
   "call-sub-agent": [
     {
       key: "skill",
       label: "Skill (.sui)",
       placeholder: "alice.sui",
+      hint: "The agent/skill to call.",
       validate: validateSuiName,
     },
     {
       key: "delegationCapId",
       label: "Delegation cap id (0x…, optional)",
       placeholder: "0x… (from Delegate output)",
+      hint: "Paste the cap id from a Delegate node to call under that grant. Blank = direct call.",
       validate: validateHexId,
     },
     {
       key: "subjectPassportId",
       label: "Subject passport id (0x…, optional)",
       placeholder: "0x…",
+      hint: "The passport the call acts for. Leave blank to use this agent's own.",
       validate: validateHexId,
     },
     {
@@ -286,15 +314,18 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Cost",
       placeholder: "0",
       kind: "number",
+      hint: "Amount charged against the delegation's spend limit.",
       validate: validateNonNegInt,
     },
   ],
 
+  // Attest = record an on-chain reputation note about another agent.
   attest: [
     {
       key: "subjectPassportId",
       label: "Subject passport id (0x…)",
       placeholder: "0x…",
+      hint: "The passport this attestation is about. Blank = this agent attests itself.",
       validate: validateHexId,
     },
     {
@@ -302,6 +333,7 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Kind",
       placeholder: "review",
       kind: "select",
+      hint: "What kind of attestation this is.",
       options: [
         { value: "review", label: "review" },
         { value: "endorsement", label: "endorsement" },
@@ -313,11 +345,33 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Score (0-100)",
       placeholder: "100",
       kind: "number",
+      hint: "Rating from 0 to 100.",
       validate: validateScore,
     },
-    { key: "uri", label: "URI (optional)", placeholder: "" },
+    {
+      key: "uri",
+      label: "URI (optional)",
+      placeholder: "",
+      hint: "Optional link to supporting evidence (e.g. a report or run).",
+    },
   ],
 };
+
+/**
+ * Optional one-line note shown at the TOP of a node's inline config form (under
+ * the title), explaining what the whole node does — and, for Harbor, carrying
+ * the honest caveat that the encryption is a demo AES stand-in, not real
+ * threshold Seal yet. Keyed by node label (empty when a type has no note).
+ */
+export const NODE_FORM_NOTES: Partial<Record<string, string>> = {
+  Harbor:
+    "Encrypts a blob before storing it on Walrus, so the skill/manifest is private — only holders allowed by the access policy can decrypt. DEMO: encryption is an AES stand-in, not real threshold Seal yet.",
+};
+
+/** Look up the form-level note for a canvas node label (undefined when none). */
+export function formNoteForLabel(label: string): string | undefined {
+  return NODE_FORM_NOTES[label];
+}
 
 /**
  * Fields whose `key` is `"label"` write to the node's display caption

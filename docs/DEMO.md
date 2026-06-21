@@ -47,8 +47,8 @@ pnpm dev           # Or use the deployed Vercel URL
 | Artifact            | Link                                                                                                                  |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Live URL**        | https://suins-agentos.vercel.app                                                                                      |
-| **Testnet Package** | `0x7febcab96302fc0917b3f0443e2b29779ca8fc802a6407edfa857604fa6ad9ef`                                                  |
-| **Suiscan**         | [View package](https://suiscan.xyz/testnet/object/0x7febcab96302fc0917b3f0443e2b29779ca8fc802a6407edfa857604fa6ad9ef) |
+| **Testnet Package** | `0xb6fcc783987f8bf72f9c9f817da3308cb9df2d6808921cdc8b5374a9d1e97387`                                                  |
+| **Suiscan**         | [View package](https://suiscan.xyz/testnet/object/0xb6fcc783987f8bf72f9c9f817da3308cb9df2d6808921cdc8b5374a9d1e97387) |
 | **Tx Digest**       | `DiAks5zr85tZt2XtwsZL7wtFCSyGwskMoAMLoRDWkyyj`                                                                        |
 | **Modules**         | agent_passport, attestation, bucket_policy, delegation, skill_descriptor                                              |
 
