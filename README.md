@@ -20,7 +20,7 @@
 
 <div align="center">
 
-https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO_ID
+https://x.com/HUC0610/status/2068966786889101355?s=20
 
 *Create an agent → publish skills from IDE → compose workflows on canvas → run on-chain*
 
