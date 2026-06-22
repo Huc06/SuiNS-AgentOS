@@ -20,6 +20,7 @@ import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "./types.js";
 
@@ -58,6 +59,24 @@ export interface PublishSkillInput {
 export interface MutationResult<T> {
   value: T;
   changed: boolean;
+}
+
+export interface PublishWorkflowInput {
+  /** Owning agent (SuiNS name or slug). */
+  agentName: string;
+  /** Workflow name (becomes the subname label + workflowId). */
+  name: string;
+  /** Fully-qualified SuiNS subname (e.g. `rebalance-pipeline.alpha-fund.sui`). */
+  suinsName: string;
+  version?: string;
+  /** Walrus blob holding the serialized graph manifest (empty for a draft). */
+  walrusManifestBlob?: string;
+  /** Hex SHA-256 of the serialized manifest (empty for a draft). */
+  manifestHash?: string;
+  description?: string;
+  dependencies?: string[];
+  network?: "mainnet" | "testnet";
+  status?: "draft" | "active" | "archived";
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +118,31 @@ export function listSkills(
   agentName: string,
 ): RegistrySkillRecord[] {
   return resolveAgent(data, agentName)?.skills ?? [];
+}
+
+/** All workflows (across every agent). Missing array → empty list. */
+export function getWorkflows(data: RegistryFile): RegistryWorkflowRecord[] {
+  return data.workflows ?? [];
+}
+
+/** Workflows belonging to one agent (by SuiNS name or slug). */
+export function listWorkflows(
+  data: RegistryFile,
+  agentName: string,
+): RegistryWorkflowRecord[] {
+  const agent =
+    findAgentBySuins(data, agentName) ??
+    findAgentBySlug(data, agentName.replace(/^@/, ""));
+  if (!agent) return [];
+  return (data.workflows ?? []).filter((w) => w.agentSlug === agent.slug);
+}
+
+/** Look up a single workflow by its canvas slug. */
+export function findWorkflowBySlug(
+  data: RegistryFile,
+  slug: string,
+): RegistryWorkflowRecord | undefined {
+  return (data.workflows ?? []).find((w) => w.slug === slug);
 }
 
 export function listAgents(data: RegistryFile): RegistryAgentRecord[] {
@@ -193,6 +237,9 @@ export function removeAgent(
   const { agent } = resolved;
   data.agents = data.agents.filter((a) => a.slug !== agent.slug);
   data.skills = data.skills.filter((s) => s.agentSlug !== agent.slug);
+  if (data.workflows) {
+    data.workflows = data.workflows.filter((w) => w.agentSlug !== agent.slug);
+  }
   return { value: agent, changed: true };
 }
 
@@ -289,6 +336,62 @@ export function publishSkill(
   } else {
     data.skills.push(record);
   }
+  return { value: record, changed: true };
+}
+
+/**
+ * Create or upsert a workflow under an agent. Keyed by `(agentSlug, workflowId)`
+ * so re-publishing the same workflow (e.g. after editing the graph) updates the
+ * record in place rather than duplicating it. The slug is derived from the
+ * fully-qualified subname so it is stable + unique across agents.
+ */
+export function publishWorkflow(
+  data: RegistryFile,
+  input: PublishWorkflowInput,
+): MutationResult<RegistryWorkflowRecord> {
+  const resolved = resolveAgent(data, input.agentName);
+  if (!resolved) {
+    throw new Error(`Agent not found: ${input.agentName}`);
+  }
+  const suinsName = normalizeSuinsName(input.suinsName);
+  const workflowId = input.name.trim();
+  if (!workflowId) {
+    throw new Error("Workflow name is required");
+  }
+
+  if (!data.workflows) data.workflows = [];
+
+  const now = new Date().toISOString();
+  const existing = data.workflows.find(
+    (w) => w.agentSlug === resolved.agent.slug && w.workflowId === workflowId,
+  );
+
+  const record: RegistryWorkflowRecord = {
+    agentSlug: resolved.agent.slug,
+    workflowId,
+    name: workflowId,
+    slug: slugFromSuins(suinsName),
+    suinsName,
+    version: input.version ?? "1.0.0",
+    walrusManifestBlob: input.walrusManifestBlob ?? "",
+    manifestHash: input.manifestHash ?? "",
+    network: input.network ?? resolved.agent.network,
+    status: input.status ?? (input.walrusManifestBlob ? "active" : "draft"),
+    createdAt: existing?.createdAt ?? now,
+    lastUpdated: now,
+    ...(input.description?.trim()
+      ? { description: input.description.trim() }
+      : {}),
+    ...(input.dependencies && input.dependencies.length > 0
+      ? { dependencies: input.dependencies }
+      : {}),
+  };
+
+  if (existing) {
+    Object.assign(existing, record);
+    return { value: existing, changed: true };
+  }
+  data.workflows.push(record);
   return { value: record, changed: true };
 }
 

@@ -16,11 +16,13 @@ import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "../registry/types.js";
 import type {
   DelegationRecord,
   PublishSkillInput,
+  PublishWorkflowInput,
   RegisterAgentInput,
   RegistryStore,
   RunsStore,
@@ -52,9 +54,7 @@ export class InMemoryRegistryStore implements RegistryStore {
   #lock = new AsyncLock();
 
   constructor(seed?: RegistryFile) {
-    this.#data = seed
-      ? structuredClone(seed)
-      : structuredClone(SEED_REGISTRY);
+    this.#data = seed ? structuredClone(seed) : structuredClone(SEED_REGISTRY);
   }
 
   /** Defensive copy of the whole document (tests/inspection). */
@@ -90,10 +90,7 @@ export class InMemoryRegistryStore implements RegistryStore {
     return structuredClone(logic.listSkills(this.#data, agentName));
   }
 
-  async searchAgents(
-    query: string,
-    limit = 6,
-  ): Promise<RegistryAgentRecord[]> {
+  async searchAgents(query: string, limit = 6): Promise<RegistryAgentRecord[]> {
     return structuredClone(logic.searchAgents(this.#data, query, limit));
   }
 
@@ -122,6 +119,30 @@ export class InMemoryRegistryStore implements RegistryStore {
   publishSkill(input: PublishSkillInput): Promise<RegistrySkillRecord> {
     return this.#lock.run(async () => {
       const { value } = logic.publishSkill(this.#data, input);
+      return structuredClone(value);
+    });
+  }
+
+  async getWorkflows(): Promise<RegistryWorkflowRecord[]> {
+    return structuredClone(logic.getWorkflows(this.#data));
+  }
+
+  async listWorkflows(agentName: string): Promise<RegistryWorkflowRecord[]> {
+    return structuredClone(logic.listWorkflows(this.#data, agentName));
+  }
+
+  async findWorkflowBySlug(
+    slug: string,
+  ): Promise<RegistryWorkflowRecord | undefined> {
+    const w = logic.findWorkflowBySlug(this.#data, slug);
+    return w ? structuredClone(w) : undefined;
+  }
+
+  publishWorkflow(
+    input: PublishWorkflowInput,
+  ): Promise<RegistryWorkflowRecord> {
+    return this.#lock.run(async () => {
+      const { value } = logic.publishWorkflow(this.#data, input);
       return structuredClone(value);
     });
   }

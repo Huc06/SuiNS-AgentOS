@@ -3,6 +3,8 @@ import Link from "next/link";
 export type AgentCardData = {
   slug: string;
   displayName: string;
+  /** Fully-qualified SuiNS name, e.g. `alpha-fund.sui` (used to scope subnames). */
+  suinsName?: string;
   version: string;
   network: "mainnet" | "testnet";
   metric: string;
