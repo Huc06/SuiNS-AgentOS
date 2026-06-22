@@ -32,12 +32,9 @@ function makeMockDb(): SqlDatabase {
   const agents: SqlRow[] = [];
   const skills: SqlRow[] = [];
   const runs: SqlRow[] = [];
+  const workflows: SqlRow[] = [];
 
-  const upsert = (
-    table: SqlRow[],
-    row: SqlRow,
-    keys: string[],
-  ): void => {
+  const upsert = (table: SqlRow[], row: SqlRow, keys: string[]): void => {
     const idx = table.findIndex((r) => keys.every((k) => r[k] === row[k]));
     if (idx >= 0) table[idx] = row;
     else table.push(row);
@@ -52,6 +49,8 @@ function makeMockDb(): SqlDatabase {
         return { rows: agents.map((r) => ({ ...r })) };
       if (text.startsWith("SELECT * FROM skills"))
         return { rows: skills.map((r) => ({ ...r })) };
+      if (text.startsWith("SELECT * FROM workflows"))
+        return { rows: workflows.map((r) => ({ ...r })) };
 
       if (text.startsWith("INSERT INTO agents")) {
         upsert(
@@ -107,10 +106,40 @@ function makeMockDb(): SqlDatabase {
         }
         return { rows: [] };
       }
+      if (text.startsWith("DELETE FROM workflows WHERE agent_slug")) {
+        for (let i = workflows.length - 1; i >= 0; i--) {
+          if (workflows[i].agent_slug === p[0]) workflows.splice(i, 1);
+        }
+        return { rows: [] };
+      }
       if (text.startsWith("DELETE FROM agents WHERE slug")) {
         for (let i = agents.length - 1; i >= 0; i--) {
           if (agents[i].slug === p[0]) agents.splice(i, 1);
         }
+        return { rows: [] };
+      }
+
+      if (text.startsWith("INSERT INTO workflows")) {
+        upsert(
+          workflows,
+          {
+            slug: p[0],
+            agent_slug: p[1],
+            workflow_id: p[2],
+            name: p[3],
+            suins_name: p[4],
+            version: p[5],
+            walrus_manifest_blob: p[6],
+            manifest_hash: p[7],
+            network: p[8],
+            status: p[9],
+            description: p[10],
+            dependencies: p[11],
+            created_at: p[12],
+            last_updated: p[13],
+          },
+          ["slug"],
+        );
         return { rows: [] };
       }
 

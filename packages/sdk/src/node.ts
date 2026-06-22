@@ -13,7 +13,11 @@ export type {
   PublishSkillOptions,
   UploadManifestOptions,
 } from "./client.js";
-export type { AgentPassport, SkillDescriptor, SubAgentConfig } from "./types.js";
+export type {
+  AgentPassport,
+  SkillDescriptor,
+  SubAgentConfig,
+} from "./types.js";
 export * from "./registry/index.js";
 export * from "./storage/index.js";
 export * as contracts from "./contracts/index.js";
@@ -33,6 +37,13 @@ export {
   computeManifestHash,
   validateManifest,
 } from "./manifest.js";
+export {
+  WORKFLOW_MANIFEST_TYPE,
+  serializeWorkflowManifest,
+  computeWorkflowManifestHash,
+  validateWorkflowManifest,
+} from "./workflow-manifest.js";
+export type { WorkflowManifest } from "./workflow-manifest.js";
 export { parseSkillMd, convertToAgentOSManifest } from "./skill-md-parser.js";
 export type { SkillMdMetadata } from "./skill-md-parser.js";
 export type { SkillManifest } from "./types.js";
@@ -66,10 +77,7 @@ export type {
 // wallet-signed SessionKey + a key-server round-trip + the on-chain seal_approve
 // check, so it is NOT run by the signer-agnostic workflow engine. Exposed from
 // the Node entry for a dApp / CLI that holds the user's wallet.
-export {
-  sealDecryptReal,
-  stripRealSealMarker,
-} from "./seal-decrypt-real.js";
+export { sealDecryptReal, stripRealSealMarker } from "./seal-decrypt-real.js";
 export type {
   SealDecryptRealOptions,
   SignPersonalMessage,
@@ -77,10 +85,7 @@ export type {
 
 // Workflow engine (signer-agnostic; host injects execute/upload/memory).
 export { runWorkflow } from "./workflow/run.js";
-export type {
-  RunWorkflowOptions,
-  RunWorkflowResult,
-} from "./workflow/run.js";
+export type { RunWorkflowOptions, RunWorkflowResult } from "./workflow/run.js";
 export { executors } from "./workflow/executors.js";
 export type { StepExecutor, StepExecutorResult } from "./workflow/executors.js";
 export {

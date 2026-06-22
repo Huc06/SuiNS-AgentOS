@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 
 import {
   AgentOSClient,
@@ -16,43 +16,46 @@ import {
   type SkillManifest,
   type RunContext,
   type WorkflowGraph,
-} from '@agentos/sdk/node';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { Transaction } from '@mysten/sui/transactions';
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+} from "@agentos/sdk/node";
+import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
-import { getAgentosPackageId, getSuiNetwork } from '../../../../../lib/enoki-config';
-import { loadRootEnv } from '../../../../../lib/load-root-env';
+import {
+  getAgentosPackageId,
+  getSuiNetwork,
+} from "../../../../../lib/enoki-config";
+import { loadRootEnv } from "../../../../../lib/load-root-env";
 import {
   getRegistryStore,
   getRegistryPath,
-} from '../../../../../lib/registry-server';
-import { appendRun } from '../../../../../lib/runs-store';
-import { sponsoredExecuteServer } from '../../../../../lib/sponsored-execute';
+} from "../../../../../lib/registry-server";
+import { appendRun } from "../../../../../lib/runs-store";
+import { sponsoredExecuteServer } from "../../../../../lib/sponsored-execute";
 
 // Belt-and-suspenders: ensure repo-root .env secrets (SUI_PRIVATE_KEY /
 // ENOKI_SECRET_KEY / MEMWAL_*) are loaded even if the next.config.ts load was
 // skipped. Idempotent; never logs values.
 loadRootEnv();
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
 const nodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum([
-    'trigger',
-    'walrus',
-    'harbor',
-    'sui',
-    'memory',
-    'memory-recall',
-    'import-agent',
-    'call-sub-agent',
-    'delegate',
-    'attest',
+    "trigger",
+    "walrus",
+    "harbor",
+    "sui",
+    "memory",
+    "memory-recall",
+    "import-agent",
+    "call-sub-agent",
+    "delegate",
+    "attest",
   ]),
   label: z.string().min(1),
   params: z.record(z.unknown()).optional(),
@@ -80,35 +83,35 @@ function defaultGraph(
 ): WorkflowGraph {
   return {
     nodes: [
-      { id: 'trigger', type: 'trigger', label: 'Trigger' },
-      { id: 'walrus', type: 'walrus', label: 'Walrus' },
-      { id: 'harbor', type: 'harbor', label: 'Harbor' },
+      { id: "trigger", type: "trigger", label: "Trigger" },
+      { id: "walrus", type: "walrus", label: "Walrus" },
+      { id: "harbor", type: "harbor", label: "Harbor" },
       {
-        id: 'sui',
-        type: 'sui',
-        label: 'Sui',
+        id: "sui",
+        type: "sui",
+        label: "Sui",
         params: {
           ...(passportId ? { passportId } : {}),
           ...(packageId ? { packageId } : {}),
         },
       },
-      { id: 'memory', type: 'memory', label: 'Memory' },
+      { id: "memory", type: "memory", label: "Memory" },
     ],
     edges: [
-      { source: 'trigger', target: 'walrus' },
-      { source: 'walrus', target: 'harbor' },
-      { source: 'walrus', target: 'sui' },
-      { source: 'harbor', target: 'memory' },
-      { source: 'sui', target: 'memory' },
+      { source: "trigger", target: "walrus" },
+      { source: "walrus", target: "harbor" },
+      { source: "walrus", target: "sui" },
+      { source: "harbor", target: "memory" },
+      { source: "sui", target: "memory" },
     ],
   };
 }
 
 function isManifest(value: unknown): value is SkillManifest {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    (value as { manifestType?: unknown }).manifestType === 'sui-agent-skill/v1'
+    (value as { manifestType?: unknown }).manifestType === "sui-agent-skill/v1"
   );
 }
 
@@ -122,20 +125,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { slug } = await context.params;
   const key = decodeURIComponent(slug).trim();
   if (!key) {
-    return NextResponse.json({ error: 'slug is required' }, { status: 400 });
+    return NextResponse.json({ error: "slug is required" }, { status: 400 });
   }
 
   const raw = await request.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(raw ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? 'Invalid request body' },
+      { error: parsed.error.issues[0]?.message ?? "Invalid request body" },
       { status: 400 },
     );
   }
 
   const registry = getRegistryStore();
-  const resolved = await registry.resolveAgent(key);
+  let resolved = await registry.resolveAgent(key);
+  // The canvas slug may be a WORKFLOW slug (e.g. `rebalance-pipeline-alpha-fund`)
+  // rather than an agent slug. A workflow runs under its parent agent's
+  // passport, so fall back to resolving the owning agent from the workflow
+  // record when the key isn't an agent itself.
+  if (!resolved) {
+    const workflow = await registry.findWorkflowBySlug(key);
+    if (workflow) {
+      resolved = await registry.resolveAgent(workflow.agentSlug);
+    }
+  }
   if (!resolved) {
     return NextResponse.json(
       { error: `Agent not found: ${key}` },
@@ -145,8 +158,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const agent = resolved.agent;
 
   const packageId = getAgentosPackageId();
-  const graph =
-    parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
+  const graph = parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
 
   const suiClient = new SuiClient({ url: getFullnodeUrl(getSuiNetwork()) });
 
@@ -180,10 +192,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         remember: async (ns: string, text: string) => {
           const result = await memwal.remember(ns, text);
           try {
-            await getRegistryStore().recordMemoryNamespace(
-              agent.suinsName,
-              ns,
-            );
+            await getRegistryStore().recordMemoryNamespace(agent.suinsName, ns);
           } catch {
             // Namespace bookkeeping is best-effort; never fail the run for it.
           }
@@ -219,8 +228,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
               { attempts: 60, intervalMs: 1000 }, // 60 seconds timeout
             );
             const base = (
-              harborBaseUrl ?? 'https://api.testnet.harbor.walrus.xyz'
-            ).replace(/\/+$/, '');
+              harborBaseUrl ?? "https://api.testnet.harbor.walrus.xyz"
+            ).replace(/\/+$/, "");
             return {
               blobId,
               fileId,
@@ -239,7 +248,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // self-contained and signer-agnostic; we only hand it the read-only client +
   // the package id + the network. Seal supports testnet/mainnet only, so we map
   // devnet → testnet.
-  const sealNetwork = getSuiNetwork() === 'mainnet' ? 'mainnet' : 'testnet';
+  const sealNetwork = getSuiNetwork() === "mainnet" ? "mainnet" : "testnet";
   const seal = packageId
     ? async (data: Uint8Array, sealPolicyId: string) => {
         const r = await sealEncryptReal({
@@ -297,14 +306,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       // (skillResolved:true) instead of degrading to "did not resolve". Names
       // that already carry a skill prefix ("web-search.alpha.sui") pass through.
       const normalizeSkill = (name: string): string => {
-        const slug = (name ?? '').replace(/\.sui$/i, '');
-        if (!slug || slug.includes('.')) return name;
+        const slug = (name ?? "").replace(/\.sui$/i, "");
+        if (!slug || slug.includes(".")) return name;
         const seeded: Record<string, string> = {
-          alpha: 'web-search',
-          'beta-agent': 'sandbox-tool',
-          'walrus-bot': 'walrus-read',
+          alpha: "web-search",
+          "beta-agent": "sandbox-tool",
+          "walrus-bot": "walrus-read",
         };
-        return `${seeded[slug] ?? 'web-search'}.${slug}.sui`;
+        return `${seeded[slug] ?? "web-search"}.${slug}.sui`;
       };
       const built = await agentClient.buildExecuteSkillTx({
         ...options,
@@ -400,11 +409,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // bookkeeping never fails the run.
     const nowIso = new Date().toISOString();
     const asStr = (v: unknown): string | undefined =>
-      typeof v === 'string' ? v : typeof v === 'number' ? String(v) : undefined;
+      typeof v === "string" ? v : typeof v === "number" ? String(v) : undefined;
     const asStrArr = (v: unknown): string[] =>
-      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+      Array.isArray(v)
+        ? v.filter((x): x is string => typeof x === "string")
+        : [];
     for (const step of steps) {
-      if (step.status !== 'done' || step.type !== 'delegate') continue;
+      if (step.status !== "done" || step.type !== "delegate") continue;
       const out = (step.output ?? {}) as Record<string, unknown>;
       const capId = asStr(out.capId);
       const childAgent = asStr(out.childAgent);
@@ -418,11 +429,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
           childName: asStr(out.childName) ?? asStr(p.child) ?? childAgent,
           allowedSkills: asStrArr(p.allowedSkills),
           allowedCapabilities: asStrArr(p.allowedCapabilities),
-          spendLimit: asStr(p.spendLimit) ?? '0',
-          spent: '0',
+          spendLimit: asStr(p.spendLimit) ?? "0",
+          spent: "0",
           // Mirror the executor's far-future default (0/unset cap never expires).
           expiryMs:
-            rawExpiry && rawExpiry !== '0' ? rawExpiry : '4102444800000',
+            rawExpiry && rawExpiry !== "0" ? rawExpiry : "4102444800000",
           revoked: false,
           capId,
           createdAt: nowIso,
@@ -435,7 +446,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ runId, steps, status });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'workflow run failed' },
+      { error: e instanceof Error ? e.message : "workflow run failed" },
       { status: 500 },
     );
   }

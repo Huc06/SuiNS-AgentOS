@@ -2,41 +2,45 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { AgentCardData } from "../../components/dashboard/agent-card";
+import { CreateAgentModal } from "../../components/dashboard/create-agent-modal";
+import { CreateWorkflowModal } from "../../components/dashboard/create-workflow-modal";
+import type { WorkflowCardData } from "../../lib/registry-mappers";
 
 /**
- * /create — Workflows page (replaces old "Create Agent" dashboard).
- * Lists existing agent workflows as cards, with a "Create Workflow" button
- * that opens the agent creation wizard.
+ * /create — Workflows page.
+ * Lists published/draft workflows (each a SuiNS subname under an agent) as
+ * cards, with a "Create Workflow" button that opens the workflow wizard:
+ * pick an agent → name it → mint subname → open the canvas.
  */
 export default function WorkflowsPage() {
-  const [agents, setAgents] = useState<AgentCardData[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateWorkflow, setShowCreateWorkflow] = useState(false);
+  const [showCreateAgent, setShowCreateAgent] = useState(false);
 
-  const loadAgents = useCallback(async () => {
+  const loadWorkflows = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/agents", { cache: "no-store" });
-      const data = (await res.json()) as { agents?: AgentCardData[] };
-      setAgents(data.agents ?? []);
+      const res = await fetch("/api/workflows", { cache: "no-store" });
+      const data = (await res.json()) as { workflows?: WorkflowCardData[] };
+      setWorkflows(data.workflows ?? []);
     } catch {
-      setAgents([]);
+      setWorkflows([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadAgents();
-  }, [loadAgents]);
+    void loadWorkflows();
+  }, [loadWorkflows]);
 
-  const filtered = agents.filter(
-    (a) =>
+  const filtered = workflows.filter(
+    (w) =>
       !search ||
-      a.displayName.toLowerCase().includes(search.toLowerCase()) ||
-      a.slug.toLowerCase().includes(search.toLowerCase()),
+      w.name.toLowerCase().includes(search.toLowerCase()) ||
+      w.suinsName.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -48,12 +52,12 @@ export default function WorkflowsPage() {
             Workflows
           </h1>
           <p className="mt-1 font-mono text-sm text-on-surface-variant">
-            Manage and create your agent workflows
+            Compose your agents&apos; skills into published workflows
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => setShowCreateWorkflow(true)}
           className="flex items-center gap-2 bg-electric-purple px-5 py-2.5 font-mono text-xs font-bold text-white transition-colors hover:bg-electric-purple/90"
         >
           + Create Workflow
@@ -84,87 +88,75 @@ export default function WorkflowsPage() {
       ) : filtered.length === 0 ? (
         <div className="py-20 text-center">
           <p className="font-mono text-sm text-on-surface-variant">
-            {agents.length === 0
+            {workflows.length === 0
               ? "No workflows yet. Create your first one."
               : "No workflows match your search."}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((agent) => (
-            <WorkflowCard key={agent.slug} agent={agent} />
+          {filtered.map((wf) => (
+            <WorkflowCard key={wf.slug} workflow={wf} />
           ))}
         </div>
       )}
 
-      {/* Pagination — sticky bottom */}
-      {agents.length > 0 && (
-        <div className="fixed bottom-0 left-16 right-0 flex items-center justify-between border-t border-gray-200 bg-white px-8 py-3 md:left-56">
-          <p className="font-mono text-xs text-on-surface-variant">
-            Page 1 of 1
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled
-              className="border border-gray-200 px-3 py-1 font-mono text-xs text-on-surface-variant disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              disabled
-              className="border border-gray-200 px-3 py-1 font-mono text-xs text-on-surface-variant disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Create Workflow modal */}
+      <CreateWorkflowModal
+        open={showCreateWorkflow}
+        onClose={() => setShowCreateWorkflow(false)}
+        onCreated={loadWorkflows}
+        onRequestCreateAgent={() => setShowCreateAgent(true)}
+      />
 
-      {/* Create modal (reuse existing) */}
-      {showCreateModal && (
-        <CreateWorkflowModal
-          onClose={() => setShowCreateModal(false)}
-          onCreated={loadAgents}
-        />
-      )}
+      {/* Create Agent Passport modal (opened when the user has no agents) */}
+      <CreateAgentModal
+        open={showCreateAgent}
+        onClose={() => setShowCreateAgent(false)}
+      />
     </div>
   );
 }
 
 // ===== Workflow Card =====
 
-function WorkflowCard({ agent }: { agent: AgentCardData }) {
-  const skillCount = parseInt(agent.metric) || 0;
-
+function WorkflowCard({ workflow }: { workflow: WorkflowCardData }) {
   return (
     <a
-      href={`/create/${agent.slug}`}
+      href={`/create/${workflow.slug}`}
       className="group block border-[3px] border-pure-black bg-white p-8 neo-shadow transition-all hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0_0_#6800FF]"
     >
       <div className="mb-4 flex items-start gap-4">
         <div className="flex h-12 w-12 items-center justify-center border-2 border-electric-purple bg-electric-purple/10 font-mono text-lg font-bold text-electric-purple">
-          {agent.slug.charAt(0).toUpperCase()}
+          {workflow.name.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-xl font-bold text-on-surface group-hover:text-electric-purple">
-            {agent.displayName}
+            {workflow.name}
           </p>
-          <p className="font-mono text-[10px] text-on-surface-variant">
-            Updated recently
+          <p className="truncate font-mono text-[10px] text-on-surface-variant">
+            {workflow.suinsName}
           </p>
         </div>
+        <span
+          className={`shrink-0 border-2 px-2 py-0.5 font-mono text-[10px] font-bold uppercase ${
+            workflow.published
+              ? "border-green-800 bg-green-100 text-green-800"
+              : "border-gray-400 bg-gray-100 text-gray-600"
+          }`}
+        >
+          {workflow.published ? "Published" : "Draft"}
+        </span>
       </div>
 
       {/* Stats */}
       <div className="flex gap-6 border-t-2 border-pure-black/10 pt-3">
         <div>
           <p className="font-mono text-[10px] uppercase text-on-surface-variant">
-            Skills
+            Nodes
           </p>
           <p className="font-mono text-sm font-bold text-on-surface">
-            {skillCount || "—"}
+            {workflow.nodeCount ?? "—"}
           </p>
         </div>
         <div>
@@ -172,45 +164,18 @@ function WorkflowCard({ agent }: { agent: AgentCardData }) {
             Network
           </p>
           <p className="font-mono text-sm font-bold text-on-surface">
-            {agent.network}
+            {workflow.network}
           </p>
         </div>
         <div>
           <p className="font-mono text-[10px] uppercase text-on-surface-variant">
             Status
           </p>
-          <p className="font-mono text-sm font-bold text-on-surface">
-            {agent.trend === "up" ? "Active" : "—"}
+          <p className="font-mono text-sm font-bold text-on-surface capitalize">
+            {workflow.status}
           </p>
         </div>
       </div>
     </a>
   );
-}
-
-// ===== Create Workflow Modal (thin wrapper) =====
-
-function CreateWorkflowModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  // Dynamically import the existing modal to avoid SSR issues
-  const [Modal, setModal] = useState<React.ComponentType<{
-    open: boolean;
-    onClose: () => void;
-    onCreated?: () => void;
-  }> | null>(null);
-
-  useEffect(() => {
-    import("../../components/dashboard/create-agent-modal").then((mod) => {
-      setModal(() => mod.CreateAgentModal);
-    });
-  }, []);
-
-  if (!Modal) return null;
-
-  return <Modal open onClose={onClose} onCreated={onCreated} />;
 }

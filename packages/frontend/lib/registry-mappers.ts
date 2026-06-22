@@ -1,6 +1,7 @@
 import type {
   RegistryAgentRecord,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
 } from "@agentos/sdk/node";
 
 import type { AgentCardData } from "../components/dashboard/agent-card";
@@ -28,6 +29,7 @@ export function registryAgentToCard(
 
   return {
     slug: agent.slug,
+    suinsName: agent.suinsName,
     displayName: agent.suinsName.startsWith("@")
       ? agent.suinsName
       : `@${agent.slug}`,
@@ -42,6 +44,41 @@ export function registryAgentToCard(
     verified,
     reputationScore: reputation.score,
     reputationTier: reputation.tier,
+  };
+}
+
+/** Card shape for the Workflows list page. */
+export interface WorkflowCardData {
+  slug: string;
+  name: string;
+  suinsName: string;
+  /** Owning agent slug. */
+  agentSlug: string;
+  network: "mainnet" | "testnet";
+  status: "draft" | "active" | "archived";
+  /** Number of nodes in the published graph, when known. */
+  nodeCount?: number;
+  description?: string;
+  lastUpdated: string;
+  /** True once the graph has been published to Walrus. */
+  published: boolean;
+}
+
+export function registryWorkflowToCard(
+  workflow: RegistryWorkflowRecord,
+  nodeCount?: number,
+): WorkflowCardData {
+  return {
+    slug: workflow.slug,
+    name: workflow.name,
+    suinsName: workflow.suinsName,
+    agentSlug: workflow.agentSlug,
+    network: workflow.network,
+    status: workflow.status,
+    published: Boolean(workflow.walrusManifestBlob),
+    lastUpdated: workflow.lastUpdated,
+    ...(typeof nodeCount === "number" ? { nodeCount } : {}),
+    ...(workflow.description ? { description: workflow.description } : {}),
   };
 }
 

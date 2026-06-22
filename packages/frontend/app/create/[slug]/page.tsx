@@ -41,19 +41,16 @@ import {
   LABEL_FIELD_KEY,
   type NodeParamField,
 } from "../../../lib/node-config";
-import { TEMPLATES, templatesByCategory } from "../../../lib/workflow-templates";
+import {
+  TEMPLATES,
+  templatesByCategory,
+} from "../../../lib/workflow-templates";
 import { defaultGraphForSlug } from "../../../lib/agent-workflows";
 
 // ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
 // this client component never imports the Node-only SDK entry) =====
 
-type NodeStatus =
-  | "idle"
-  | "pending"
-  | "running"
-  | "done"
-  | "error"
-  | "skipped";
+type NodeStatus = "idle" | "pending" | "running" | "done" | "error" | "skipped";
 
 type WfType =
   | "trigger"
@@ -250,14 +247,18 @@ function diagnoseFromError(error?: string): string | undefined {
   if (!error) return undefined;
   if (/SUI_PRIVATE_KEY is not set/i.test(error))
     return "Server key not loaded — add SUI_PRIVATE_KEY (root .env must reach the route).";
-  if (/ENOKI_SECRET_KEY/i.test(error)) return "Enoki sponsor key missing (ENOKI_SECRET_KEY).";
+  if (/ENOKI_SECRET_KEY/i.test(error))
+    return "Enoki sponsor key missing (ENOKI_SECRET_KEY).";
   if (/memwal not configured/i.test(error))
     return "Memory API key not set (MEMWAL_API_KEY) — skipped, not a failure.";
   if (/Missing required capability/i.test(error))
     return "Agent lacks a capability the skill requires.";
-  if (/integrity check failed/i.test(error)) return "Manifest hash mismatch — re-publish.";
-  if (/no (parent )?passport id/i.test(error)) return "Agent has no on-chain passport.";
-  if (/Walrus upload failed/i.test(error)) return "Walrus publisher rejected the upload.";
+  if (/integrity check failed/i.test(error))
+    return "Manifest hash mismatch — re-publish.";
+  if (/no (parent )?passport id/i.test(error))
+    return "Agent has no on-chain passport.";
+  if (/Walrus upload failed/i.test(error))
+    return "Walrus publisher rejected the upload.";
   return undefined;
 }
 
@@ -438,7 +439,9 @@ function NodeOutputDetailPopover({
                 </span>
                 <span
                   className={`font-bold ${c.verified ? "text-green-700" : "text-red-600"}`}
-                  title={c.error ?? (c.verified ? "hash verified" : "unverified")}
+                  title={
+                    c.error ?? (c.verified ? "hash verified" : "unverified")
+                  }
                 >
                   {c.verified ? "✓ verified" : "✗ unverified"}
                 </span>
@@ -539,7 +542,9 @@ function NodeConfigField({
           onChange={(e) => onChange(e.target.checked ? "true" : "")}
           className="h-3.5 w-3.5 accent-electric-purple"
         />
-        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        <span className="font-mono text-[9px] text-black/60">
+          {field.label}
+        </span>
         {field.hint && (
           <span className="font-mono text-[8px] text-black/35">
             {field.hint}
@@ -552,7 +557,9 @@ function NodeConfigField({
   if (field.kind === "select") {
     return (
       <label className="block">
-        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        <span className="font-mono text-[9px] text-black/60">
+          {field.label}
+        </span>
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -576,7 +583,9 @@ function NodeConfigField({
   if (field.kind === "textarea") {
     return (
       <label className="block">
-        <span className="font-mono text-[9px] text-black/60">{field.label}</span>
+        <span className="font-mono text-[9px] text-black/60">
+          {field.label}
+        </span>
         <textarea
           value={value}
           placeholder={field.placeholder}
@@ -641,13 +650,7 @@ function NodeConfigField({
 
 // ===== Custom Skill Node =====
 
-function SkillNode({
-  id,
-  data,
-}: {
-  id: string;
-  data: SkillNodeData;
-}) {
+function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
   const { setNodes, setEdges } = useReactFlow();
   const [editing, setEditing] = useState(false);
   // Expandable per-node output detail popover (toggled from the hover toolbar).
@@ -687,7 +690,10 @@ function SkillNode({
         const prev = (n.data as SkillNodeData).params ?? {};
         return {
           ...n,
-          data: { ...(n.data as SkillNodeData), params: { ...prev, [key]: value } },
+          data: {
+            ...(n.data as SkillNodeData),
+            params: { ...prev, [key]: value },
+          },
         };
       }),
     );
@@ -1001,17 +1007,21 @@ function SkillNode({
       )}
 
       {/* Pre-run preflight badge (shown only before a result lands) */}
-      {!hasStatus && data.preflight && data.preflight.outcome !== "will-run" && (
-        <div
-          className={`mt-1 max-w-[160px] truncate border px-1.5 py-0.5 font-mono text-[9px] font-bold ${preflightColor(
-            data.preflight.outcome,
-          )}`}
-          title={`${data.preflight.outcome}: ${data.preflight.reason}`}
-        >
-          {preflightGlyph(data.preflight.outcome)}{" "}
-          {data.preflight.outcome === "will-error" ? "will error" : "will skip"}
-        </div>
-      )}
+      {!hasStatus &&
+        data.preflight &&
+        data.preflight.outcome !== "will-run" && (
+          <div
+            className={`mt-1 max-w-[160px] truncate border px-1.5 py-0.5 font-mono text-[9px] font-bold ${preflightColor(
+              data.preflight.outcome,
+            )}`}
+            title={`${data.preflight.outcome}: ${data.preflight.reason}`}
+          >
+            {preflightGlyph(data.preflight.outcome)}{" "}
+            {data.preflight.outcome === "will-error"
+              ? "will error"
+              : "will skip"}
+          </div>
+        )}
 
       {/* Per-node error caption — full text on hover */}
       {data.status === "error" && (data.cause || data.error) && (
@@ -1107,7 +1117,10 @@ const DEMO_SEEDED_SKILL_BY_AGENT: Record<string, string> = {
  * template helper). Prefers a concrete seeded skill the agent owns so
  * `resolveSkill` succeeds; falls back to the bare `web-search` skill id. */
 function demoDefaultSkillFor(agentName: string): string {
-  const slug = agentName?.trim().replace(/\.sui$/, "").toLowerCase();
+  const slug = agentName
+    ?.trim()
+    .replace(/\.sui$/, "")
+    .toLowerCase();
   return DEMO_SEEDED_SKILL_BY_AGENT[slug] ?? "web-search";
 }
 
@@ -1181,7 +1194,12 @@ function demoCoordinateGraph(selfName: string): {
       },
     },
   ];
-  const edge = (id: string, source: string, target: string, label?: string): Edge => ({
+  const edge = (
+    id: string,
+    source: string,
+    target: string,
+    label?: string,
+  ): Edge => ({
     id,
     source,
     target,
@@ -1289,7 +1307,11 @@ function severityStyle(status: NodeStatus): {
 } {
   switch (status) {
     case "error":
-      return { ring: "border-red-600", badge: "bg-red-600 text-white", label: "ERROR" };
+      return {
+        ring: "border-red-600",
+        badge: "bg-red-600 text-white",
+        label: "ERROR",
+      };
     case "skipped":
       return {
         ring: "border-blue-400",
@@ -1303,13 +1325,27 @@ function severityStyle(status: NodeStatus): {
         label: "BLOCKED",
       };
     case "done":
-      return { ring: "border-green-500", badge: "bg-green-500 text-white", label: "DONE" };
+      return {
+        ring: "border-green-500",
+        badge: "bg-green-500 text-white",
+        label: "DONE",
+      };
     default:
-      return { ring: "border-pure-black/20", badge: "bg-black/30 text-white", label: status.toUpperCase() };
+      return {
+        ring: "border-pure-black/20",
+        badge: "bg-black/30 text-white",
+        label: status.toUpperCase(),
+      };
   }
 }
 
-function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) {
+function LogsView({
+  steps,
+  runTime,
+}: {
+  steps: StepResult[];
+  runTime: string;
+}) {
   if (steps.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -1364,7 +1400,9 @@ function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) 
                   {s.errorCode}
                 </span>
               )}
-              <span className="font-mono text-[9px] text-black/30">{runTime}</span>
+              <span className="font-mono text-[9px] text-black/30">
+                {runTime}
+              </span>
             </div>
 
             {cause && (
@@ -1423,11 +1461,140 @@ function LogsView({ steps, runTime }: { steps: StepResult[]; runTime: string }) 
 
 // ===== Page =====
 
+// ===== Inline "Create Skill" mini-form inside the Tools palette =====
+// Lets the user quick-publish a skill (name + description) into the registry
+// so it appears in "My Skills" immediately and can be dragged into the workflow.
+function CreateSkillInline({
+  agentSlug,
+  onCreated,
+}: {
+  agentSlug: string;
+  onCreated: (skill: { name: string; suinsName: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    const trimmed = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!trimmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentName: agentSlug,
+          skillId: trimmed,
+          mvrPackage: `@${agentSlug}/${trimmed}`,
+          version: "1.0.0",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Failed");
+      const suinsName = data?.skill?.suinsName ?? `${trimmed}.${agentSlug}.sui`;
+      onCreated({ name: trimmed, suinsName });
+      setName("");
+      setDesc("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 px-3 pb-3 pt-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="skill-name"
+        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
+      />
+      <input
+        type="text"
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Description (optional)"
+        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
+      />
+      {error && <p className="font-mono text-[9px] text-red-600">{error}</p>}
+      <button
+        type="button"
+        disabled={busy || !name.trim()}
+        onClick={() => void handleCreate()}
+        className="w-full border-2 border-electric-purple bg-electric-purple px-2 py-1.5 font-mono text-[10px] font-bold text-white disabled:opacity-50"
+      >
+        {busy ? "Creating…" : "Create & Add to My Skills"}
+      </button>
+    </div>
+  );
+}
+
+// ===== Workflow record + graph<->canvas conversion =====
+
+// Minimal workflow record shape returned by GET /api/workflows/[slug].
+interface WorkflowMeta {
+  slug: string;
+  workflowId: string;
+  name: string;
+  suinsName: string;
+  agentSlug: string;
+  version: string;
+  walrusManifestBlob: string;
+  status: "draft" | "active" | "archived";
+}
+
+// A serialized workflow graph node (from the Walrus manifest), mirroring the
+// engine's WorkflowGraph: { id, type, label, params? }.
+interface WfGraphNode {
+  id: string;
+  type: WfType;
+  label: string;
+  params?: Record<string, string>;
+}
+
+/**
+ * Convert a stored WorkflowGraph (nodes + edges, no positions) into React Flow
+ * nodes/edges for the canvas. Positions are recomputed with a simple left→right
+ * layout since the manifest stores only the logical graph, not the visual one.
+ */
+function workflowGraphToFlow(graph: {
+  nodes: WfGraphNode[];
+  edges: { source: string; target: string }[];
+}): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = graph.nodes.map((n, i) => ({
+    id: n.id,
+    type: "skill",
+    position: { x: 60 + i * 240, y: 240 },
+    data: {
+      label: n.label,
+      subtitle: TYPE_LABEL[n.type] ?? n.label,
+      ...(n.params ? { params: n.params } : {}),
+    },
+  }));
+  const edges: Edge[] = graph.edges.map((e, i) => ({
+    id: `wf-edge-${i}`,
+    source: e.source,
+    target: e.target,
+    type: "smoothstep",
+    style: { stroke: "#6800FF", strokeDasharray: "5 5" },
+  }));
+  return { nodes, edges };
+}
+
 export default function WorkflowEditorPage() {
   const params = useParams();
   const slug = params.slug as string;
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [showTools, setShowTools] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
   const [panelHeight, setPanelHeight] = useState(45);
@@ -1457,6 +1624,15 @@ export default function WorkflowEditorPage() {
   // Known Walrus-memory namespaces (registry-derived) for the memory-node
   // namespace picker. Element 0 is the default (the agent's `.sui` name).
   const [namespaces, setNamespaces] = useState<string[]>([]);
+  // The workflow record this canvas edits (when the slug is a workflow, not a
+  // bare agent). Drives the Publish button + the graph hydration from Walrus.
+  const [workflowMeta, setWorkflowMeta] = useState<WorkflowMeta | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  // Agent's published skills (for the "My Skills" palette section).
+  const [agentSkills, setAgentSkills] = useState<
+    { name: string; suinsName: string }[]
+  >([]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -1604,7 +1780,53 @@ export default function WorkflowEditorPage() {
   useEffect(() => {
     fetchRuns();
     fetchNamespaces();
-  }, [fetchRuns, fetchNamespaces]);
+    // Fetch the agent's published skills for the "My Skills" palette section.
+    void (async () => {
+      try {
+        // Resolve the effective agent slug (workflow → parent agent).
+        let agentKey = slug;
+        try {
+          const wfRes = await fetch(
+            `/api/workflows/${encodeURIComponent(slug)}`,
+            { cache: "no-store" },
+          );
+          if (wfRes.ok) {
+            const wfData = await wfRes.json();
+            if (wfData?.workflow?.agentSlug)
+              agentKey = wfData.workflow.agentSlug;
+          }
+        } catch {
+          /* not a workflow — use slug as-is */
+        }
+        const res = await fetch(
+          `/api/agents/${encodeURIComponent(agentKey)}/skills`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data?.skills)) {
+          setAgentSkills(
+            data.skills
+              .filter(
+                (s: { status?: string }) => !s.status || s.status === "active",
+              )
+              .map(
+                (s: {
+                  name: string;
+                  suinsName?: string;
+                  agentSlug?: string;
+                }) => ({
+                  name: s.name,
+                  suinsName: s.suinsName ?? `${s.name}.${agentKey}.sui`,
+                }),
+              ),
+          );
+        }
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }, [fetchRuns, fetchNamespaces, slug]);
 
   // Seed the canvas with this agent's DISTINCT default workflow on first load
   // (once per slug). Each known demo agent (@alpha, @beta-agent, @walrus-bot,
@@ -1615,14 +1837,97 @@ export default function WorkflowEditorPage() {
   useEffect(() => {
     if (!slug || seededSlug.current === slug) return;
     seededSlug.current = slug;
-    const graph = defaultGraphForSlug(slug);
-    if (!graph) return; // unknown agent — leave the generic default in place.
-    setNodes(graph.nodes);
-    setEdges(graph.edges);
-    setLatestRun(null);
-    requestAnimationFrame(() => {
-      rfInstance.current?.fitView({ padding: 0.2, duration: 300 });
-    });
+    let cancelled = false;
+
+    const fitSoon = () =>
+      requestAnimationFrame(() => {
+        rfInstance.current?.fitView({ padding: 0.2, duration: 300 });
+      });
+
+    void (async () => {
+      // 1. Fetch the workflow record (if this slug is a workflow) so the
+      //    Publish button knows its name/subname.
+      let isWorkflow = false;
+      try {
+        const metaRes = await fetch(
+          `/api/workflows/${encodeURIComponent(slug)}`,
+          { cache: "no-store" },
+        );
+        if (metaRes.ok && !cancelled) {
+          const data = await metaRes.json();
+          if (data?.workflow) {
+            isWorkflow = true;
+            setWorkflowMeta(data.workflow as WorkflowMeta);
+          }
+        }
+      } catch {
+        /* not a workflow slug — fine, fall through to the agent default */
+      }
+      if (cancelled) return;
+
+      // 2. Hydrate the canvas from the published graph on Walrus, when present.
+      try {
+        const gRes = await fetch(
+          `/api/workflows/${encodeURIComponent(slug)}/graph`,
+          { cache: "no-store" },
+        );
+        if (gRes.ok && !cancelled) {
+          const data = await gRes.json();
+          const g = data?.graph as
+            | {
+                nodes: WfGraphNode[];
+                edges: { source: string; target: string }[];
+              }
+            | undefined;
+          if (g?.nodes?.length) {
+            const flow = workflowGraphToFlow(g);
+            setNodes(flow.nodes);
+            setEdges(flow.edges);
+            setLatestRun(null);
+            fitSoon();
+            return; // loaded the saved graph — skip the default seed
+          }
+        }
+      } catch {
+        /* no published graph yet — fall through below */
+      }
+      if (cancelled) return;
+
+      // 3a. A WORKFLOW with no published graph is a fresh draft → start with a
+      //     blank canvas (just a Trigger) so the user builds their OWN graph,
+      //     NOT a pre-filled agent demo template.
+      if (isWorkflow) {
+        setNodes([
+          {
+            id: "trigger",
+            type: "skill",
+            position: { x: 120, y: 240 },
+            data: { label: "Trigger", subtitle: "Manual start" },
+          },
+        ]);
+        setEdges([]);
+        setLatestRun(null);
+        fitSoon();
+        return;
+      }
+
+      // 3b. Bare-agent canvas: fall back to the per-agent default starter graph.
+      const graph = defaultGraphForSlug(slug);
+      if (graph) {
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
+      } else {
+        // Unknown agent — use the generic default graph.
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+      }
+      setLatestRun(null);
+      fitSoon();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, setNodes, setEdges]);
 
   // Fetch the preflight prediction on mount and whenever the graph shape changes
@@ -1692,7 +1997,8 @@ export default function WorkflowEditorPage() {
     const markRunnableError = (message: string) =>
       setNodes((nds) =>
         nds.map((n) =>
-          runnableIds.has(n.id) && (n.data as SkillNodeData).status === "running"
+          runnableIds.has(n.id) &&
+          (n.data as SkillNodeData).status === "running"
             ? {
                 ...n,
                 data: {
@@ -1706,11 +2012,14 @@ export default function WorkflowEditorPage() {
       );
 
     try {
-      const res = await fetch(`/api/workflows/${encodeURIComponent(slug)}/run`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ graph }),
-      });
+      const res = await fetch(
+        `/api/workflows/${encodeURIComponent(slug)}/run`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ graph }),
+        },
+      );
       const payload = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -1807,6 +2116,60 @@ export default function WorkflowEditorPage() {
     [slug, setNodes, setEdges, fitViewNextTick],
   );
 
+  // Publish the current canvas as the workflow's graph: package it into a
+  // `sui-agent-workflow/v1` manifest and POST to the publish route, which
+  // uploads it to Walrus and binds it to the workflow's SuiNS subname. Only
+  // available when this slug is a workflow (workflowMeta loaded).
+  const handlePublish = useCallback(async () => {
+    if (!workflowMeta || publishing) return;
+    const graph = buildRunnableGraph();
+    if (graph.nodes.length === 0) {
+      setPublishMsg("Add at least one node before publishing.");
+      return;
+    }
+    setPublishing(true);
+    setPublishMsg(null);
+    // Derive composed-skill dependencies from any Call Sub-Agent nodes.
+    const dependencies = Array.from(
+      new Set(
+        graph.nodes
+          .filter((n) => n.type === "call-sub-agent")
+          .map((n) => n.params?.skill)
+          .filter((s): s is string => Boolean(s)),
+      ),
+    );
+    const manifest = {
+      name: workflowMeta.workflowId,
+      version: workflowMeta.version || "1.0.0",
+      publisher: workflowMeta.suinsName,
+      manifestType: "sui-agent-workflow/v1" as const,
+      graph,
+      dependencies,
+    };
+    try {
+      const res = await fetch(
+        `/api/workflows/${encodeURIComponent(slug)}/publish`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ manifest }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Publish failed (${res.status})`);
+      }
+      setPublishMsg(
+        `Published to Walrus → ${String(data.blobId).slice(0, 14)}…`,
+      );
+      if (data.workflow) setWorkflowMeta(data.workflow as WorkflowMeta);
+    } catch (e) {
+      setPublishMsg(e instanceof Error ? e.message : "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  }, [workflowMeta, publishing, buildRunnableGraph, slug]);
+
   // Drag to resize bottom panel
   const handleDragResize = useCallback(
     (e: React.MouseEvent) => {
@@ -1865,11 +2228,20 @@ export default function WorkflowEditorPage() {
   const envWarnings: { label: string; tone: "error" | "warn" }[] = [];
   if (env) {
     if (!env.suiKey)
-      envWarnings.push({ label: "env: SUI_PRIVATE_KEY missing", tone: "error" });
+      envWarnings.push({
+        label: "env: SUI_PRIVATE_KEY missing",
+        tone: "error",
+      });
     if (!env.enokiKey)
-      envWarnings.push({ label: "env: ENOKI_SECRET_KEY missing", tone: "error" });
+      envWarnings.push({
+        label: "env: ENOKI_SECRET_KEY missing",
+        tone: "error",
+      });
     if (env.network === "mainnet" && !env.customWalrusPublisher)
-      envWarnings.push({ label: "mainnet — no public Walrus publisher", tone: "warn" });
+      envWarnings.push({
+        label: "mainnet — no public Walrus publisher",
+        tone: "warn",
+      });
     if (!env.passportOnChain)
       envWarnings.push({
         label: "passport not on-chain (sui/delegate may skip)",
@@ -1884,751 +2256,866 @@ export default function WorkflowEditorPage() {
 
   return (
     <NamespacesContext.Provider value={namespaces}>
-    <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
-      {/* ===== Top bar ===== */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
-        {/* Left: sidebar toggle + breadcrumb */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="flex h-7 w-7 items-center justify-center border-2 border-pure-black bg-white text-black hover:bg-surface-container"
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              {sidebarCollapsed ? (
-                <>
-                  <path d="M3 3h18v18H3z" />
-                  <path d="M9 3v18" />
-                  <path d="M14 12l3-3m0 0l3 3m-3-3v6" />
-                </>
-              ) : (
-                <>
-                  <path d="M3 3h18v18H3z" />
-                  <path d="M9 3v18" />
-                  <path d="M15 9l-3 3 3 3" />
-                </>
-              )}
-            </svg>
-          </button>
-          <nav className="flex items-center gap-1 font-mono text-sm text-black">
-            <Link href="/create" className="text-black/50 hover:text-black">
-              Workflows
-            </Link>
-            <span className="text-black/30">/</span>
-            <span className="font-bold text-black">@{slug}</span>
-          </nav>
-        </div>
-
-        {/* Center: ▶ Runs dropdown */}
-        <div className="relative flex-1 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setShowRuns((p) => !p);
-              if (!showRuns) fetchRuns();
-            }}
-            className="font-mono text-sm font-bold text-black transition-colors hover:text-electric-purple"
-          >
-            ▶ Runs ({runs.length})
-          </button>
-          {showRuns && (
-            <div className="absolute left-1/2 top-8 z-30 max-h-80 w-72 -translate-x-1/2 overflow-y-auto border-2 border-pure-black bg-white text-left shadow-[4px_4px_0_0_#000]">
-              <div className="border-b-2 border-pure-black px-3 py-2 font-mono text-[10px] font-bold uppercase text-black/50">
-                Past Runs
-              </div>
-              {runs.length === 0 ? (
-                <p className="px-3 py-4 text-center font-mono text-xs italic text-black/40">
-                  No runs yet.
-                </p>
-              ) : (
-                runs.map((run) => (
-                  <button
-                    key={run.runId}
-                    type="button"
-                    onClick={() => loadRun(run)}
-                    className="flex w-full items-center gap-2 border-b border-pure-black/10 px-3 py-2 text-left hover:bg-surface-container"
-                  >
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${run.status === "done" ? "bg-green-500" : "bg-red-500"}`}
-                    />
-                    <span className="flex-1 font-mono text-xs font-bold text-black">
-                      {run.runId.slice(0, 8)}
-                    </span>
-                    <span className="font-mono text-[10px] text-black/50">
-                      {run.steps.length} steps
-                    </span>
-                    <span className="font-mono text-[10px] text-black/40">
-                      {new Date(run.createdAt).toLocaleTimeString()}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right: preflight badges + run + tools */}
-        <div className="flex items-center gap-2">
-          {/* Env preflight badge strip (predicted before a run) */}
-          {envWarnings.length > 0 && (
-            <div className="hidden items-center gap-1 lg:flex">
-              {envWarnings.map((w) => (
-                <span
-                  key={w.label}
-                  className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
-                    w.tone === "error"
-                      ? "border-red-600 bg-red-50 text-red-700"
-                      : "border-amber-500 bg-amber-50 text-amber-700"
-                  }`}
-                  title={w.label}
-                >
-                  {w.tone === "error" ? "✕ " : "⚠ "}
-                  {w.label}
-                </span>
-              ))}
-            </div>
-          )}
-          {/* Templates: pick-and-run library of ready-made workflows. */}
-          <div className="relative">
+      <div className="relative h-[calc(100vh-0px)] w-full overflow-hidden bg-off-white">
+        {/* ===== Top bar ===== */}
+        <div className="absolute left-0 right-0 top-0 z-10 flex items-center border-b border-pure-black/10 bg-off-white/95 px-4 py-3 backdrop-blur-sm">
+          {/* Left: sidebar toggle + breadcrumb */}
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setShowTemplates((v) => !v)}
-              disabled={running}
-              aria-haspopup="menu"
-              aria-expanded={showTemplates}
-              className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-electric-purple disabled:cursor-not-allowed disabled:opacity-60"
-              title="Load a ready-made workflow template"
+              onClick={toggleSidebar}
+              className="flex h-7 w-7 items-center justify-center border-2 border-pure-black bg-white text-black hover:bg-surface-container"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              Templates
-              <span className="text-[10px]">{showTemplates ? "▲" : "▼"}</span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                {sidebarCollapsed ? (
+                  <>
+                    <path d="M3 3h18v18H3z" />
+                    <path d="M9 3v18" />
+                    <path d="M14 12l3-3m0 0l3 3m-3-3v6" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M3 3h18v18H3z" />
+                    <path d="M9 3v18" />
+                    <path d="M15 9l-3 3 3 3" />
+                  </>
+                )}
+              </svg>
             </button>
-            {showTemplates && (
-              <>
-                {/* Click-away backdrop. */}
-                <div
-                  className="fixed inset-0 z-30"
-                  onClick={() => setShowTemplates(false)}
-                />
-                <div
-                  role="menu"
-                  className="absolute right-0 z-40 mt-2 w-80 border-2 border-pure-black bg-white shadow-[4px_4px_0_0_#000]"
-                >
-                  <div className="border-b-2 border-pure-black bg-electric-purple px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide text-white">
-                    Templates
-                  </div>
-                  <div className="max-h-[60vh] overflow-y-auto">
-                    {templatesByCategory().map((group) => (
-                      <div key={group.category}>
-                        <div className="sticky top-0 z-10 border-b border-pure-black/10 bg-surface-container px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-black/45">
-                          {group.category}
-                        </div>
-                        {group.templates.map((tpl) => (
-                          <button
-                            key={tpl.id}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => loadTemplate(tpl.id)}
-                            title={tpl.demonstrates}
-                            className="block w-full border-b border-pure-black/10 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-container"
-                          >
-                            <div className="font-mono text-xs font-bold text-black">
-                              {tpl.name}
-                            </div>
-                            <div className="mt-0.5 font-mono text-[10px] leading-snug text-black/55">
-                              {tpl.description}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+            <nav className="flex items-center gap-1 font-mono text-sm text-black">
+              <Link href="/create" className="text-black/50 hover:text-black">
+                Workflows
+              </Link>
+              <span className="text-black/30">/</span>
+              <span className="font-bold text-black">@{slug}</span>
+            </nav>
           </div>
-          <button
-            type="button"
-            onClick={loadDemoGraph}
-            disabled={running}
-            className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
-            title="Load the Agents-import-agents coordination demo"
-          >
-            Demo Graph
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              // Warn-gate: if an on-chain node will error purely on missing
-              // server env, surface it BEFORE the run instead of as a cryptic
-              // red node. The run still proceeds (user may have a reason).
-              if (hardBlocker && !running) {
-                const missing = !env?.suiKey
-                  ? "SUI_PRIVATE_KEY"
-                  : "ENOKI_SECRET_KEY";
-                setRunError(
-                  `${missing} not set — on-chain steps will error. Add it to packages/frontend/.env.local (or the repo-root .env reaching the route). Running anyway…`,
-                );
-              }
-              void handleRun();
-            }}
-            disabled={running}
-            className={`flex items-center gap-1.5 border-2 border-pure-black px-3 py-1.5 font-mono text-xs font-bold text-white shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
-              hardBlocker ? "bg-red-600" : "bg-electric-purple"
-            }`}
-            title={
-              hardBlocker
-                ? "Missing server signing env — on-chain steps will error"
-                : "Run the workflow"
-            }
-          >
-            {running ? (
-              <>
-                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-                Running…
-              </>
-            ) : (
-              <>▶ Run Workflow</>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTools(!showTools)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-lg text-black transition-all hover:border-electric-purple hover:text-electric-purple"
-          >
-            +
-          </button>
-        </div>
-      </div>
 
-      {/* ===== Run error banner ===== */}
-      {runError && (
-        <div className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-3 border-2 border-red-600 bg-red-50 px-4 py-2 font-mono text-xs font-bold text-red-700 shadow-[3px_3px_0_0_#000]">
-          <span>{runError}</span>
-          <button
-            type="button"
-            onClick={() => setRunError(null)}
-            className="text-red-700/60 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* ===== Canvas ===== */}
-      <div
-        className="absolute inset-0 pt-[52px]"
-        style={{ paddingBottom: showMetrics ? `${panelHeight}vh` : 0 }}
-      >
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onInit={(instance) => {
-            rfInstance.current = instance;
-          }}
-          nodeTypes={nodeTypes}
-          fitView
-          deleteKeyCode={["Backspace", "Delete"]}
-          className="bg-off-white"
-          defaultEdgeOptions={{
-            type: "smoothstep",
-            style: { stroke: "#6800FF", strokeDasharray: "5 5" },
-          }}
-        >
-          <Background color="#e8e4df" gap={24} size={1} />
-          <Controls className="[&_button]:!border-2 [&_button]:!border-pure-black/20 [&_button]:!bg-white [&_button]:!text-black" />
-        </ReactFlow>
-      </div>
-
-      {/* ===== Bottom panel (neo-brutalist, resizable) ===== */}
-      <div className="absolute bottom-0 left-0 right-0 z-20">
-        {/* Drag handle */}
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => setShowMetrics(!showMetrics)}
-            onMouseDown={showMetrics ? handleDragResize : undefined}
-            className="relative -top-3 flex h-6 w-16 cursor-ns-resize items-center justify-center rounded-full border-2 border-pure-black bg-white text-black shadow-[2px_2px_0_0_#000] transition-colors hover:bg-electric-purple hover:text-white"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform ${showMetrics ? "" : "rotate-180"}`}
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-        </div>
-
-        {showMetrics && (
-          <div
-            style={{ height: `${panelHeight}vh` }}
-            className="overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4"
-          >
-            {/* Panel view tabs: metrics tables vs. per-node Logs */}
-            <div className="mb-3 flex items-center gap-2">
-              {(
-                [
-                  ["metrics", "METRICS"],
-                  ["logs", "LOGS"],
-                ] as const
-              ).map(([val, label]) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setPanelView(val)}
-                  className={`border-2 px-3 py-1 font-mono text-[10px] font-bold uppercase ${
-                    panelView === val
-                      ? "border-electric-purple bg-electric-purple text-white shadow-[2px_2px_0_0_#000]"
-                      : "border-pure-black/20 bg-white text-black hover:border-electric-purple"
-                  }`}
-                >
-                  {label}
-                  {val === "logs" && logSteps.length > 0 && (
-                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center bg-red-600 px-1 text-[9px] text-white">
-                      {logSteps.length}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {panelView === "logs" ? (
-              <LogsView steps={steps} runTime={runTime} />
-            ) : (
-            <div className="grid h-full grid-cols-3 gap-4">
-              {/* Run summary (real, derived from latest run) */}
-              <div className="flex flex-col gap-4">
-                <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="font-mono text-xs font-bold text-black">
-                      RUN SUMMARY
-                    </h4>
-                    <span
-                      className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
-                    >
-                      {running
-                        ? "● RUNNING"
-                        : latestRun
-                          ? `● ${latestRun.status.toUpperCase()}`
-                          : "● IDLE"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="font-mono text-[10px] text-black/50">
-                        STEPS
-                      </p>
-                      <p className="font-mono text-lg font-bold text-black">
-                        {steps.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] text-black/50">DONE</p>
-                      <p className="font-mono text-lg font-bold text-black">
-                        {doneCount}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] text-black/50">
-                        ON-CHAIN TX
-                      </p>
-                      <p className="font-mono text-lg font-bold text-black">
-                        {txCount}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] text-black/50">
-                        BLOBS
-                      </p>
-                      <p className="font-mono text-lg font-bold text-black">
-                        {blobCount}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="font-mono text-xs font-bold text-black">
-                      LAST RUN
-                    </h4>
-                    <span
-                      className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
-                    >
-                      {running ? "● LIVE" : "○"}
-                    </span>
-                  </div>
-                  {latestRun ? (
-                    <p className="font-mono text-sm text-black/60">
-                      <span className="text-lg font-bold text-black">
-                        {latestRun.runId.slice(0, 8)}
-                      </span>{" "}
-                      · {runTime}
-                    </p>
-                  ) : (
-                    <p className="font-mono text-sm italic text-black/40">
-                      No runs yet. Hit Run Workflow.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Live Transactions (real, from run steps) */}
-              <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
-                <h4 className="mb-2 font-mono text-xs font-bold text-black">
-                  LIVE TRANSACTIONS
-                </h4>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {(
-                    [
-                      ["all", "All"],
-                      ["walrus", "Walrus"],
-                      ["harbor", "Harbor"],
-                      ["sui", "Sui PTB"],
-                      ["memory", "Memory"],
-                      ["memory-recall", "Recall"],
-                      ["import-agent", "Import"],
-                      ["delegate", "Delegate"],
-                      ["call-sub-agent", "Sub-Call"],
-                      ["attest", "Attest"],
-                    ] as const
-                  ).map(([val, label]) => {
-                    const count = txTypeCount(val);
-                    const zero = hasRun && count === 0;
-                    return (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setTxFilter(val)}
-                        className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
-                          txFilter === val
-                            ? "border-electric-purple bg-electric-purple/10 text-black"
-                            : zero
-                              ? "border-pure-black/10 text-black/30 hover:border-electric-purple"
-                              : "border-pure-black/20 text-black hover:border-electric-purple"
-                        }`}
-                      >
-                        {label}
-                        {hasRun && (
-                          <span
-                            className={
-                              zero ? "ml-1 text-black/20" : "ml-1 text-black/40"
-                            }
-                          >
-                            ({count})
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
-                  <span className="flex-1">Node</span>
-                  <span className="w-16">Type</span>
-                  <span className="w-16">Status</span>
-                  <span className="w-14 text-right">Link</span>
-                </div>
-                {!hasRun ? (
-                  // (a) No run yet — keyed on the FULL steps array, like MY ACTIVITY.
-                  <p className="mt-4 text-center font-mono text-xs italic text-black/40">
-                    No transactions yet. Run the workflow.
-                  </p>
-                ) : filteredSteps.length === 0 ? (
-                  // (b) A run happened, but this filter matched nothing.
-                  <div className="mt-4 flex flex-col items-center gap-2">
-                    <p className="text-center font-mono text-xs italic text-black/40">
-                      No {txFilter === "all" ? "" : `${TYPE_LABEL[txFilter]} `}
-                      steps in this run.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setTxFilter("all")}
-                      className="border-2 border-pure-black bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-black shadow-[2px_2px_0_0_#000] hover:bg-surface-container"
-                    >
-                      Show All ({steps.length})
-                    </button>
-                  </div>
-                ) : (
-                  // (c) Rows.
-                  <div className="space-y-1.5">
-                    {filteredSteps.map((s) => {
-                      const cause = shortCause(s);
-                      return (
-                        <div key={s.nodeId} className="font-mono text-[10px]">
-                          <div className="flex items-center justify-between">
-                            <span className="flex-1 truncate text-black/60">
-                              {s.nodeId}
-                            </span>
-                            <span className="w-16 text-black">
-                              {TYPE_LABEL[s.type]}
-                            </span>
-                            <span
-                              className={`w-16 font-bold ${statusLabelColor(s.status)}`}
-                            >
-                              {s.status === "pending" ? "blocked" : s.status}
-                            </span>
-                            <span className="w-14 text-right">
-                              {s.txDigest ? (
-                                <a
-                                  href={suiscanTxUrl(s.txDigest)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-bold text-electric-purple underline"
-                                >
-                                  tx ↗
-                                </a>
-                              ) : s.blobId ? (
-                                <a
-                                  href={walruscanBlobUrl(s.blobId)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-bold text-blue-600 underline"
-                                >
-                                  blob ↗
-                                </a>
-                              ) : (
-                                <span className="text-black/30">—</span>
-                              )}
-                            </span>
-                          </div>
-                          {(s.status === "error" || s.status === "skipped") &&
-                            cause && (
-                              <p
-                                className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
-                                title={`${cause}${s.remediation ? ` — ${s.remediation}` : ""}`}
-                              >
-                                ↳ {cause}
-                              </p>
-                            )}
-                          {s.status === "done" &&
-                            (() => {
-                              const summary = nodeOutputSummary(s.type, s.output);
-                              return summary ? (
-                                <p
-                                  className="mt-0.5 truncate text-[9px] text-green-700"
-                                  title={summary}
-                                >
-                                  ↳ {summary}
-                                </p>
-                              ) : null;
-                            })()}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* My Activity (real, from run steps) */}
-              <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
-                <h4 className="mb-2 font-mono text-xs font-bold text-black">
-                  MY ACTIVITY
-                </h4>
-                <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
-                  <span className="w-16">Time</span>
-                  <span className="flex-1">Type</span>
-                  <span className="w-16">Status</span>
-                  <span className="w-14 text-right">Link</span>
-                </div>
-                {steps.length === 0 ? (
-                  <p className="mt-4 text-center font-mono text-xs italic text-black/40">
-                    No activity yet.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {steps.map((s) => {
-                      const cause = shortCause(s);
-                      return (
-                        <div key={s.nodeId} className="font-mono text-[10px]">
-                          <div className="flex items-center justify-between">
-                            <span className="w-16 text-black/50">{runTime}</span>
-                            <span className="flex-1 text-black">
-                              {TYPE_LABEL[s.type]}
-                            </span>
-                            <span
-                              className={`w-16 font-bold ${statusLabelColor(s.status)}`}
-                            >
-                              {s.status === "pending" ? "blocked" : s.status}
-                            </span>
-                            <span className="w-14 text-right">
-                              {s.txDigest ? (
-                                <a
-                                  href={suiscanTxUrl(s.txDigest)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-bold text-electric-purple underline"
-                                >
-                                  tx ↗
-                                </a>
-                              ) : s.blobId ? (
-                                <a
-                                  href={walruscanBlobUrl(s.blobId)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-bold text-blue-600 underline"
-                                >
-                                  blob ↗
-                                </a>
-                              ) : (
-                                <span className="text-black/30">—</span>
-                              )}
-                            </span>
-                          </div>
-                          {(s.status === "error" || s.status === "skipped") &&
-                            cause && (
-                              <p
-                                className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
-                                title={cause}
-                              >
-                                ↳ {cause}
-                              </p>
-                            )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ===== Tools Panel (right side) ===== */}
-      {showTools && (
-        <div className="absolute right-0 top-0 z-20 flex h-full w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-[-4px_0_0_0_#000]">
-          <div className="flex items-center justify-between border-b-2 border-pure-black px-4 py-3">
-            <h3 className="font-mono text-sm font-bold text-black">TOOLS</h3>
+          {/* Center: ▶ Runs dropdown */}
+          <div className="relative flex-1 text-center">
             <button
               type="button"
-              onClick={() => setShowTools(false)}
-              className="text-black/50 hover:text-black"
+              onClick={() => {
+                setShowRuns((p) => !p);
+                if (!showRuns) fetchRuns();
+              }}
+              className="font-mono text-sm font-bold text-black transition-colors hover:text-electric-purple"
+            >
+              ▶ Runs ({runs.length})
+            </button>
+            {showRuns && (
+              <div className="absolute left-1/2 top-8 z-30 max-h-80 w-72 -translate-x-1/2 overflow-y-auto border-2 border-pure-black bg-white text-left shadow-[4px_4px_0_0_#000]">
+                <div className="border-b-2 border-pure-black px-3 py-2 font-mono text-[10px] font-bold uppercase text-black/50">
+                  Past Runs
+                </div>
+                {runs.length === 0 ? (
+                  <p className="px-3 py-4 text-center font-mono text-xs italic text-black/40">
+                    No runs yet.
+                  </p>
+                ) : (
+                  runs.map((run) => (
+                    <button
+                      key={run.runId}
+                      type="button"
+                      onClick={() => loadRun(run)}
+                      className="flex w-full items-center gap-2 border-b border-pure-black/10 px-3 py-2 text-left hover:bg-surface-container"
+                    >
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${run.status === "done" ? "bg-green-500" : "bg-red-500"}`}
+                      />
+                      <span className="flex-1 font-mono text-xs font-bold text-black">
+                        {run.runId.slice(0, 8)}
+                      </span>
+                      <span className="font-mono text-[10px] text-black/50">
+                        {run.steps.length} steps
+                      </span>
+                      <span className="font-mono text-[10px] text-black/40">
+                        {new Date(run.createdAt).toLocaleTimeString()}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right: preflight badges + run + tools */}
+          <div className="flex items-center gap-2">
+            {/* Env preflight badge strip (predicted before a run) */}
+            {envWarnings.length > 0 && (
+              <div className="hidden items-center gap-1 lg:flex">
+                {envWarnings.map((w) => (
+                  <span
+                    key={w.label}
+                    className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
+                      w.tone === "error"
+                        ? "border-red-600 bg-red-50 text-red-700"
+                        : "border-amber-500 bg-amber-50 text-amber-700"
+                    }`}
+                    title={w.label}
+                  >
+                    {w.tone === "error" ? "✕ " : "⚠ "}
+                    {w.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Templates: pick-and-run library of ready-made workflows. */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTemplates((v) => !v)}
+                disabled={running}
+                aria-haspopup="menu"
+                aria-expanded={showTemplates}
+                className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-electric-purple disabled:cursor-not-allowed disabled:opacity-60"
+                title="Load a ready-made workflow template"
+              >
+                Templates
+                <span className="text-[10px]">{showTemplates ? "▲" : "▼"}</span>
+              </button>
+              {showTemplates && (
+                <>
+                  {/* Click-away backdrop. */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowTemplates(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 z-40 mt-2 w-80 border-2 border-pure-black bg-white shadow-[4px_4px_0_0_#000]"
+                  >
+                    <div className="border-b-2 border-pure-black bg-electric-purple px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide text-white">
+                      Templates
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      {templatesByCategory().map((group) => (
+                        <div key={group.category}>
+                          <div className="sticky top-0 z-10 border-b border-pure-black/10 bg-surface-container px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-black/45">
+                            {group.category}
+                          </div>
+                          {group.templates.map((tpl) => (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => loadTemplate(tpl.id)}
+                              title={tpl.demonstrates}
+                              className="block w-full border-b border-pure-black/10 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-container"
+                            >
+                              <div className="font-mono text-xs font-bold text-black">
+                                {tpl.name}
+                              </div>
+                              <div className="mt-0.5 font-mono text-[10px] leading-snug text-black/55">
+                                {tpl.description}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={loadDemoGraph}
+              disabled={running}
+              className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
+              title="Load the Agents-import-agents coordination demo"
+            >
+              Demo Graph
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Warn-gate: if an on-chain node will error purely on missing
+                // server env, surface it BEFORE the run instead of as a cryptic
+                // red node. The run still proceeds (user may have a reason).
+                if (hardBlocker && !running) {
+                  const missing = !env?.suiKey
+                    ? "SUI_PRIVATE_KEY"
+                    : "ENOKI_SECRET_KEY";
+                  setRunError(
+                    `${missing} not set — on-chain steps will error. Add it to packages/frontend/.env.local (or the repo-root .env reaching the route). Running anyway…`,
+                  );
+                }
+                void handleRun();
+              }}
+              disabled={running}
+              className={`flex items-center gap-1.5 border-2 border-pure-black px-3 py-1.5 font-mono text-xs font-bold text-white shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                hardBlocker ? "bg-red-600" : "bg-electric-purple"
+              }`}
+              title={
+                hardBlocker
+                  ? "Missing server signing env — on-chain steps will error"
+                  : "Run the workflow"
+              }
+            >
+              {running ? (
+                <>
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                  Running…
+                </>
+              ) : (
+                <>▶ Run Workflow</>
+              )}
+            </button>
+            {workflowMeta && (
+              <button
+                type="button"
+                onClick={() => void handlePublish()}
+                disabled={publishing || running}
+                className="flex items-center gap-1.5 border-2 border-pure-black bg-white px-3 py-1.5 font-mono text-xs font-bold text-black shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 hover:border-electric-purple disabled:cursor-not-allowed disabled:opacity-60"
+                title="Publish this graph to Walrus under the workflow's SuiNS subname"
+              >
+                {publishing ? "Publishing…" : "⇪ Publish"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowTools(!showTools)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-pure-black bg-white text-lg text-black transition-all hover:border-electric-purple hover:text-electric-purple"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* ===== Publish status banner ===== */}
+        {publishMsg && (
+          <div className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-3 border-2 border-electric-purple bg-electric-purple/10 px-4 py-2 font-mono text-xs font-bold text-electric-purple shadow-[3px_3px_0_0_#000]">
+            <span>{publishMsg}</span>
+            <button
+              type="button"
+              onClick={() => setPublishMsg(null)}
+              className="text-electric-purple/60 hover:text-electric-purple"
             >
               ✕
             </button>
           </div>
-          <div className="border-b border-pure-black/10 px-4 py-3">
-            <input
-              type="search"
-              placeholder="Search..."
-              className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs text-black outline-none placeholder:text-black/40 focus:border-electric-purple"
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <div className="border-b border-pure-black/10 px-4 py-2">
-              <p className="font-mono text-[10px] font-bold uppercase text-black/50">
-                In This Workflow ({nodes.length})
-              </p>
-            </div>
-            <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
-              <p className="font-mono text-[10px] font-bold uppercase text-black">
-                All Tools
-              </p>
-            </div>
+        )}
 
-            <div className="space-y-1 p-2">
-              {[
-                {
-                  category: "storage",
-                  tools: [
-                    { label: "Walrus", subtitle: "Store file (Walrus)" },
-                    { label: "Memory", subtitle: "Save to agent memory" },
-                    { label: "Memory Recall", subtitle: "Recall agent memory" },
-                  ],
-                  count: 3,
-                },
-                {
-                  category: "security",
-                  tools: [{ label: "Harbor", subtitle: "Encrypt + store (DEMO)" }],
-                  count: 1,
-                },
-                {
-                  category: "blockchain",
-                  tools: [{ label: "Sui", subtitle: "Execute PTB" }],
-                  count: 1,
-                },
-                {
-                  category: "coordination",
-                  tools: COORDINATE_TOOLS,
-                  count: COORDINATE_TOOLS.length,
-                },
-                {
-                  category: "triggers",
-                  tools: [{ label: "Trigger", subtitle: "Manual start" }],
-                  count: 1,
-                },
-              ].map((cat) => (
-                <details
-                  key={cat.category}
-                  className="border-2 border-pure-black/20 bg-white"
-                >
-                  <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-black hover:bg-surface-container">
-                    {cat.category}
-                    <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
-                      {cat.count}
-                    </span>
-                  </summary>
-                  <div className="space-y-1 border-t border-pure-black/10 p-2">
-                    {cat.tools.map((tool) => (
-                      <div
-                        key={tool.label}
-                        onClick={() => {
-                          setNodes((nds) => [
-                            ...nds,
-                            {
-                              id: `${tool.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
-                              type: "skill",
-                              position: {
-                                x: 300 + Math.random() * 200,
-                                y: 200 + Math.random() * 150,
-                              },
-                              data: {
-                                label: tool.label,
-                                subtitle: tool.subtitle,
-                              },
-                            },
-                          ]);
-                        }}
-                        className="flex cursor-pointer items-center gap-3 border-2 border-pure-black bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
-                      >
-                        <span className="font-mono text-lg font-bold text-black">
-                          {tool.label.charAt(0)}
+        {/* ===== Run error banner ===== */}
+        {runError && (
+          <div className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-3 border-2 border-red-600 bg-red-50 px-4 py-2 font-mono text-xs font-bold text-red-700 shadow-[3px_3px_0_0_#000]">
+            <span>{runError}</span>
+            <button
+              type="button"
+              onClick={() => setRunError(null)}
+              className="text-red-700/60 hover:text-red-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* ===== Canvas ===== */}
+        <div
+          className="absolute inset-0 pt-[52px]"
+          style={{ paddingBottom: showMetrics ? `${panelHeight}vh` : 0 }}
+        >
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onInit={(instance) => {
+              rfInstance.current = instance;
+            }}
+            nodeTypes={nodeTypes}
+            fitView
+            deleteKeyCode={["Backspace", "Delete"]}
+            className="bg-off-white"
+            defaultEdgeOptions={{
+              type: "smoothstep",
+              style: { stroke: "#6800FF", strokeDasharray: "5 5" },
+            }}
+          >
+            <Background color="#e8e4df" gap={24} size={1} />
+            <Controls className="[&_button]:!border-2 [&_button]:!border-pure-black/20 [&_button]:!bg-white [&_button]:!text-black" />
+          </ReactFlow>
+        </div>
+
+        {/* ===== Bottom panel (neo-brutalist, resizable) ===== */}
+        <div className="absolute bottom-0 left-0 right-0 z-20">
+          {/* Drag handle */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShowMetrics(!showMetrics)}
+              onMouseDown={showMetrics ? handleDragResize : undefined}
+              className="relative -top-3 flex h-6 w-16 cursor-ns-resize items-center justify-center rounded-full border-2 border-pure-black bg-white text-black shadow-[2px_2px_0_0_#000] transition-colors hover:bg-electric-purple hover:text-white"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${showMetrics ? "" : "rotate-180"}`}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          </div>
+
+          {showMetrics && (
+            <div
+              style={{ height: `${panelHeight}vh` }}
+              className="overflow-y-auto border-t-2 border-pure-black bg-off-white px-6 py-4"
+            >
+              {/* Panel view tabs: metrics tables vs. per-node Logs */}
+              <div className="mb-3 flex items-center gap-2">
+                {(
+                  [
+                    ["metrics", "METRICS"],
+                    ["logs", "LOGS"],
+                  ] as const
+                ).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setPanelView(val)}
+                    className={`border-2 px-3 py-1 font-mono text-[10px] font-bold uppercase ${
+                      panelView === val
+                        ? "border-electric-purple bg-electric-purple text-white shadow-[2px_2px_0_0_#000]"
+                        : "border-pure-black/20 bg-white text-black hover:border-electric-purple"
+                    }`}
+                  >
+                    {label}
+                    {val === "logs" && logSteps.length > 0 && (
+                      <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center bg-red-600 px-1 text-[9px] text-white">
+                        {logSteps.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {panelView === "logs" ? (
+                <LogsView steps={steps} runTime={runTime} />
+              ) : (
+                <div className="grid h-full grid-cols-3 gap-4">
+                  {/* Run summary (real, derived from latest run) */}
+                  <div className="flex flex-col gap-4">
+                    <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="font-mono text-xs font-bold text-black">
+                          RUN SUMMARY
+                        </h4>
+                        <span
+                          className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
+                        >
+                          {running
+                            ? "● RUNNING"
+                            : latestRun
+                              ? `● ${latestRun.status.toUpperCase()}`
+                              : "● IDLE"}
                         </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="font-mono text-xs font-bold text-black">
-                            {tool.label}
-                          </p>
                           <p className="font-mono text-[10px] text-black/50">
-                            {tool.subtitle}
+                            STEPS
+                          </p>
+                          <p className="font-mono text-lg font-bold text-black">
+                            {steps.length}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-mono text-[10px] text-black/50">
+                            DONE
+                          </p>
+                          <p className="font-mono text-lg font-bold text-black">
+                            {doneCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-mono text-[10px] text-black/50">
+                            ON-CHAIN TX
+                          </p>
+                          <p className="font-mono text-lg font-bold text-black">
+                            {txCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-mono text-[10px] text-black/50">
+                            BLOBS
+                          </p>
+                          <p className="font-mono text-lg font-bold text-black">
+                            {blobCount}
                           </p>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                    <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h4 className="font-mono text-xs font-bold text-black">
+                          LAST RUN
+                        </h4>
+                        <span
+                          className={`font-mono text-[10px] font-bold ${running ? "text-green-700" : "text-black/40"}`}
+                        >
+                          {running ? "● LIVE" : "○"}
+                        </span>
+                      </div>
+                      {latestRun ? (
+                        <p className="font-mono text-sm text-black/60">
+                          <span className="text-lg font-bold text-black">
+                            {latestRun.runId.slice(0, 8)}
+                          </span>{" "}
+                          · {runTime}
+                        </p>
+                      ) : (
+                        <p className="font-mono text-sm italic text-black/40">
+                          No runs yet. Hit Run Workflow.
+                        </p>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Live Transactions (real, from run steps) */}
+                  <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                    <h4 className="mb-2 font-mono text-xs font-bold text-black">
+                      LIVE TRANSACTIONS
+                    </h4>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {(
+                        [
+                          ["all", "All"],
+                          ["walrus", "Walrus"],
+                          ["harbor", "Harbor"],
+                          ["sui", "Sui PTB"],
+                          ["memory", "Memory"],
+                          ["memory-recall", "Recall"],
+                          ["import-agent", "Import"],
+                          ["delegate", "Delegate"],
+                          ["call-sub-agent", "Sub-Call"],
+                          ["attest", "Attest"],
+                        ] as const
+                      ).map(([val, label]) => {
+                        const count = txTypeCount(val);
+                        const zero = hasRun && count === 0;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setTxFilter(val)}
+                            className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
+                              txFilter === val
+                                ? "border-electric-purple bg-electric-purple/10 text-black"
+                                : zero
+                                  ? "border-pure-black/10 text-black/30 hover:border-electric-purple"
+                                  : "border-pure-black/20 text-black hover:border-electric-purple"
+                            }`}
+                          >
+                            {label}
+                            {hasRun && (
+                              <span
+                                className={
+                                  zero
+                                    ? "ml-1 text-black/20"
+                                    : "ml-1 text-black/40"
+                                }
+                              >
+                                ({count})
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
+                      <span className="flex-1">Node</span>
+                      <span className="w-16">Type</span>
+                      <span className="w-16">Status</span>
+                      <span className="w-14 text-right">Link</span>
+                    </div>
+                    {!hasRun ? (
+                      // (a) No run yet — keyed on the FULL steps array, like MY ACTIVITY.
+                      <p className="mt-4 text-center font-mono text-xs italic text-black/40">
+                        No transactions yet. Run the workflow.
+                      </p>
+                    ) : filteredSteps.length === 0 ? (
+                      // (b) A run happened, but this filter matched nothing.
+                      <div className="mt-4 flex flex-col items-center gap-2">
+                        <p className="text-center font-mono text-xs italic text-black/40">
+                          No{" "}
+                          {txFilter === "all" ? "" : `${TYPE_LABEL[txFilter]} `}
+                          steps in this run.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setTxFilter("all")}
+                          className="border-2 border-pure-black bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-black shadow-[2px_2px_0_0_#000] hover:bg-surface-container"
+                        >
+                          Show All ({steps.length})
+                        </button>
+                      </div>
+                    ) : (
+                      // (c) Rows.
+                      <div className="space-y-1.5">
+                        {filteredSteps.map((s) => {
+                          const cause = shortCause(s);
+                          return (
+                            <div
+                              key={s.nodeId}
+                              className="font-mono text-[10px]"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="flex-1 truncate text-black/60">
+                                  {s.nodeId}
+                                </span>
+                                <span className="w-16 text-black">
+                                  {TYPE_LABEL[s.type]}
+                                </span>
+                                <span
+                                  className={`w-16 font-bold ${statusLabelColor(s.status)}`}
+                                >
+                                  {s.status === "pending"
+                                    ? "blocked"
+                                    : s.status}
+                                </span>
+                                <span className="w-14 text-right">
+                                  {s.txDigest ? (
+                                    <a
+                                      href={suiscanTxUrl(s.txDigest)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-bold text-electric-purple underline"
+                                    >
+                                      tx ↗
+                                    </a>
+                                  ) : s.blobId ? (
+                                    <a
+                                      href={walruscanBlobUrl(s.blobId)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-bold text-blue-600 underline"
+                                    >
+                                      blob ↗
+                                    </a>
+                                  ) : (
+                                    <span className="text-black/30">—</span>
+                                  )}
+                                </span>
+                              </div>
+                              {(s.status === "error" ||
+                                s.status === "skipped") &&
+                                cause && (
+                                  <p
+                                    className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
+                                    title={`${cause}${s.remediation ? ` — ${s.remediation}` : ""}`}
+                                  >
+                                    ↳ {cause}
+                                  </p>
+                                )}
+                              {s.status === "done" &&
+                                (() => {
+                                  const summary = nodeOutputSummary(
+                                    s.type,
+                                    s.output,
+                                  );
+                                  return summary ? (
+                                    <p
+                                      className="mt-0.5 truncate text-[9px] text-green-700"
+                                      title={summary}
+                                    >
+                                      ↳ {summary}
+                                    </p>
+                                  ) : null;
+                                })()}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* My Activity (real, from run steps) */}
+                  <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+                    <h4 className="mb-2 font-mono text-xs font-bold text-black">
+                      MY ACTIVITY
+                    </h4>
+                    <div className="mb-1 flex items-center justify-between border-b-2 border-pure-black/10 pb-1 font-mono text-[9px] font-bold uppercase text-black/50">
+                      <span className="w-16">Time</span>
+                      <span className="flex-1">Type</span>
+                      <span className="w-16">Status</span>
+                      <span className="w-14 text-right">Link</span>
+                    </div>
+                    {steps.length === 0 ? (
+                      <p className="mt-4 text-center font-mono text-xs italic text-black/40">
+                        No activity yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {steps.map((s) => {
+                          const cause = shortCause(s);
+                          return (
+                            <div
+                              key={s.nodeId}
+                              className="font-mono text-[10px]"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="w-16 text-black/50">
+                                  {runTime}
+                                </span>
+                                <span className="flex-1 text-black">
+                                  {TYPE_LABEL[s.type]}
+                                </span>
+                                <span
+                                  className={`w-16 font-bold ${statusLabelColor(s.status)}`}
+                                >
+                                  {s.status === "pending"
+                                    ? "blocked"
+                                    : s.status}
+                                </span>
+                                <span className="w-14 text-right">
+                                  {s.txDigest ? (
+                                    <a
+                                      href={suiscanTxUrl(s.txDigest)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-bold text-electric-purple underline"
+                                    >
+                                      tx ↗
+                                    </a>
+                                  ) : s.blobId ? (
+                                    <a
+                                      href={walruscanBlobUrl(s.blobId)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-bold text-blue-600 underline"
+                                    >
+                                      blob ↗
+                                    </a>
+                                  ) : (
+                                    <span className="text-black/30">—</span>
+                                  )}
+                                </span>
+                              </div>
+                              {(s.status === "error" ||
+                                s.status === "skipped") &&
+                                cause && (
+                                  <p
+                                    className={`mt-0.5 truncate text-[9px] ${s.status === "error" ? "text-red-600" : "text-blue-700/60"}`}
+                                    title={cause}
+                                  >
+                                    ↳ {cause}
+                                  </p>
+                                )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ===== Tools Panel (right side) ===== */}
+        {showTools && (
+          <div className="absolute right-0 top-[52px] z-20 flex h-[calc(100%-52px)] w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-[-4px_0_0_0_#000]">
+            <div className="flex items-center justify-between border-b-2 border-pure-black px-4 py-3">
+              <h3 className="font-mono text-sm font-bold text-black">TOOLS</h3>
+              <button
+                type="button"
+                onClick={() => setShowTools(false)}
+                className="text-black/50 hover:text-black"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="border-b border-pure-black/10 px-4 py-3">
+              <input
+                type="search"
+                placeholder="Search..."
+                className="w-full border-2 border-pure-black bg-white px-3 py-2 font-mono text-xs text-black outline-none placeholder:text-black/40 focus:border-electric-purple"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {/* ===== My Skills (FIRST — the primary building blocks) ===== */}
+              <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
+                <p className="font-mono text-[10px] font-bold uppercase text-electric-purple">
+                  My Skills ({agentSkills.length})
+                </p>
+              </div>
+              <div className="space-y-1 p-2">
+                {agentSkills.length > 0 ? (
+                  agentSkills.map((skill) => (
+                    <div
+                      key={skill.suinsName}
+                      onClick={() => {
+                        setNodes((nds) => [
+                          ...nds,
+                          {
+                            id: `call-${skill.name}-${Date.now()}`,
+                            type: "skill",
+                            position: {
+                              x: 300 + Math.random() * 200,
+                              y: 200 + Math.random() * 150,
+                            },
+                            data: {
+                              label: "Call Sub-Agent",
+                              subtitle: skill.name,
+                              params: {
+                                skill: skill.suinsName,
+                                cost: "0",
+                              },
+                            },
+                          },
+                        ]);
+                      }}
+                      className="flex cursor-pointer items-center gap-3 border-2 border-electric-purple/40 bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
+                    >
+                      <span className="font-mono text-lg font-bold text-electric-purple">
+                        ⚡
+                      </span>
+                      <div>
+                        <p className="font-mono text-xs font-bold text-black">
+                          {skill.name}
+                        </p>
+                        <p className="font-mono text-[10px] text-electric-purple/70">
+                          {skill.suinsName}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-2 py-3 font-mono text-[10px] text-black/40">
+                    No skills published yet. Create one below or from the Agent
+                    page.
+                  </p>
+                )}
+                {/* Create Skill inline — quick-publish a skill to the agent */}
+                <details className="mt-1 border-2 border-dashed border-electric-purple/40 bg-electric-purple/5">
+                  <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 font-mono text-xs font-bold text-electric-purple hover:bg-electric-purple/10">
+                    + Create Skill
+                  </summary>
+                  <CreateSkillInline
+                    agentSlug={workflowMeta?.agentSlug ?? slug}
+                    onCreated={(skill) => {
+                      setAgentSkills((prev) => [...prev, skill]);
+                    }}
+                  />
                 </details>
-              ))}
+              </div>
+
+              {/* ===== All Tools (infrastructure nodes) ===== */}
+              <div className="border-b border-pure-black/10 border-t-2 border-t-pure-black/20 px-4 py-2">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+                  All Tools
+                </p>
+              </div>
+
+              <div className="space-y-1 p-2">
+                {[
+                  {
+                    category: "storage",
+                    tools: [
+                      { label: "Walrus", subtitle: "Store file (Walrus)" },
+                      { label: "Memory", subtitle: "Save to agent memory" },
+                      {
+                        label: "Memory Recall",
+                        subtitle: "Recall agent memory",
+                      },
+                    ],
+                    count: 3,
+                  },
+                  {
+                    category: "security",
+                    tools: [
+                      { label: "Harbor", subtitle: "Encrypt + store (DEMO)" },
+                    ],
+                    count: 1,
+                  },
+                  {
+                    category: "blockchain",
+                    tools: [{ label: "Sui", subtitle: "Execute PTB" }],
+                    count: 1,
+                  },
+                  {
+                    category: "coordination",
+                    tools: COORDINATE_TOOLS,
+                    count: COORDINATE_TOOLS.length,
+                  },
+                  {
+                    category: "triggers",
+                    tools: [{ label: "Trigger", subtitle: "Manual start" }],
+                    count: 1,
+                  },
+                ].map((cat) => (
+                  <details
+                    key={cat.category}
+                    className="border-2 border-pure-black/20 bg-white"
+                  >
+                    <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-black hover:bg-surface-container">
+                      {cat.category}
+                      <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
+                        {cat.count}
+                      </span>
+                    </summary>
+                    <div className="space-y-1 border-t border-pure-black/10 p-2">
+                      {cat.tools.map((tool) => (
+                        <div
+                          key={tool.label}
+                          onClick={() => {
+                            setNodes((nds) => [
+                              ...nds,
+                              {
+                                id: `${tool.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
+                                type: "skill",
+                                position: {
+                                  x: 300 + Math.random() * 200,
+                                  y: 200 + Math.random() * 150,
+                                },
+                                data: {
+                                  label: tool.label,
+                                  subtitle: tool.subtitle,
+                                },
+                              },
+                            ]);
+                          }}
+                          className="flex cursor-pointer items-center gap-3 border-2 border-pure-black bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
+                        >
+                          <span className="font-mono text-lg font-bold text-black">
+                            {tool.label.charAt(0)}
+                          </span>
+                          <div>
+                            <p className="font-mono text-xs font-bold text-black">
+                              {tool.label}
+                            </p>
+                            <p className="font-mono text-[10px] text-black/50">
+                              {tool.subtitle}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </NamespacesContext.Provider>
   );
 }
