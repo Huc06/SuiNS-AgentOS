@@ -23,10 +23,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@agentos/mcp':
+      '@agentos-sui/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@agentos/sdk':
+      '@agentos-sui/sdk':
         specifier: workspace:*
         version: link:../sdk
       '@mysten/sui':
@@ -51,7 +51,7 @@ importers:
 
   packages/frontend:
     dependencies:
-      '@agentos/sdk':
+      '@agentos-sui/sdk':
         specifier: workspace:*
         version: link:../sdk
       '@mysten/dapp-kit':
@@ -127,7 +127,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@agentos/sdk':
+      '@agentos-sui/sdk':
         specifier: workspace:*
         version: link:../sdk
       '@modelcontextprotocol/sdk':

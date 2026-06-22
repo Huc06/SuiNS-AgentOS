@@ -1,5 +1,5 @@
 {
-  "name": "@agentos/sdk",
+  "name": "@agentos-sui/sdk",
   "version": "0.0.1",
   "description": "TypeScript SDK for SuiNS AgentOS — Sui-native identity, skill discovery, and delegation for AI agents",
   "type": "module",

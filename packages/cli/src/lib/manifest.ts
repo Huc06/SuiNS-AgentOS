@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import type { SkillManifest } from '@agentos/sdk';
+import type { SkillManifest } from '@agentos-sui/sdk';
 
 export function readManifestFile(filePath: string): SkillManifest {
   const raw = JSON.parse(readFileSync(filePath, 'utf8')) as SkillManifest;

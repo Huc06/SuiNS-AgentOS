@@ -10,7 +10,7 @@ import {
   parseSkillMd,
   formatSkillSubname,
   type SkillManifest,
-} from "@agentos/sdk";
+} from "@agentos-sui/sdk";
 
 /**
  * Tests for the MCP agentos_import_skill tool.

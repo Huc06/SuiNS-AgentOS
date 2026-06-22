@@ -1,5 +1,5 @@
 {
-  "name": "@agentos/mcp",
+  "name": "@agentos-sui/mcp",
   "version": "0.0.1",
   "description": "MCP server for SuiNS AgentOS — AI IDE integration for Cursor, Claude Code, Kiro, and Codex",
   "type": "module",
@@ -54,7 +54,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@agentos/sdk": "workspace:*",
+    "@agentos-sui/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.6.0",
     "@mysten/sui": "^1.0.0",
     "zod": "^3.23.0"

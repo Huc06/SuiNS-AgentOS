@@ -1,0 +1,110 @@
+name: Publish Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - sdk
+          - mcp
+          - all
+      version:
+        description: "Version bump (patch/minor/major) or exact version (e.g. 0.1.0)"
+        required: true
+        default: "patch"
+      dry-run:
+        description: "Dry run (no actual publish)"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PNPM_VERSION: "10.13.1"
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Version bump (SDK)
+        if: inputs.package == 'sdk' || inputs.package == 'all'
+        working-directory: packages/sdk
+        run: |
+          if [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            npm version "${{ inputs.version }}" --no-git-tag-version
+          else
+            npm version "${{ inputs.version }}" --no-git-tag-version
+          fi
+
+      - name: Version bump (MCP)
+        if: inputs.package == 'mcp' || inputs.package == 'all'
+        working-directory: packages/mcp
+        run: |
+          if [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            npm version "${{ inputs.version }}" --no-git-tag-version
+          else
+            npm version "${{ inputs.version }}" --no-git-tag-version
+          fi
+
+      - name: Publish SDK
+        if: inputs.package == 'sdk' || inputs.package == 'all'
+        working-directory: packages/sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          FLAGS="--no-git-checks"
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          pnpm publish $FLAGS
+
+      - name: Publish MCP
+        if: inputs.package == 'mcp' || inputs.package == 'all'
+        working-directory: packages/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          FLAGS="--no-git-checks"
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          pnpm publish $FLAGS
+
+      - name: Commit version bumps
+        if: inputs.dry-run != true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/sdk/package.json packages/mcp/package.json
+          VERSION=$(node -p "require('./packages/sdk/package.json').version")
+          git commit -m "chore: release v${VERSION}" --allow-empty || true
+          git tag "v${VERSION}" || true
+          git push --follow-tags || true

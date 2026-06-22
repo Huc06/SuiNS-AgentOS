@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { LocalRegistry } from '@agentos/sdk/node';
+import { LocalRegistry } from '@agentos-sui/sdk/node';
 
 describe('MCP registry backing', () => {
   it('register + resolve matches MCP tool expectations', () => {

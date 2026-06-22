@@ -1,5 +1,5 @@
 {
-  "name": "@agentos/cli",
+  "name": "@agentos-sui/cli",
   "version": "0.0.1",
   "type": "module",
   "bin": {
@@ -12,8 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agentos/mcp": "workspace:*",
-    "@agentos/sdk": "workspace:*",
+    "@agentos-sui/mcp": "workspace:*",
+    "@agentos-sui/sdk": "workspace:*",
     "@mysten/sui": "^1.0.0",
     "commander": "^12.0.0"
   },

@@ -1,7 +1,7 @@
 import type { SuiClient } from "@mysten/sui/client";
 import type { Transaction } from "@mysten/sui/transactions";
 
-import type { AgentOSConfig } from "@agentos/sdk/node";
+import type { AgentOSConfig } from "@agentos-sui/sdk/node";
 
 export async function formatDryRun(
   transaction: Transaction,

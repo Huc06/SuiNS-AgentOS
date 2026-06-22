@@ -16,7 +16,7 @@ import {
   LocalRegistry,
   resolveRegistryPath,
   scanSkillsDirectory,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 import {
   AgentOSClient,
   convertToAgentOSManifest,
@@ -25,7 +25,7 @@ import {
   WalrusClient,
   serializeManifest,
   computeManifestHash,
-} from "@agentos/sdk";
+} from "@agentos-sui/sdk";
 
 function openRegistry(): LocalRegistry {
   const cwd = process.cwd();
@@ -380,7 +380,7 @@ async function handlePublishSkill(
       const bucketId = process.env.HARBOR_BUCKET_ID?.trim() ?? "default";
       const descriptor = await client.publishSkill({
         signer: signer as never,
-        manifest: manifest as import("@agentos/sdk").SkillManifest,
+        manifest: manifest as import("@agentos-sui/sdk").SkillManifest,
         bucketId,
         agentName: input.agentName,
         walrusManifestBlob: input.walrusBlob,
@@ -413,7 +413,7 @@ async function handlePublishSkill(
   let manifestHash: string | undefined;
   if (!walrusBlobId) {
     try {
-      const bytes = serializeManifest(manifest as import("@agentos/sdk").SkillManifest);
+      const bytes = serializeManifest(manifest as import("@agentos-sui/sdk").SkillManifest);
       manifestHash = computeManifestHash(bytes);
       const walrus = new WalrusClient();
       const { blobId } = await walrus.uploadBlob(bytes);
@@ -425,7 +425,7 @@ async function handlePublishSkill(
   }
   const record = registry.publishSkill({
     agentName: input.agentName,
-    manifest: manifest as import("@agentos/sdk").SkillManifest,
+    manifest: manifest as import("@agentos-sui/sdk").SkillManifest,
     walrusManifestBlob: walrusBlobId,
     manifestHash,
     suinsName,
@@ -665,7 +665,7 @@ async function handleImportSkill(
   }
 
   // 2. Parse + convert to an AgentOS manifest (26.5: error on parse/convert).
-  let manifest: import("@agentos/sdk").SkillManifest;
+  let manifest: import("@agentos-sui/sdk").SkillManifest;
   try {
     const metadata = parseSkillMd(resolved.content);
     manifest = convertToAgentOSManifest(metadata, {

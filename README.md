@@ -14,7 +14,7 @@
 [![MCP](https://img.shields.io/npm/v/@agentos-sui/mcp?label=%40agentos-sui%2Fmcp)](https://www.npmjs.com/package/@agentos-sui/mcp)
 [![Network](https://img.shields.io/badge/network-Sui%20Testnet-4DA2FF)](https://suiscan.xyz/testnet)
 
-[Demo](https://www.youtube.com/watch?v=ELUr0hHXM5E) · [Docs](./docs/) · [SDK](./packages/sdk/) · [MCP Server](./packages/mcp/) · [CLI](./packages/cli/)
+[Demo](https://www.youtube.com/watch?v=ELUr0hHXM5E) · [SDK](./packages/sdk/) · [MCP Server](./packages/mcp/) · [CLI](./packages/cli/)
 
 </div>
 
@@ -234,7 +234,7 @@ pnpm contracts:publish
 
 <div align="center">
 
-https://x.com/HUC0610/status/2068966786889101355
+https://www.youtube.com/watch?v=ELUr0hHXM5E
 
 _Create an agent, publish skills from your IDE, compose workflows on canvas, execute on-chain._
 
@@ -249,18 +249,6 @@ _Create an agent, publish skills from your IDE, compose workflows on canvas, exe
 | `/agent/:name/delegate` | Delegation UI                     |
 | `/dashboard`            | Agent management                  |
 | `/analytics`            | Network analytics                 |
-
----
-
-## Documentation
-
-| Doc | Description |
-|-----|-------------|
-| [Post-Suiperpower Flow](./docs/post-suiperpower-flow.md) | Full pipeline — Suiperpower ↔ AgentOS, publish, CLI/MCP, MVR, Walrus |
-| [Create Agent UX](./docs/create-agent-ux.md) | Two-path UX: terminal → web, two wallets |
-| [Setup & Deploy](./docs/setup-env-auth-deploy.md) | Enoki, Google OAuth, Cloudflare, GitHub secrets |
-| [Storage Adapter](./docs/storage-adapter.md) | Pluggable persistence (file/memory/DB) |
-| [Cloudflare Deploy](./docs/cloudflare-deploy-plan.md) | Deploy to Cloudflare Workers + D1 |
 
 ---
 

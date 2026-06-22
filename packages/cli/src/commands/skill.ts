@@ -71,7 +71,7 @@ skillCommand
           detectSuperpowerProject,
           parseSuiperpowerOutput,
           buildManifestFromSuperpowerOutput,
-        } = await import("@agentos/sdk/node");
+        } = await import("@agentos-sui/sdk/node");
 
         // Decide whether the Suiperpower flow applies.
         if (!fromSuiperpower && !detectSuperpowerProject(ctx.cwd)) {
@@ -201,7 +201,7 @@ skillCommand
       const signer = ctx.getSigner();
       if (signer) {
         try {
-          const { formatSkillSubname } = await import("@agentos/sdk");
+          const { formatSkillSubname } = await import("@agentos-sui/sdk");
           if (suiperpowerActive && !opts.json) {
             if (effectiveBlob) {
               console.log(`  using pre-uploaded Walrus blob: ${effectiveBlob}`);
@@ -334,7 +334,7 @@ async function resolveSkillMdContent(
 
     // Fall back to scanning `.agents/skills` for a matching skill name.
     try {
-      const { scanSkillsDirectory } = await import("@agentos/sdk/node");
+      const { scanSkillsDirectory } = await import("@agentos-sui/sdk/node");
       const scanned = scanSkillsDirectory(join(cwd, ".agents", "skills"));
       const match = scanned.find((s) => s.name === nameOrPath);
       if (match?.sourcePath && existsSync(match.sourcePath)) {
@@ -401,7 +401,7 @@ skillCommand
       const ctx = createCliContext();
 
       const { parseSkillMd, convertToAgentOSManifest, formatSkillSubname } =
-        await import("@agentos/sdk");
+        await import("@agentos-sui/sdk");
 
       // 1. Resolve SKILL.md content (download or read from disk).
       const content = await resolveSkillMdContent(
@@ -574,8 +574,8 @@ skillCommand
       const ctx = createCliContext();
 
       const { convertToAgentOSManifest, formatSkillSubname } =
-        await import("@agentos/sdk");
-      const { scanSkillsDirectory } = await import("@agentos/sdk/node");
+        await import("@agentos-sui/sdk");
+      const { scanSkillsDirectory } = await import("@agentos-sui/sdk/node");
 
       // 1. Determine scan roots: an explicit --dir override, or the two
       //    conventional locations (cwd-local first so it wins de-duplication).
@@ -769,7 +769,7 @@ skillCommand
 
         // 3. Resolve dependencies and print order
         if (manifest.dependencies && manifest.dependencies.length > 0) {
-          const { DependencyResolver } = await import("@agentos/sdk");
+          const { DependencyResolver } = await import("@agentos-sui/sdk");
           const resolver = new DependencyResolver(ctx.agentos);
           const resolved = await resolver.resolve(manifest);
           if (resolved.length > 0) {
