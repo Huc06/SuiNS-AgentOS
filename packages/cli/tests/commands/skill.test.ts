@@ -130,7 +130,7 @@ const mockConvertToAgentOSManifest = vi.fn(
 
 const mockScanSkillsDirectory = vi.fn().mockReturnValue([]);
 
-vi.mock("@agentos/sdk", () => ({
+vi.mock("@agentos-sui/sdk", () => ({
   formatSkillSubname: (skill: string, agent: string) => {
     const base = agent.endsWith(".sui") ? agent : `${agent}.sui`;
     return `${skill}.${base}`;
@@ -148,7 +148,7 @@ vi.mock("@agentos/sdk", () => ({
     mockConvertToAgentOSManifest(...args),
 }));
 
-vi.mock("@agentos/sdk/node", () => ({
+vi.mock("@agentos-sui/sdk/node", () => ({
   scanSkillsDirectory: (...args: [string]) => mockScanSkillsDirectory(...args),
 }));
 

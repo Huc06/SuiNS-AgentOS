@@ -1,6 +1,6 @@
 'use client';
 
-import type { ResolveAgentResponse } from '@agentos/sdk/node';
+import type { ResolveAgentResponse } from '@agentos-sui/sdk/node';
 
 import type { AgentSkillRow } from './agent-types';
 import { registrySkillToRow } from './registry-mappers';

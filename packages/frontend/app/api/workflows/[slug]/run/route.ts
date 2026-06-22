@@ -16,7 +16,7 @@ import {
   type SkillManifest,
   type RunContext,
   type WorkflowGraph,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { NextRequest, NextResponse } from "next/server";

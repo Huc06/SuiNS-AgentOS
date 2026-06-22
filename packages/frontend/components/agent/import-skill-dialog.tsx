@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import type { SkillManifest } from "@agentos/sdk";
+import type { SkillManifest } from "@agentos-sui/sdk";
 
 interface CatalogSkill {
   id: string;

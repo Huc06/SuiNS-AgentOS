@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 
-import { resolvePackageId } from '@agentos/sdk/node';
+import { resolvePackageId } from '@agentos-sui/sdk/node';
 
 import { createCliContext } from '../lib/context.js';
 import { formatDryRun } from '../lib/dry-run.js';

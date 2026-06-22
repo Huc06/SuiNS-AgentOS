@@ -3,7 +3,7 @@ import {
   computeWorkflowManifestHash,
   validateWorkflowManifest,
   type WorkflowManifest,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getRegistryStore } from "../../../../../lib/registry-server";

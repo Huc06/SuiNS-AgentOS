@@ -1,8 +1,8 @@
 import type { ClientWithCoreApi } from '@mysten/sui/experimental';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { agentOS, type AgentOSClient } from '@agentos/sdk';
-import { loadConfig, LocalRegistry, resolvePackageId, resolveRegistryPath } from '@agentos/sdk/node';
+import { agentOS, type AgentOSClient } from '@agentos-sui/sdk';
+import { loadConfig, LocalRegistry, resolvePackageId, resolveRegistryPath } from '@agentos-sui/sdk/node';
 
 export function createCliContext(cwd = process.cwd()) {
   const config = loadConfig(cwd);

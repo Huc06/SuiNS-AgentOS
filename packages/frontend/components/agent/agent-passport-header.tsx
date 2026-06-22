@@ -1,6 +1,6 @@
 "use client";
 
-import type { RegistryAgentRecord } from "@agentos/sdk/node";
+import type { RegistryAgentRecord } from "@agentos-sui/sdk/node";
 
 import { explorerObjectUrl } from "../../lib/explorer-links";
 import { shortObjectId } from "../../lib/registry-mappers";

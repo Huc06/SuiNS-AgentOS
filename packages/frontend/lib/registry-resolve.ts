@@ -1,4 +1,4 @@
-import type { ResolveAgentResponse } from '@agentos/sdk/node';
+import type { ResolveAgentResponse } from '@agentos-sui/sdk/node';
 
 import type { AgentCardData } from '../components/dashboard/agent-card';
 import type { AgentSkillRow } from './agent-types';

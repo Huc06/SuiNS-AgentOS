@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { SEED_REGISTRY } from '@agentos/sdk/node';
+import { SEED_REGISTRY } from '@agentos-sui/sdk/node';
 
 export const initCommand = new Command('init')
   .description('Initialize AgentOS registry + config (use alongside Suiperpower — no separate skill pack)')
@@ -40,7 +40,7 @@ export const initCommand = new Command('init')
       mcpServers: {
         agentos: {
           command: 'npx',
-          args: ['-y', '@agentos/mcp'],
+          args: ['-y', '@agentos-sui/mcp'],
           env: {
             AGENTOS_REGISTRY_PATH: registryPath,
           },

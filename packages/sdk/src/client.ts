@@ -417,6 +417,33 @@ export class AgentOSClient {
     expectedHash: string,
     options?: DownloadManifestOptions,
   ): Promise<SkillManifest> {
+    // Placeholder blobIds (walrus://blob/...) are written by local-only publish
+    // when no Walrus upload occurred. They are not downloadable — resolve from
+    // the local registry by matching the hash/blobId in the skill records.
+    if (blobId.startsWith("walrus://")) {
+      if (this.#registry) {
+        const match = this.#registry.snapshot.skills.find(
+          (s) =>
+            s.walrusManifestBlob === blobId || s.manifestHash === expectedHash,
+        );
+        if (match) {
+          // Return a synthetic manifest from the registry record.
+          return {
+            name: match.name,
+            version: match.version.replace(/^v/, ""),
+            publisher: match.mvrPackage,
+            manifestType: "sui-agent-skill/v1",
+            mcp: { compatible: true, tools: [] },
+            sui: { movePackage: "0x0", entry: match.name, policyRequired: [] },
+            dependencies: match.dependencies ?? [],
+          };
+        }
+      }
+      throw new Error(
+        `Cannot download placeholder blob: ${blobId}. Publish the skill with Walrus upload (set SUI_PRIVATE_KEY) or re-publish.`,
+      );
+    }
+
     // 1. Download blob from the configured storage backend.
     let content: Uint8Array;
     if (this.#storageBackend === "harbor") {
@@ -1074,7 +1101,9 @@ export class AgentOSClient {
         moveCallArgs.push(slot as unknown as TransactionObjectArgument);
       } else if (typeof value === "string") {
         moveCallArgs.push(
-          transaction.pure.string(value) as unknown as TransactionObjectArgument,
+          transaction.pure.string(
+            value,
+          ) as unknown as TransactionObjectArgument,
         );
       } else if (typeof value === "number") {
         moveCallArgs.push(

@@ -5,7 +5,7 @@ import {
   HarborClient,
   validateManifest,
   WalrusClient,
-} from '@agentos/sdk/node';
+} from '@agentos-sui/sdk/node';
 
 /**
  * GET /api/skills/manifest?blobId=...&expectedHash=...

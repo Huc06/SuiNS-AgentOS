@@ -1,7 +1,29 @@
 {
-  "name": "@agentos/mcp",
+  "name": "@agentos-sui/mcp",
   "version": "0.0.1",
+  "description": "MCP server for SuiNS AgentOS — AI IDE integration for Cursor, Claude Code, Kiro, and Codex",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Huc06/SuiNS-AgentOS.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/Huc06/SuiNS-AgentOS#readme",
+  "bugs": {
+    "url": "https://github.com/Huc06/SuiNS-AgentOS/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sui",
+    "suins",
+    "agent",
+    "ai-agent",
+    "cursor",
+    "claude",
+    "walrus"
+  ],
   "bin": {
     "agentos-mcp": "./dist/index.js"
   },
@@ -17,13 +39,22 @@
       "import": "./dist/server.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@agentos/sdk": "workspace:*",
+    "@agentos-sui/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.6.0",
     "@mysten/sui": "^1.0.0",
     "zod": "^3.23.0"

@@ -9,12 +9,12 @@
  * `Boolean(process.env.X)`.
  */
 
-import { preflight as sdkPreflight } from '@agentos/sdk/node';
+import { preflight as sdkPreflight } from '@agentos-sui/sdk/node';
 import type {
   PreflightEnv,
   PreflightReport,
   WorkflowGraph,
-} from '@agentos/sdk/node';
+} from '@agentos-sui/sdk/node';
 
 import { getAgentosPackageId, getSuiNetwork } from './enoki-config';
 import { loadRootEnv } from './load-root-env';

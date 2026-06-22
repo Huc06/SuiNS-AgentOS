@@ -4,13 +4,13 @@ import {
   createDefaultRegistryStore,
   resolveRegistryStorePath,
   type RegistryStore,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 
 /**
  * Server-side registry access for the deployed app.
  *
  * The frontend talks ONLY to the async {@link RegistryStore} abstraction from
- * `@agentos/sdk/node`, so a real database (D1 / Postgres / KV) can slot in later
+ * `@agentos-sui/sdk/node`, so a real database (D1 / Postgres / KV) can slot in later
  * by adding a new backend here WITHOUT touching any route code. By default the
  * store is file-backed (the same `.agentos/registry.json` the CLI and MCP server
  * read/write), preserving today's dev behavior.

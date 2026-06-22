@@ -30,7 +30,7 @@ const {
   })),
 }));
 
-vi.mock("@agentos/sdk", () => ({
+vi.mock("@agentos-sui/sdk", () => ({
   AgentOSClient: vi.fn(() => ({
     publishSkill: mockPublishSkill,
     executeSkill: mockExecuteSkill,
@@ -45,7 +45,7 @@ vi.mock("@agentos/sdk", () => ({
   },
 }));
 
-vi.mock("@agentos/sdk/node", () => ({
+vi.mock("@agentos-sui/sdk/node", () => ({
   loadConfig: vi.fn(() => ({
     network: "testnet",
     dashboardUrl: "http://localhost:3000",
@@ -67,8 +67,8 @@ vi.mock("@agentos/sdk/node", () => ({
 
 // --- Imports (after mocks) ---
 
-import { AgentOSClient, formatSkillSubname } from "@agentos/sdk";
-import { loadConfig, LocalRegistry } from "@agentos/sdk/node";
+import { AgentOSClient, formatSkillSubname } from "@agentos-sui/sdk";
+import { loadConfig, LocalRegistry } from "@agentos-sui/sdk/node";
 
 // --- Handler logic replicating server.ts with direct config/env checks ---
 
@@ -136,7 +136,7 @@ async function handlePublishSkill(args: {
       const bucketId = process.env.HARBOR_BUCKET_ID?.trim() ?? "default";
       const descriptor = await client.publishSkill({
         signer: { toSuiAddress: () => "0xtest" } as never,
-        manifest: manifest as unknown as import("@agentos/sdk").SkillManifest,
+        manifest: manifest as unknown as import("@agentos-sui/sdk").SkillManifest,
         bucketId,
         agentName: input.agentName,
         walrusManifestBlob: input.walrusBlob,

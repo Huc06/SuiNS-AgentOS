@@ -208,6 +208,43 @@
       "icon": "token",
       "source": "custom",
       "suinsName": "walrus-read.walrus-bot.sui"
+    },
+    {
+      "agentSlug": "alpha",
+      "skillId": "sui-nft-mint",
+      "name": "sui-nft-mint",
+      "mvrPackage": "@alpha/sui-nft-mint",
+      "version": "v1.0.0",
+      "walrusManifestBlob": "hAb4FD6c43sDrFsYUfr_R0-vhfOtBKsyp6qtSTTgB60",
+      "manifestHash": "6ac83778162be923631dda987954c1a49493b387aeb77fd92364103d0959f2c6",
+      "objectId": "0xd90b03c8083140d3b0e1811bc2f58b8aee81f9b4",
+      "network": "testnet",
+      "status": "active",
+      "resolutions": "0",
+      "lastUpdated": "just now",
+      "icon": "token",
+      "source": "custom",
+      "suinsName": "sui-nft-mint.alpha.sui"
+    }
+  ],
+  "workflows": [
+    {
+      "agentSlug": "alpha",
+      "workflowId": "firstworkflow",
+      "name": "firstworkflow",
+      "slug": "firstworkflow-alpha",
+      "suinsName": "firstworkflow.alpha.sui",
+      "version": "1.0.0",
+      "walrusManifestBlob": "-Re7diK30CtFOUja1una3-MtUP7ijFC4wMgUOP0XrEY",
+      "manifestHash": "2f5763e29fec6d283bd7e645534501eb63b709173a2718d31c568872789f3381",
+      "network": "testnet",
+      "status": "active",
+      "createdAt": "2026-06-22T10:50:31.121Z",
+      "lastUpdated": "2026-06-22T16:03:32.080Z",
+      "description": "Mint NFT",
+      "dependencies": [
+        "sui-nft-mint.alpha.sui"
+      ]
     }
   ]
 }

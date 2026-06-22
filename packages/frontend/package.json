@@ -1,5 +1,5 @@
 {
-  "name": "@agentos/frontend",
+  "name": "@agentos-sui/frontend",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentos/sdk": "workspace:*",
+    "@agentos-sui/sdk": "workspace:*",
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/enoki": "0.12.15",
     "@mysten/sui": "^1.0.0",

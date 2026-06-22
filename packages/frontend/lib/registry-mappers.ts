@@ -2,7 +2,7 @@ import type {
   RegistryAgentRecord,
   RegistrySkillRecord,
   RegistryWorkflowRecord,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 
 import type { AgentCardData } from "../components/dashboard/agent-card";
 import type { AgentSkillRow } from "./agent-types";
