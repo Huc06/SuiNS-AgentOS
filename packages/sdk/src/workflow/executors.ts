@@ -97,7 +97,23 @@ function parseTarget(
   }
   return `${movePackage}::main::${entry}`;
 }
-
+const RESERVED_PARAM_KEYS = new Set([
+ "movePackage", "entry", "passportId", "packageId", "manifest", "blob",
+ "private", "sealPolicyId", "filename", "skill", "cost", "agent", "child",
+ "spendLimit", "expiryMs", "allowedSkills", "allowedCapabilities", "kind",
+ "score", "share", "recipient", "namespace", "text", "query", "limit",
+]);
+function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
+ if (!params) return [];
+ const args: ReturnType<typeof tx.pure.vector>[] = [];
+ for (const [key, value] of Object.entries(params)) {
+ if (RESERVED_PARAM_KEYS.has(key)) continue;
+ if (value === undefined || value === null || value === "") continue;
+ const str = String(value);
+ args.push(tx.pure.vector("u8", Array.from(new TextEncoder().encode(str))));
+ }
+ return args;
+}
 /** Trigger: a no-op start node that simply marks the chain as begun. */
 const trigger: StepExecutor = async (node, ctx) => {
   return {
@@ -354,7 +370,7 @@ const sui: StepExecutor = async (node, ctx) => {
         },
       };
     }
-    tx.moveCall({ target: parseTarget(movePackage, entry), arguments: [] });
+    tx.moveCall({ target: parseTarget(movePackage, entry), arguments: buildMoveArgs(tx, node.params) });
   } else if (passportId) {
     // record_execution targets the AgentOS package. With no published package
     // id configured, `resolveMovePackageId` falls back to the MVR placeholder
