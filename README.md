@@ -1,81 +1,156 @@
-# SuiNS AgentOS
+<div align="center">
 
-Sui-native identity, wallet, skill discovery, and delegation layer for AI agents.
+<img src="docs/assets/banner.png" alt="SuiNS AgentOS" width="100%" />
 
-[![CI](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml)
+<br />
+<br />
 
-## Monorepo
+**Sui-native identity, skill discovery, and delegation layer for AI agents.**
 
-| Package | Description |
-|---------|-------------|
-| `packages/contracts` | Move 2024 on-chain types — AgentPassport, SkillDescriptor, BucketPolicy |
-| `packages/sdk` | TypeScript SDK (`agentOS()` client extension for `@mysten/sui`) |
-| `packages/cli` | `agentos` CLI — init, agent, skill, bucket, `mcp` |
-| `packages/mcp` | MCP server for Cursor / Claude Code / Codex |
-| `packages/frontend` | Next.js app — agent explorer and creation flows (MVR-style dashboard) |
+[[CI]](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml)
+[[License: MIT]](https://img.shields.io/badge/license-MIT-blue.svg)
+[[SDK])(https://img.shields.io/npm/v/@agentos/sdk?label=%40agentos%2Fsdk)](https://www.npmjs.com/package/@agentos/sdk)
+[[MCP]](https://img.shields.io/npm/v/@agentos/mcp?label=%40agentos%2Fmcp)](https://www.npmjs.com/package/@agentos/mcp)
+[[Network]](https://img.shields.io/badge/network-Sui%20Testnet-4DA2FF)](https://suiscan.xyz/testnet)
 
-## Prerequisites
+</div>
+---
 
-- Node.js 20
-- pnpm 10
-- [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) ≥ 1.70
+## Demo
 
-## Distribution (with [Suiperpower](https://www.suiperpower.dev/) — no extra skill pack)
+<div align="center">
 
-Build with **Suiperpower** (`/suiper:*` in Claude Code, or bare names in Cursor). Register with **AgentOS** via CLI or MCP only:
+https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO_ID
 
-```bash
-agentos init
-agentos agent create my-agent.sui --wallet 0xYOUR_ADDRESS
-agentos skill publish ./examples/skill.manifest.json --agent my-agent.sui
+*Create an agent → publish skills from IDE → compose workflows on canvas → run on-chain*
+
+</div>
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Frontend (Next.js) │
+│ Landing · Agent Explorer · Workflow Canvas · Dashboard │
+└──────────────────────────┬──────────────────────────────────────┘
+ │ API Routes
+ ┌─────────┴──────────┐
+ │ SDK (@agentos/sdk) │
+ └───┬───┬───┬───┘
+ ┌────────┯ │ │
+ ┌───┴───┐ ┌───┴─────┐ ┌───┴───┐
+ │ Walrus │ │ Sui Chain │ │ SuiNS │
+ │ Storage │ │ (Testnet) │ │ Names │
+ └────────┘ └──────────┘ └────────┘
+ │
+ ┌───┴───┐ ┌─────────────┐
+ │ Harbor │ │ MCP Server │ ← Claude Code / Cursor
+ │ (Seal) │ │(@agentos/mcp)│
+ └────────┘ └─────────────┘
 ```
 
-In Cursor, add the `agentos` MCP server (`agentos init` prints the snippet). After Suiperpower deploy, open the dashboard to bind SuiNS — see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) and [docs/create-agent-ux.md](./docs/create-agent-ux.md).
+---
 
-**Docs:** [docs/README.md](./docs/README.md)
+## Quick Start
+
+```bash
+git clone https://github.com/Huc06/SuiNS-AgentOS.git
+cd SuiNS-AgentOS
+pnpm install
+pnpm build
+pnpm dev
+```
+
+### Environment
+
+```bash
+cp .env.example packages/frontend/.env.local
+# SUI_PRIVATE_KEY, ENOKI_SECRET_KEY, NEXT_PUBLIC_AGENTOS_PACKAGE_ID
+```
+
+---
+
+## Packages
+
+| Package | Description | npm |
+|---------|-------------|-----|
+| [`packages/sdk`](./packages/sdk) | TypeScript SDK — client, registry, workflow engine, Seal, Walrus | `@agentos/sdk` |
+| [`packages/mcp`](./packages/mcp) | MCP server — Claude Code, Cursor, Kiro | `@agentos/mcp` |
+| [`packages/cli`](./packages/cli) | CLI — agent create, skill publish, skill execute | — |
+| [`packages/contracts`](./packages/contracts) | Move 2024 — AgentPassport, SkillDescriptor, Delegation | — |
+| [`packages/frontend`](./packages/frontend) | Next.js 15 — workflow builder, agent explorer | — |
+
+---
+
+## MCP Server
+
+```json
+{
+ "mcpServers": {
+ "agentos": {
+ "command": "node",
+ "args": ["packages/mcp/dist/index.js"],
+ "cwd": "/path/to/SuiNS-AgentOS",
+ "env": { "SUI_PRIVATE_KEY": "<key>", "AGENTOS_PACKAGE_ID": "0x..." }
+ }
+ }
+}
+```
+
+| Tool | Description |
+|------|-------------|
+| `agentos_publish_skill` | Publish manifest → Walrus + on-chain SkillDescriptor |
+| `agentos_execute_skill` | Execute skill by SuiNS name |
+| `agentos_import_skill` | Import from catalog or SKILL.md |
+| `agentos_resolve` | Resolve agent passport + skills |
+| `agentos_list_skills` | List skills under an agent |
+| `agentos_register_agent` | Register agent locally |
+| `agentos_resolve_manifest` | Download + verify manifest |
+| `agentos_dashboard_url` | Get dashboard URL |
+
+---
+
+## Workflow Engine
+
+1. **Create Workflow** — pick agent, name it → SuiNS subname
+2. **Build on Canvas** — drag skills from My Skills palette, connect nodes
+3. **Run** — execute step-by-step (Enoki gas-sponsored)
+4. **Publish** — upload graph manifest to Walrus
+
+**Node types:** `Trigger` · `Walrus` · `Harbor` · `Sui` · `Memory` · `Import Agent` · `Delegate` · `Call Sub-Agent` · `Attest`
+
+---
+
+## On-Chain Contracts (Move 2024)
+
+| Module | Description |
+|--------|-------------|
+| `agent_passport` | Mint/revoke identity, record executions |
+| `skill_descriptor` | Skill on-chain records (blobId, hash, version) |
+| `delegation` | Scoped DelegationCaps with spend limits |
+| `attestation` | Reputation attestations (kind, score, URI) |
+| `bucket_policy` | Seal access-control for private skills |
+
+---
 
 ## Development
 
 ```bash
-pnpm install
-pnpm build          # sdk → mcp → cli → frontend
-pnpm test           # SDK unit tests
-pnpm contracts:test # Move unit tests
-pnpm dev            # watch mode (sdk + frontend)
+pnpm build # sdk → mcp → cli → frontend
+pnpm test # 351 tests passing
+pnpm dev # watch mode
 ```
 
-### Workspace registry (local core)
-
-CLI, MCP, and the Next.js app share **`.agentos/registry.json`** at the repo root (see `.agentos/config.json.example`).
-
-```bash
-cp .agentos/config.json.example .agentos/config.json   # optional
-pnpm --filter @agentos/frontend dev                     # http://localhost:3000
-```
-
-| Surface | Flow |
-|---------|------|
-| Dashboard `/create` | New Agent / Import Skill → writes registry |
-| Explorer `/` | Resolve → `/agent/[slug]` |
-| CLI | `agentos agent create`, `agentos skill publish`, `agentos agent list` |
-| API | `GET/POST /api/agents`, `GET /api/resolve`, `POST /api/skills` |
-
-On-chain mint uses **wallet gas** when `packageId` is set (see [docs/post-suiperpower-flow.md](./docs/post-suiperpower-flow.md) §2).  
-Enoki sponsor is opt-in (`NEXT_PUBLIC_ENOKI_SPONSOR=true`).
-
-## CI / CD
-
-- **CI** (`ci.yml`) — runs on every push/PR to `main`: `pnpm build`, `pnpm test`, `pnpm lint`, `sui move test`
-- **CD** (`cd.yml`) — manual or on GitHub Release:
-  - `contracts-testnet` — publish Move package (requires `SUI_PRIVATE_KEY`, `SUI_RPC_URL` secrets)
-  - `frontend-build` — upload Next.js build artifact
-
-Configure GitHub Environment `testnet` with secrets before contract deploy.
+---
 
 ## Contributing
 
-`main` is protected — all changes must go through a **Pull Request**. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+`main` is protected — all changes go through Pull Requests. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## Roadmap
+---
 
-Track implementation progress via [GitHub Issues](https://github.com/Huc06/SuiNS-AgentOS/issues).
+## License
+
+MIT — see [LICENSE](./LICENSE).
