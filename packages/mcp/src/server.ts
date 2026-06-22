@@ -402,10 +402,12 @@ async function handlePublishSkill(
   }
 
   // Fallback: local-only publish (no signer available)
+  const suinsName = formatSkillSubname(manifest.name, input.agentName);
   const record = registry.publishSkill({
     agentName: input.agentName,
     manifest: manifest as import("@agentos/sdk").SkillManifest,
     walrusManifestBlob: input.walrusBlob,
+    suinsName,
   });
   return textResult({ skill: record });
 }
@@ -696,6 +698,7 @@ async function handleImportSkill(
     const record = registry.publishSkill({
       agentName: input.agentName,
       manifest,
+      suinsName: fallbackSuins,
     });
     return textResult({
       manifest,
