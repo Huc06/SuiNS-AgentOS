@@ -1461,79 +1461,99 @@ function LogsView({
 
 // ===== Page =====
 
-// ===== Inline "Create Skill" mini-form inside the Tools palette =====
-// Lets the user quick-publish a skill (name + description) into the registry
-// so it appears in "My Skills" immediately and can be dragged into the workflow.
-function CreateSkillInline({
-  agentSlug,
-  onCreated,
-}: {
-  agentSlug: string;
-  onCreated: (skill: { name: string; suinsName: string }) => void;
-}) {
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleCreate = async () => {
-    const trimmed = name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/^-+|-+$/g, "");
-    if (!trimmed) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/skills", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentName: agentSlug,
-          skillId: trimmed,
-          mvrPackage: `@${agentSlug}/${trimmed}`,
-          version: "1.0.0",
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Failed");
-      const suinsName = data?.skill?.suinsName ?? `${trimmed}.${agentSlug}.sui`;
-      onCreated({ name: trimmed, suinsName });
-      setName("");
-      setDesc("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+// ===== "Create Skill" guide — directs user to MCP publish flow =====
+// Skills must be published on-chain (Walrus + SkillDescriptor). The MCP server
+// handles build/deploy/publish from an IDE agent (Claude Code, Cursor, Kiro).
+function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (text: string, key: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
   };
 
+  const mcpConfig = JSON.stringify(
+    {
+      mcpServers: {
+        agentos: {
+          command: "node",
+          args: ["packages/mcp/dist/index.js"],
+          cwd: "/path/to/AgentOS",
+          env: {
+            SUI_PRIVATE_KEY: "<your-base64-key>",
+            AGENTOS_PACKAGE_ID:
+              "0x6568deb11f5fa2f69b370ab797fbf1ee3db67a6151bd4a48b9f6233874c70c6a",
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
+
+  const publishCmd = `"Publish a skill called my-skill for agent ${agentSlug}"`;
+
   return (
-    <div className="space-y-2 px-3 pb-3 pt-2">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="skill-name"
-        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
-      />
-      <input
-        type="text"
-        value={desc}
-        onChange={(e) => setDesc(e.target.value)}
-        placeholder="Description (optional)"
-        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
-      />
-      {error && <p className="font-mono text-[9px] text-red-600">{error}</p>}
-      <button
-        type="button"
-        disabled={busy || !name.trim()}
-        onClick={() => void handleCreate()}
-        className="w-full border-2 border-electric-purple bg-electric-purple px-2 py-1.5 font-mono text-[10px] font-bold text-white disabled:opacity-50"
+    <div className="space-y-3 px-3 pb-3 pt-2">
+      <p className="font-mono text-[10px] text-black/60">
+        Skills are published on-chain via the AgentOS MCP server from your IDE
+        (Claude Code, Cursor, Kiro). Clone the repo, build, and connect.
+      </p>
+
+      <div className="space-y-1">
+        <p className="font-mono text-[9px] font-bold uppercase text-electric-purple">
+          1. Add MCP server config to your IDE
+        </p>
+        <div className="relative">
+          <pre className="max-h-28 overflow-auto border border-pure-black/20 bg-white px-2 py-1.5 font-mono text-[9px] text-black/80">
+            {mcpConfig}
+          </pre>
+          <button
+            type="button"
+            onClick={() => copy(mcpConfig, "config")}
+            className="absolute right-1 top-1 border border-pure-black/20 bg-white px-1.5 py-0.5 font-mono text-[8px] font-bold hover:border-electric-purple"
+          >
+            {copied === "config" ? "✓" : "copy"}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <p className="font-mono text-[9px] font-bold uppercase text-electric-purple">
+          2. Tell your IDE agent to publish
+        </p>
+        <div className="relative">
+          <code className="block border border-pure-black/20 bg-white px-2 py-1.5 font-mono text-[9px] text-black/80">
+            {publishCmd}
+          </code>
+          <button
+            type="button"
+            onClick={() => copy(publishCmd, "cmd")}
+            className="absolute right-1 top-1 border border-pure-black/20 bg-white px-1.5 py-0.5 font-mono text-[8px] font-bold hover:border-electric-purple"
+          >
+            {copied === "cmd" ? "✓" : "copy"}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <p className="font-mono text-[9px] font-bold uppercase text-electric-purple">
+          3. Come back here
+        </p>
+        <p className="font-mono text-[9px] text-black/60">
+          After publishing, reopen the Tools panel — your skill will appear in
+          My Skills above, ready to drag into the workflow.
+        </p>
+      </div>
+
+      <a
+        href="https://github.com/Huc06/SuiNS-AgentOS#mcp-server"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block border-2 border-electric-purple bg-electric-purple/10 px-2 py-1.5 text-center font-mono text-[9px] font-bold text-electric-purple hover:bg-electric-purple/20"
       >
-        {busy ? "Creating…" : "Create & Add to My Skills"}
-      </button>
+        Full docs →
+      </a>
     </div>
   );
 }
@@ -3007,13 +3027,10 @@ export default function WorkflowEditorPage() {
                 {/* Create Skill inline — quick-publish a skill to the agent */}
                 <details className="mt-1 border-2 border-dashed border-electric-purple/40 bg-electric-purple/5">
                   <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 font-mono text-xs font-bold text-electric-purple hover:bg-electric-purple/10">
-                    + Create Skill
+                    + Create Skill (via MCP)
                   </summary>
-                  <CreateSkillInline
+                  <CreateSkillGuide
                     agentSlug={workflowMeta?.agentSlug ?? slug}
-                    onCreated={(skill) => {
-                      setAgentSkills((prev) => [...prev, skill]);
-                    }}
                   />
                 </details>
               </div>
