@@ -1511,7 +1511,7 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
             onClick={() => copy(mcpConfig, "config")}
             className="absolute right-1 top-1 border border-pure-black/20 bg-white px-1.5 py-0.5 font-mono text-[8px] font-bold hover:border-electric-purple"
           >
-            {copied === "config" ? "\u2713" : "copy"}
+            {copied === "config" ? "✓" : "copy"}
           </button>
         </div>
       </div>
@@ -1529,7 +1529,7 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
             onClick={() => copy(publishCmd, "cmd")}
             className="absolute right-1 top-1 border border-pure-black/20 bg-white px-1.5 py-0.5 font-mono text-[8px] font-bold hover:border-electric-purple"
           >
-            {copied === "cmd" ? "\u2713" : "copy"}
+            {copied === "cmd" ? "✓" : "copy"}
           </button>
         </div>
       </div>
@@ -1539,8 +1539,8 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
           3. Come back here
         </p>
         <p className="font-mono text-[9px] text-black/60">
-          After publishing, reopen the Tools panel \u2014 your skill will appear
-          in My Skills above, ready to drag into the workflow.
+          After publishing, reopen the Tools panel — your skill will appear in
+          My Skills above, ready to drag into the workflow.
         </p>
       </div>
 
@@ -1550,7 +1550,7 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
         rel="noopener noreferrer"
         className="block border-2 border-electric-purple bg-electric-purple/10 px-2 py-1.5 text-center font-mono text-[9px] font-bold text-electric-purple hover:bg-electric-purple/20"
       >
-        Full docs \u2192
+        Full docs →
       </a>
     </div>
   );
