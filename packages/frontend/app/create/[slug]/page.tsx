@@ -1461,6 +1461,83 @@ function LogsView({
 
 // ===== Page =====
 
+// ===== Inline "Create Skill" mini-form inside the Tools palette =====
+// Lets the user quick-publish a skill (name + description) into the registry
+// so it appears in "My Skills" immediately and can be dragged into the workflow.
+function CreateSkillInline({
+  agentSlug,
+  onCreated,
+}: {
+  agentSlug: string;
+  onCreated: (skill: { name: string; suinsName: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    const trimmed = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!trimmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentName: agentSlug,
+          skillId: trimmed,
+          mvrPackage: `@${agentSlug}/${trimmed}`,
+          version: "1.0.0",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Failed");
+      const suinsName = data?.skill?.suinsName ?? `${trimmed}.${agentSlug}.sui`;
+      onCreated({ name: trimmed, suinsName });
+      setName("");
+      setDesc("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 px-3 pb-3 pt-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="skill-name"
+        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
+      />
+      <input
+        type="text"
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Description (optional)"
+        className="w-full border-2 border-pure-black/30 bg-white px-2 py-1.5 font-mono text-[10px] outline-none placeholder:text-black/30 focus:border-electric-purple"
+      />
+      {error && <p className="font-mono text-[9px] text-red-600">{error}</p>}
+      <button
+        type="button"
+        disabled={busy || !name.trim()}
+        onClick={() => void handleCreate()}
+        className="w-full border-2 border-electric-purple bg-electric-purple px-2 py-1.5 font-mono text-[10px] font-bold text-white disabled:opacity-50"
+      >
+        {busy ? "Creating…" : "Create & Add to My Skills"}
+      </button>
+    </div>
+  );
+}
+
 // ===== Workflow record + graph<->canvas conversion =====
 
 // Minimal workflow record shape returned by GET /api/workflows/[slug].
@@ -2874,13 +2951,76 @@ export default function WorkflowEditorPage() {
               />
             </div>
             <div className="flex-1 overflow-y-auto">
-              <div className="border-b border-pure-black/10 px-4 py-2">
-                <p className="font-mono text-[10px] font-bold uppercase text-black/50">
-                  In This Workflow ({nodes.length})
+              {/* ===== My Skills (FIRST — the primary building blocks) ===== */}
+              <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
+                <p className="font-mono text-[10px] font-bold uppercase text-electric-purple">
+                  My Skills ({agentSkills.length})
                 </p>
               </div>
-              <div className="border-b-2 border-electric-purple bg-electric-purple/10 px-4 py-2">
-                <p className="font-mono text-[10px] font-bold uppercase text-black">
+              <div className="space-y-1 p-2">
+                {agentSkills.length > 0 ? (
+                  agentSkills.map((skill) => (
+                    <div
+                      key={skill.suinsName}
+                      onClick={() => {
+                        setNodes((nds) => [
+                          ...nds,
+                          {
+                            id: `call-${skill.name}-${Date.now()}`,
+                            type: "skill",
+                            position: {
+                              x: 300 + Math.random() * 200,
+                              y: 200 + Math.random() * 150,
+                            },
+                            data: {
+                              label: "Call Sub-Agent",
+                              subtitle: skill.name,
+                              params: {
+                                skill: skill.suinsName,
+                                cost: "0",
+                              },
+                            },
+                          },
+                        ]);
+                      }}
+                      className="flex cursor-pointer items-center gap-3 border-2 border-electric-purple/40 bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
+                    >
+                      <span className="font-mono text-lg font-bold text-electric-purple">
+                        ⚡
+                      </span>
+                      <div>
+                        <p className="font-mono text-xs font-bold text-black">
+                          {skill.name}
+                        </p>
+                        <p className="font-mono text-[10px] text-electric-purple/70">
+                          {skill.suinsName}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-2 py-3 font-mono text-[10px] text-black/40">
+                    No skills published yet. Create one below or from the Agent
+                    page.
+                  </p>
+                )}
+                {/* Create Skill inline — quick-publish a skill to the agent */}
+                <details className="mt-1 border-2 border-dashed border-electric-purple/40 bg-electric-purple/5">
+                  <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 font-mono text-xs font-bold text-electric-purple hover:bg-electric-purple/10">
+                    + Create Skill
+                  </summary>
+                  <CreateSkillInline
+                    agentSlug={workflowMeta?.agentSlug ?? slug}
+                    onCreated={(skill) => {
+                      setAgentSkills((prev) => [...prev, skill]);
+                    }}
+                  />
+                </details>
+              </div>
+
+              {/* ===== All Tools (infrastructure nodes) ===== */}
+              <div className="border-b border-pure-black/10 border-t-2 border-t-pure-black/20 px-4 py-2">
+                <p className="font-mono text-[10px] font-bold uppercase text-black/50">
                   All Tools
                 </p>
               </div>
@@ -2972,64 +3112,6 @@ export default function WorkflowEditorPage() {
                   </details>
                 ))}
               </div>
-
-              {/* ===== My Skills (agent's published skills → Call Sub-Agent nodes) ===== */}
-              {agentSkills.length > 0 && (
-                <div className="border-t-2 border-electric-purple/30 p-2">
-                  <details
-                    open
-                    className="border-2 border-electric-purple/40 bg-electric-purple/5"
-                  >
-                    <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-electric-purple hover:bg-electric-purple/10">
-                      My Skills
-                      <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
-                        {agentSkills.length}
-                      </span>
-                    </summary>
-                    <div className="space-y-1 border-t border-electric-purple/20 p-2">
-                      {agentSkills.map((skill) => (
-                        <div
-                          key={skill.suinsName}
-                          onClick={() => {
-                            setNodes((nds) => [
-                              ...nds,
-                              {
-                                id: `call-${skill.name}-${Date.now()}`,
-                                type: "skill",
-                                position: {
-                                  x: 300 + Math.random() * 200,
-                                  y: 200 + Math.random() * 150,
-                                },
-                                data: {
-                                  label: "Call Sub-Agent",
-                                  subtitle: skill.name,
-                                  params: {
-                                    skill: skill.suinsName,
-                                    cost: "0",
-                                  },
-                                },
-                              },
-                            ]);
-                          }}
-                          className="flex cursor-pointer items-center gap-3 border-2 border-electric-purple/40 bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
-                        >
-                          <span className="font-mono text-lg font-bold text-electric-purple">
-                            ⚡
-                          </span>
-                          <div>
-                            <p className="font-mono text-xs font-bold text-black">
-                              {skill.name}
-                            </p>
-                            <p className="font-mono text-[10px] text-electric-purple/70">
-                              {skill.suinsName}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                </div>
-              )}
             </div>
           </div>
         )}
