@@ -61,6 +61,46 @@ export interface RegistryFile {
   version: 1;
   agents: RegistryAgentRecord[];
   skills: RegistrySkillRecord[];
+  /**
+   * Published workflows (compositions of skills). Optional for back-compat with
+   * registry files written before workflows existed — readers treat a missing
+   * key as an empty list. A workflow is published under an agent as its own
+   * SuiNS subname; its DAG lives on Walrus (referenced by `walrusManifestBlob`).
+   */
+  workflows?: RegistryWorkflowRecord[];
+}
+
+/**
+ * A published workflow record. Mirrors {@link RegistrySkillRecord} (same
+ * Walrus/on-chain/SuiNS fields) but kept in its OWN array so workflows never
+ * pollute skill listings (agent skill tables, MCP `list_skills`, skill counts).
+ * The workflow DAG itself is not stored here — it lives on Walrus as the blob
+ * `walrusManifestBlob` (a `sui-agent-workflow/v1` manifest), loaded on demand.
+ */
+export interface RegistryWorkflowRecord {
+  /** Owning agent's slug. */
+  agentSlug: string;
+  /** Stable id within the agent (the workflow name). */
+  workflowId: string;
+  /** Display name (== workflowId today). */
+  name: string;
+  /** Slug derived from the fully-qualified subname; the canvas route key. */
+  slug: string;
+  /** Fully-qualified SuiNS subname, e.g. `rebalance-pipeline.alpha-fund.sui`. */
+  suinsName: string;
+  version: string;
+  /** Walrus blob holding the serialized `sui-agent-workflow/v1` manifest (graph). */
+  walrusManifestBlob: string;
+  /** Hex SHA-256 of the serialized manifest (empty until first publish). */
+  manifestHash: string;
+  network: "mainnet" | "testnet";
+  status: "draft" | "active" | "archived";
+  /** Optional human-readable summary. */
+  description?: string;
+  /** SuiNS subnames of skills/sub-agents this workflow composes. */
+  dependencies?: string[];
+  createdAt: string;
+  lastUpdated: string;
 }
 
 export interface ResolveAgentResponse {

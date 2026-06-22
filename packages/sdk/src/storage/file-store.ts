@@ -21,13 +21,7 @@
  * Default paths mirror the old behavior: `.agentos/registry.json` and a sibling
  * `runs/` directory (legacy single `runs.json` is still read for back-compat).
  */
-import {
-  mkdir,
-  readFile,
-  readdir,
-  rename,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -38,12 +32,14 @@ import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "../registry/types.js";
 import { AsyncLock } from "./memory-store.js";
 import type {
   DelegationRecord,
   PublishSkillInput,
+  PublishWorkflowInput,
   RegisterAgentInput,
   RegistryStore,
   RunsStore,
@@ -123,9 +119,7 @@ export class FileRegistryStore implements RegistryStore {
    * concurrent mutations safe — each one sees the previous one's committed
    * write rather than a stale snapshot.
    */
-  #mutate<T>(
-    fn: (data: RegistryFile) => logic.MutationResult<T>,
-  ): Promise<T> {
+  #mutate<T>(fn: (data: RegistryFile) => logic.MutationResult<T>): Promise<T> {
     return lockFor(this.#path).run(async () => {
       const data = await this.#load();
       const { value, changed } = fn(data);
@@ -160,10 +154,7 @@ export class FileRegistryStore implements RegistryStore {
     return logic.listSkills(await this.#load(), agentName);
   }
 
-  async searchAgents(
-    query: string,
-    limit = 6,
-  ): Promise<RegistryAgentRecord[]> {
+  async searchAgents(query: string, limit = 6): Promise<RegistryAgentRecord[]> {
     return logic.searchAgents(await this.#load(), query, limit);
   }
 
@@ -185,6 +176,26 @@ export class FileRegistryStore implements RegistryStore {
 
   publishSkill(input: PublishSkillInput): Promise<RegistrySkillRecord> {
     return this.#mutate((data) => logic.publishSkill(data, input));
+  }
+
+  async getWorkflows(): Promise<RegistryWorkflowRecord[]> {
+    return logic.getWorkflows(await this.#load());
+  }
+
+  async listWorkflows(agentName: string): Promise<RegistryWorkflowRecord[]> {
+    return logic.listWorkflows(await this.#load(), agentName);
+  }
+
+  async findWorkflowBySlug(
+    slug: string,
+  ): Promise<RegistryWorkflowRecord | undefined> {
+    return logic.findWorkflowBySlug(await this.#load(), slug);
+  }
+
+  publishWorkflow(
+    input: PublishWorkflowInput,
+  ): Promise<RegistryWorkflowRecord> {
+    return this.#mutate((data) => logic.publishWorkflow(data, input));
   }
 
   recordMemoryNamespace(

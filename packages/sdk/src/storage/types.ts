@@ -11,12 +11,14 @@ import type { SkillManifest } from "../types.js";
 import type {
   DelegationRecord,
   PublishSkillInput,
+  PublishWorkflowInput,
   RegisterAgentInput,
 } from "../registry/registry-logic.js";
 import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "../registry/types.js";
 import type { StepResult } from "../workflow/types.js";
@@ -24,6 +26,7 @@ import type { StepResult } from "../workflow/types.js";
 export type {
   DelegationRecord,
   PublishSkillInput,
+  PublishWorkflowInput,
   RegisterAgentInput,
 } from "../registry/registry-logic.js";
 
@@ -55,6 +58,15 @@ export interface RegistryStore {
   /** Publish (or upsert) a skill under an agent. Throws if the agent is unknown. */
   publishSkill(input: PublishSkillInput): Promise<RegistrySkillRecord>;
 
+  /** All workflows across every agent. */
+  getWorkflows(): Promise<RegistryWorkflowRecord[]>;
+  /** Workflows belonging to one agent (by SuiNS name or slug). */
+  listWorkflows(agentName: string): Promise<RegistryWorkflowRecord[]>;
+  /** Look up a single workflow by its canvas slug. */
+  findWorkflowBySlug(slug: string): Promise<RegistryWorkflowRecord | undefined>;
+  /** Create or upsert a workflow under an agent. Throws if the agent is unknown. */
+  publishWorkflow(input: PublishWorkflowInput): Promise<RegistryWorkflowRecord>;
+
   /** Fuzzy search over slug + suinsName, scored (prefix > substring > subsequence). */
   searchAgents(query: string, limit?: number): Promise<RegistryAgentRecord[]>;
 
@@ -67,10 +79,7 @@ export interface RegistryStore {
   listMemoryNamespaces(agentName: string): Promise<string[]>;
 
   /** Append a sub-agent delegation to an agent. Throws if the agent is unknown. */
-  addDelegation(
-    agentName: string,
-    delegation: DelegationRecord,
-  ): Promise<void>;
+  addDelegation(agentName: string, delegation: DelegationRecord): Promise<void>;
   /** List delegations granted by an agent. */
   listDelegations(agentName: string): Promise<DelegationRecord[]>;
 }
@@ -103,6 +112,7 @@ export type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
   SkillManifest,
   StepResult,

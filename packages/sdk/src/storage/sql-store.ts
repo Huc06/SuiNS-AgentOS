@@ -43,11 +43,13 @@ import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "../registry/types.js";
 import type {
   DelegationRecord,
   PublishSkillInput,
+  PublishWorkflowInput,
   RegisterAgentInput,
   RegistryStore,
   RunsStore,
@@ -175,6 +177,24 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_agent_created
   ON runs (agent_slug, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS workflows (
+  slug                 TEXT PRIMARY KEY,
+  agent_slug           TEXT NOT NULL,
+  workflow_id          TEXT NOT NULL,
+  name                 TEXT NOT NULL,
+  suins_name           TEXT NOT NULL,
+  version              TEXT NOT NULL,
+  walrus_manifest_blob TEXT NOT NULL DEFAULT '',
+  manifest_hash        TEXT NOT NULL DEFAULT '',
+  network              TEXT NOT NULL DEFAULT 'testnet',
+  status               TEXT NOT NULL DEFAULT 'draft',
+  description          TEXT,
+  dependencies         TEXT NOT NULL DEFAULT '[]',
+  created_at           TEXT NOT NULL,
+  last_updated         TEXT NOT NULL,
+  FOREIGN KEY (agent_slug) REFERENCES agents(slug) ON DELETE CASCADE
+);
 `;
 
 // ---------------------------------------------------------------------------
@@ -252,6 +272,27 @@ function rowToRun(row: SqlRow): WorkflowRunRecord {
   };
 }
 
+function rowToWorkflow(row: SqlRow): RegistryWorkflowRecord {
+  const dependencies = parseJsonArray<string>(row.dependencies);
+  const status = str(row.status);
+  return {
+    slug: str(row.slug),
+    agentSlug: str(row.agent_slug),
+    workflowId: str(row.workflow_id),
+    name: str(row.name),
+    suinsName: str(row.suins_name),
+    version: str(row.version),
+    walrusManifestBlob: str(row.walrus_manifest_blob),
+    manifestHash: str(row.manifest_hash),
+    network: str(row.network) === "mainnet" ? "mainnet" : "testnet",
+    status: status === "active" || status === "archived" ? status : "draft",
+    createdAt: str(row.created_at),
+    lastUpdated: str(row.last_updated),
+    ...(row.description ? { description: str(row.description) } : {}),
+    ...(dependencies.length ? { dependencies } : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // SqlRegistryStore — loads rows into a RegistryFile, runs the SHARED pure logic,
 // writes the result back inside a transaction so it cannot diverge from the
@@ -265,16 +306,18 @@ export class SqlRegistryStore implements RegistryStore {
     this.#db = db;
   }
 
-  /** Load the full registry document from SQL (agents + skills). */
+  /** Load the full registry document from SQL (agents + skills + workflows). */
   async #load(db: SqlDatabase = this.#db): Promise<RegistryFile> {
-    const [agentsRes, skillsRes] = await Promise.all([
+    const [agentsRes, skillsRes, workflowsRes] = await Promise.all([
       db.query("SELECT * FROM agents"),
       db.query("SELECT * FROM skills"),
+      db.query("SELECT * FROM workflows"),
     ]);
     return {
       version: 1,
       agents: agentsRes.rows.map(rowToAgent),
       skills: skillsRes.rows.map(rowToSkill),
+      workflows: workflowsRes.rows.map(rowToWorkflow),
     };
   }
 
@@ -360,6 +403,50 @@ export class SqlRegistryStore implements RegistryStore {
     );
   }
 
+  /** Upsert one workflow record. */
+  async #upsertWorkflow(
+    db: SqlDatabase,
+    w: RegistryWorkflowRecord,
+  ): Promise<void> {
+    await db.query(
+      `INSERT INTO workflows
+         (slug, agent_slug, workflow_id, name, suins_name, version,
+          walrus_manifest_blob, manifest_hash, network, status, description,
+          dependencies, created_at, last_updated)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(slug) DO UPDATE SET
+         agent_slug = excluded.agent_slug,
+         workflow_id = excluded.workflow_id,
+         name = excluded.name,
+         suins_name = excluded.suins_name,
+         version = excluded.version,
+         walrus_manifest_blob = excluded.walrus_manifest_blob,
+         manifest_hash = excluded.manifest_hash,
+         network = excluded.network,
+         status = excluded.status,
+         description = excluded.description,
+         dependencies = excluded.dependencies,
+         created_at = excluded.created_at,
+         last_updated = excluded.last_updated`,
+      [
+        w.slug,
+        w.agentSlug,
+        w.workflowId,
+        w.name,
+        w.suinsName,
+        w.version,
+        w.walrusManifestBlob,
+        w.manifestHash,
+        w.network,
+        w.status,
+        w.description ?? null,
+        JSON.stringify(w.dependencies ?? []),
+        w.createdAt,
+        w.lastUpdated,
+      ],
+    );
+  }
+
   // ----- Reads (load snapshot, delegate to shared pure logic) -----
 
   async getAgents(): Promise<RegistryAgentRecord[]> {
@@ -403,6 +490,20 @@ export class SqlRegistryStore implements RegistryStore {
     return logic.listDelegations(await this.#load(), agentName);
   }
 
+  async getWorkflows(): Promise<RegistryWorkflowRecord[]> {
+    return logic.getWorkflows(await this.#load());
+  }
+
+  async listWorkflows(agentName: string): Promise<RegistryWorkflowRecord[]> {
+    return logic.listWorkflows(await this.#load(), agentName);
+  }
+
+  async findWorkflowBySlug(
+    slug: string,
+  ): Promise<RegistryWorkflowRecord | undefined> {
+    return logic.findWorkflowBySlug(await this.#load(), slug);
+  }
+
   // ----- Mutations (load -> pure logic -> persist, inside a transaction) -----
 
   registerAgent(input: RegisterAgentInput): Promise<RegistryAgentRecord> {
@@ -421,6 +522,9 @@ export class SqlRegistryStore implements RegistryStore {
       // Cascade: delete the agent (FK ON DELETE CASCADE clears its skills, but
       // delete skills explicitly too for backends without enforced FKs).
       await tx.query("DELETE FROM skills WHERE agent_slug = ?", [value.slug]);
+      await tx.query("DELETE FROM workflows WHERE agent_slug = ?", [
+        value.slug,
+      ]);
       await tx.query("DELETE FROM agents WHERE slug = ?", [value.slug]);
       return value;
     });
@@ -431,6 +535,17 @@ export class SqlRegistryStore implements RegistryStore {
       const data = await this.#load(tx);
       const { value } = logic.publishSkill(data, input);
       await this.#upsertSkill(tx, value);
+      return value;
+    });
+  }
+
+  publishWorkflow(
+    input: PublishWorkflowInput,
+  ): Promise<RegistryWorkflowRecord> {
+    return withTx(this.#db, async (tx) => {
+      const data = await this.#load(tx);
+      const { value } = logic.publishWorkflow(data, input);
+      await this.#upsertWorkflow(tx, value);
       return value;
     });
   }
@@ -549,7 +664,10 @@ export function createSqlStores(db: SqlDatabase): SqlStores {
  *   TODO(user): provide this — that is the only place a real connection appears.
  */
 export function createPostgresStores(
-  query: (sql: string, params: readonly unknown[]) => Promise<{ rows: SqlRow[] }>,
+  query: (
+    sql: string,
+    params: readonly unknown[],
+  ) => Promise<{ rows: SqlRow[] }>,
 ): SqlStores {
   const toPgPlaceholders = (sql: string): string => {
     let i = 0;

@@ -16,6 +16,19 @@ export {
   computeManifestHash,
   validateManifest,
 } from "./manifest.js";
+export {
+  WORKFLOW_MANIFEST_TYPE,
+  serializeWorkflowManifest,
+  computeWorkflowManifestHash,
+  validateWorkflowManifest,
+} from "./workflow-manifest.js";
+export type { WorkflowManifest } from "./workflow-manifest.js";
+export type {
+  WorkflowNodeType,
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowGraph,
+} from "./workflow/types.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
 export { WalrusClient } from "./walrus.js";

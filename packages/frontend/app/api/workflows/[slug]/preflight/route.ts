@@ -1,32 +1,32 @@
-import type { WorkflowGraph } from '@agentos/sdk/node';
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import type { WorkflowGraph } from "@agentos/sdk/node";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
-import { getAgentosPackageId } from '../../../../../lib/enoki-config';
-import { loadRootEnv } from '../../../../../lib/load-root-env';
-import { computePreflight } from '../../../../../lib/preflight';
-import { getRegistryStore } from '../../../../../lib/registry-server';
+import { getAgentosPackageId } from "../../../../../lib/enoki-config";
+import { loadRootEnv } from "../../../../../lib/load-root-env";
+import { computePreflight } from "../../../../../lib/preflight";
+import { getRegistryStore } from "../../../../../lib/registry-server";
 
 // Ensure repo-root .env is visible so the presence booleans are accurate.
 loadRootEnv();
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
 const nodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum([
-    'trigger',
-    'walrus',
-    'harbor',
-    'sui',
-    'memory',
-    'memory-recall',
-    'import-agent',
-    'call-sub-agent',
-    'delegate',
-    'attest',
+    "trigger",
+    "walrus",
+    "harbor",
+    "sui",
+    "memory",
+    "memory-recall",
+    "import-agent",
+    "call-sub-agent",
+    "delegate",
+    "attest",
   ]),
   label: z.string().min(1),
   params: z.record(z.unknown()).optional(),
@@ -51,26 +51,26 @@ function defaultGraph(
 ): WorkflowGraph {
   return {
     nodes: [
-      { id: 'trigger', type: 'trigger', label: 'Trigger' },
-      { id: 'walrus', type: 'walrus', label: 'Walrus' },
-      { id: 'harbor', type: 'harbor', label: 'Harbor' },
+      { id: "trigger", type: "trigger", label: "Trigger" },
+      { id: "walrus", type: "walrus", label: "Walrus" },
+      { id: "harbor", type: "harbor", label: "Harbor" },
       {
-        id: 'sui',
-        type: 'sui',
-        label: 'Sui',
+        id: "sui",
+        type: "sui",
+        label: "Sui",
         params: {
           ...(passportId ? { passportId } : {}),
           ...(packageId ? { packageId } : {}),
         },
       },
-      { id: 'memory', type: 'memory', label: 'Memory' },
+      { id: "memory", type: "memory", label: "Memory" },
     ],
     edges: [
-      { source: 'trigger', target: 'walrus' },
-      { source: 'walrus', target: 'harbor' },
-      { source: 'walrus', target: 'sui' },
-      { source: 'harbor', target: 'memory' },
-      { source: 'sui', target: 'memory' },
+      { source: "trigger", target: "walrus" },
+      { source: "walrus", target: "harbor" },
+      { source: "walrus", target: "sui" },
+      { source: "harbor", target: "memory" },
+      { source: "sui", target: "memory" },
     ],
   };
 }
@@ -85,20 +85,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { slug } = await context.params;
   const key = decodeURIComponent(slug).trim();
   if (!key) {
-    return NextResponse.json({ error: 'slug is required' }, { status: 400 });
+    return NextResponse.json({ error: "slug is required" }, { status: 400 });
   }
 
   const raw = await request.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(raw ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? 'Invalid request body' },
+      { error: parsed.error.issues[0]?.message ?? "Invalid request body" },
       { status: 400 },
     );
   }
 
   const registry = getRegistryStore();
-  const resolved = await registry.resolveAgent(key);
+  let resolved = await registry.resolveAgent(key);
+  // The slug may be a WORKFLOW slug — fall back to its owning agent.
+  if (!resolved) {
+    const workflow = await registry.findWorkflowBySlug(key);
+    if (workflow) {
+      resolved = await registry.resolveAgent(workflow.agentSlug);
+    }
+  }
   if (!resolved) {
     return NextResponse.json(
       { error: `Agent not found: ${key}` },
@@ -108,8 +115,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const agent = resolved.agent;
   const packageId = getAgentosPackageId();
 
-  const graph =
-    parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
+  const graph = parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
 
   const payload = computePreflight(graph, { passportId: agent.passportId });
   return NextResponse.json(payload);
