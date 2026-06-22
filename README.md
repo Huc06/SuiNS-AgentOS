@@ -254,13 +254,13 @@ _Create an agent, publish skills from your IDE, compose workflows on canvas, exe
 
 ## Documentation
 
-| Doc                                                      | Description                                                          |
-| -------------------------------------------------------- | -------------------------------------------------------------------- |
+| Doc | Description |
+|-----|-------------|
 | [Post-Suiperpower Flow](./docs/post-suiperpower-flow.md) | Full pipeline — Suiperpower ↔ AgentOS, publish, CLI/MCP, MVR, Walrus |
-| [Create Agent UX](./docs/create-agent-ux.md)             | Two-path UX: terminal → web, two wallets                             |
-| [Setup & Deploy](./docs/setup-env-auth-deploy.md)        | Enoki, Google OAuth, Cloudflare, GitHub secrets                      |
-| [Storage Adapter](./docs/storage-adapter.md)             | Pluggable persistence (file/memory/DB)                               |
-| [Cloudflare Deploy](./docs/cloudflare-deploy-plan.md)    | Deploy to Cloudflare Workers + D1                                    |
+| [Create Agent UX](./docs/create-agent-ux.md) | Two-path UX: terminal → web, two wallets |
+| [Setup & Deploy](./docs/setup-env-auth-deploy.md) | Enoki, Google OAuth, Cloudflare, GitHub secrets |
+| [Storage Adapter](./docs/storage-adapter.md) | Pluggable persistence (file/memory/DB) |
+| [Cloudflare Deploy](./docs/cloudflare-deploy-plan.md) | Deploy to Cloudflare Workers + D1 |
 
 ---
 
