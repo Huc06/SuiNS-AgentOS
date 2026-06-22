@@ -1476,11 +1476,13 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
     {
       mcpServers: {
         agentos: {
-          command: "npx",
-          args: ["-y", "@agentos/mcp"],
+          command: "node",
+          args: ["packages/mcp/dist/index.js"],
+          cwd: "/path/to/AgentOS",
           env: {
-            SUI_PRIVATE_KEY: "<your-key>",
-            AGENTOS_PACKAGE_ID: "<deployed-package-id>",
+            SUI_PRIVATE_KEY: "<your-base64-key>",
+            AGENTOS_PACKAGE_ID:
+              "0x6568deb11f5fa2f69b370ab797fbf1ee3db67a6151bd4a48b9f6233874c70c6a",
           },
         },
       },
@@ -1489,13 +1491,13 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
     2,
   );
 
-  const publishCmd = `agentos_publish_skill --agent ${agentSlug}`;
+  const publishCmd = `"Publish a skill called my-skill for agent ${agentSlug}"`;
 
   return (
     <div className="space-y-3 px-3 pb-3 pt-2">
       <p className="font-mono text-[10px] text-black/60">
         Skills are published on-chain via the AgentOS MCP server from your IDE
-        (Claude Code, Cursor, Kiro).
+        (Claude Code, Cursor, Kiro). Clone the repo, build, and connect.
       </p>
 
       <div className="space-y-1">
@@ -1518,7 +1520,7 @@ function CreateSkillGuide({ agentSlug }: { agentSlug: string }) {
 
       <div className="space-y-1">
         <p className="font-mono text-[9px] font-bold uppercase text-electric-purple">
-          2. Ask your IDE agent to publish
+          2. Tell your IDE agent to publish
         </p>
         <div className="relative">
           <code className="block border border-pure-black/20 bg-white px-2 py-1.5 font-mono text-[9px] text-black/80">
