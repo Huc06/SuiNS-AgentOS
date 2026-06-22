@@ -1552,6 +1552,10 @@ export default function WorkflowEditorPage() {
   const [workflowMeta, setWorkflowMeta] = useState<WorkflowMeta | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  // Agent's published skills (for the "My Skills" palette section).
+  const [agentSkills, setAgentSkills] = useState<
+    { name: string; suinsName: string }[]
+  >([]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -1699,7 +1703,53 @@ export default function WorkflowEditorPage() {
   useEffect(() => {
     fetchRuns();
     fetchNamespaces();
-  }, [fetchRuns, fetchNamespaces]);
+    // Fetch the agent's published skills for the "My Skills" palette section.
+    void (async () => {
+      try {
+        // Resolve the effective agent slug (workflow → parent agent).
+        let agentKey = slug;
+        try {
+          const wfRes = await fetch(
+            `/api/workflows/${encodeURIComponent(slug)}`,
+            { cache: "no-store" },
+          );
+          if (wfRes.ok) {
+            const wfData = await wfRes.json();
+            if (wfData?.workflow?.agentSlug)
+              agentKey = wfData.workflow.agentSlug;
+          }
+        } catch {
+          /* not a workflow — use slug as-is */
+        }
+        const res = await fetch(
+          `/api/agents/${encodeURIComponent(agentKey)}/skills`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data?.skills)) {
+          setAgentSkills(
+            data.skills
+              .filter(
+                (s: { status?: string }) => !s.status || s.status === "active",
+              )
+              .map(
+                (s: {
+                  name: string;
+                  suinsName?: string;
+                  agentSlug?: string;
+                }) => ({
+                  name: s.name,
+                  suinsName: s.suinsName ?? `${s.name}.${agentKey}.sui`,
+                }),
+              ),
+          );
+        }
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }, [fetchRuns, fetchNamespaces, slug]);
 
   // Seed the canvas with this agent's DISTINCT default workflow on first load
   // (once per slug). Each known demo agent (@alpha, @beta-agent, @walrus-bot,
@@ -2805,7 +2855,7 @@ export default function WorkflowEditorPage() {
 
         {/* ===== Tools Panel (right side) ===== */}
         {showTools && (
-          <div className="absolute right-0 top-0 z-20 flex h-full w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-[-4px_0_0_0_#000]">
+          <div className="absolute right-0 top-[52px] z-20 flex h-[calc(100%-52px)] w-72 flex-col border-l-2 border-pure-black bg-off-white shadow-[-4px_0_0_0_#000]">
             <div className="flex items-center justify-between border-b-2 border-pure-black px-4 py-3">
               <h3 className="font-mono text-sm font-bold text-black">TOOLS</h3>
               <button
@@ -2922,6 +2972,64 @@ export default function WorkflowEditorPage() {
                   </details>
                 ))}
               </div>
+
+              {/* ===== My Skills (agent's published skills → Call Sub-Agent nodes) ===== */}
+              {agentSkills.length > 0 && (
+                <div className="border-t-2 border-electric-purple/30 p-2">
+                  <details
+                    open
+                    className="border-2 border-electric-purple/40 bg-electric-purple/5"
+                  >
+                    <summary className="flex cursor-pointer items-center justify-between px-3 py-3 font-mono text-sm font-bold text-electric-purple hover:bg-electric-purple/10">
+                      My Skills
+                      <span className="flex h-5 w-5 items-center justify-center bg-electric-purple font-mono text-[10px] font-bold text-white">
+                        {agentSkills.length}
+                      </span>
+                    </summary>
+                    <div className="space-y-1 border-t border-electric-purple/20 p-2">
+                      {agentSkills.map((skill) => (
+                        <div
+                          key={skill.suinsName}
+                          onClick={() => {
+                            setNodes((nds) => [
+                              ...nds,
+                              {
+                                id: `call-${skill.name}-${Date.now()}`,
+                                type: "skill",
+                                position: {
+                                  x: 300 + Math.random() * 200,
+                                  y: 200 + Math.random() * 150,
+                                },
+                                data: {
+                                  label: "Call Sub-Agent",
+                                  subtitle: skill.name,
+                                  params: {
+                                    skill: skill.suinsName,
+                                    cost: "0",
+                                  },
+                                },
+                              },
+                            ]);
+                          }}
+                          className="flex cursor-pointer items-center gap-3 border-2 border-electric-purple/40 bg-white px-3 py-2 transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_#6800FF]"
+                        >
+                          <span className="font-mono text-lg font-bold text-electric-purple">
+                            ⚡
+                          </span>
+                          <div>
+                            <p className="font-mono text-xs font-bold text-black">
+                              {skill.name}
+                            </p>
+                            <p className="font-mono text-[10px] text-electric-purple/70">
+                              {skill.suinsName}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )}
             </div>
           </div>
         )}
