@@ -2,155 +2,274 @@
 
 <img src="docs/assets/banner.png" alt="SuiNS AgentOS" width="100%" />
 
-<br />
-<br />
+<br /><br />
+
+# SuiNS AgentOS
 
 **Sui-native identity, skill discovery, and delegation layer for AI agents.**
 
-[[CI]](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml)
-[[License: MIT]](https://img.shields.io/badge/license-MIT-blue.svg)
-[[SDK])(https://img.shields.io/npm/v/@agentos/sdk?label=%40agentos%2Fsdk)](https://www.npmjs.com/package/@agentos/sdk)
-[[MCP]](https://img.shields.io/npm/v/@agentos/mcp?label=%40agentos%2Fmcp)](https://www.npmjs.com/package/@agentos/mcp)
-[[Network]](https://img.shields.io/badge/network-Sui%20Testnet-4DA2FF)](https://suiscan.xyz/testnet)
+[![CI](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![SDK](https://img.shields.io/npm/v/@agentos-sui/sdk?label=%40agentos-sui%2Fsdk)](https://www.npmjs.com/package/@agentos-sui/sdk)
+[![MCP](https://img.shields.io/npm/v/@agentos-sui/mcp?label=%40agentos-sui%2Fmcp)](https://www.npmjs.com/package/@agentos-sui/mcp)
+[![Network](https://img.shields.io/badge/network-Sui%20Testnet-4DA2FF)](https://suiscan.xyz/testnet)
+
+[Demo](https://www.youtube.com/watch?v=ELUr0hHXM5E) · [Docs](./docs/) · [SDK](./packages/sdk/) · [MCP Server](./packages/mcp/) · [CLI](./packages/cli/)
 
 </div>
+
 ---
 
-## Demo
+## Problem
 
-<div align="center">
+AI agents today are siloed — no shared identity, no way to discover each other's capabilities, no trust layer for delegation. Each agent reinvents the wheel.
 
-https://x.com/HUC0610/status/2068966786889101355?s=20
+## Solution
 
-*Create an agent → publish skills from IDE → compose workflows on canvas → run on-chain*
+AgentOS gives every AI agent a **SuiNS identity** (`.sui` name), a portable **skill registry** on Walrus, and on-chain **delegation + reputation** so agents can discover, import, delegate, and attest each other — composable and permissionless.
 
-</div>
+---
+
+## Key Features
+
+| Feature             | Description                                          |
+| ------------------- | ---------------------------------------------------- |
+| **Agent Passport**  | On-chain identity bound to a `.sui` name             |
+| **Skill Registry**  | Walrus-stored manifests + on-chain `SkillDescriptor` |
+| **Workflow Engine** | Visual DAG composer, published as SuiNS subnames     |
+| **Delegation**      | Scoped `DelegationCap` with spend limits + expiry    |
+| **Attestation**     | On-chain reputation scores between agents            |
+| **Seal Encryption** | Private skills via Mysten Seal + Harbor              |
+| **Agent Memory**    | Walrus Memory — persistent semantic recall           |
+| **MCP Server**      | Plug AgentOS into Claude Code / Cursor / Kiro        |
 
 ---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Frontend (Next.js) │
-│ Landing · Agent Explorer · Workflow Canvas · Dashboard │
-└──────────────────────────┬──────────────────────────────────────┘
- │ API Routes
- ┌─────────┴──────────┐
- │ SDK (@agentos/sdk) │
- └───┬───┬───┬───┘
- ┌────────┯ │ │
- ┌───┴───┐ ┌───┴─────┐ ┌───┴───┐
- │ Walrus │ │ Sui Chain │ │ SuiNS │
- │ Storage │ │ (Testnet) │ │ Names │
- └────────┘ └──────────┘ └────────┘
- │
- ┌───┴───┐ ┌─────────────┐
- │ Harbor │ │ MCP Server │ ← Claude Code / Cursor
- │ (Seal) │ │(@agentos/mcp)│
- └────────┘ └─────────────┘
+```mermaid
+graph TD
+  User([User / AI Agent]) --> FE
+  subgraph Frontend["Frontend (Next.js 15)"]
+    FE[Workflow Canvas]
+    Explorer[Agent Explorer]
+    Dashboard[Dashboard]
+  end
+  FE --> SDK
+  Explorer --> SDK
+  Dashboard --> SDK
+  subgraph Core["@agentos-sui/sdk"]
+    SDK[AgentOSClient]
+    WE[Workflow Engine]
+    REG[Registry]
+    SDK --> WE
+    SDK --> REG
+  end
+  SDK --> Walrus[(Walrus Storage)]
+  SDK --> Sui[Sui Network]
+  SDK --> SuiNS[SuiNS Names]
+  SDK --> Harbor[(Harbor / Seal)]
+  SDK --> MemWal[(Walrus Memory)]
+  subgraph MCP["MCP Server (@agentos-sui/mcp)"]
+    T1[publish_skill]
+    T2[execute_skill]
+    T3[import_skill]
+    T4[resolve_manifest]
+  end
+  IDE[Claude Code / Cursor / Kiro] --> MCP
+  MCP --> SDK
+  subgraph Contracts["Move Contracts (Sui)"]
+    C1[agent_passport]
+    C2[skill_descriptor]
+    C3[delegation]
+    C4[attestation]
+    C5[bucket_policy]
+  end
+  SDK --> Contracts
 ```
 
 ---
 
+## Monorepo Structure
+
+```
+agentos/
+├── packages/
+│   ├── contracts/   # Sui Move contracts (agent_passport, delegation, skill_descriptor, attestation, bucket_policy)
+│   ├── sdk/         # @agentos-sui/sdk — core TS SDK (AgentOSClient, Walrus, Seal, Workflow Engine)
+│   ├── mcp/         # @agentos-sui/mcp — Model Context Protocol server for AI IDEs
+│   ├── cli/         # @agentos-sui/cli — `agentos` command-line tool
+│   └── frontend/    # Next.js 15 dashboard (explore, create, workflow canvas, delegations)
+├── docs/            # Architecture & deployment docs
+├── scripts/         # Seed & demo scripts
+├── turbo.json       # Turborepo pipeline
+└── pnpm-workspace.yaml
+```
+
+---
+
+## Tech Stack
+
+| Layer          | Technology                                       |
+| -------------- | ------------------------------------------------ |
+| Blockchain     | Sui (Move 2024 edition)                          |
+| Naming         | SuiNS (.sui names + subnames)                    |
+| Storage        | Walrus (decentralized blob storage)              |
+| Encryption     | Mysten Seal + Harbor                             |
+| Memory         | Walrus Memory                                    |
+| Gasless        | Mysten Enoki (sponsored tx + zkLogin)            |
+| Frontend       | Next.js 15, React 18, TailwindCSS, @xyflow/react |
+| SDK            | TypeScript, Zod, @mysten/sui                     |
+| Build          | pnpm 10, Turborepo, tsup, Vitest                 |
+| CI/CD          | GitHub Actions (JS + Move pipelines)             |
+| AI Integration | Model Context Protocol (MCP)                     |
+
+---
+
 ## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 10.13+
+- Sui CLI 1.70+ (for Move contracts)
+
+### Install & Build
 
 ```bash
 git clone https://github.com/Huc06/SuiNS-AgentOS.git
 cd SuiNS-AgentOS
 pnpm install
 pnpm build
-pnpm dev
+pnpm test
 ```
 
-### Environment
+### Environment Setup
 
 ```bash
-cp .env.example packages/frontend/.env.local
-# SUI_PRIVATE_KEY, ENOKI_SECRET_KEY, NEXT_PUBLIC_AGENTOS_PACKAGE_ID
+cp .env.example .env
+# Fill in your keys (documented in .env.example)
+```
+
+| Variable                  | Purpose                                         |
+| ------------------------- | ----------------------------------------------- |
+| `NEXT_PUBLIC_SUI_NETWORK` | Network target (testnet/mainnet)                |
+| `AGENTOS_PACKAGE_ID`      | Published Move package (unset = local dev mode) |
+| `ENOKI_SECRET_KEY`        | Enoki gas sponsorship (server-side)             |
+| `SUI_PRIVATE_KEY`         | Runtime wallet for signing                      |
+| `MEMWAL_ACCOUNT_ID`       | Walrus Memory account                           |
+| `MEMWAL_DELEGATE_KEY`     | Walrus Memory delegate key                      |
+
+### Run
+
+```bash
+pnpm dev          # Dashboard at http://localhost:3000
+pnpm seed         # Seed demo data
+pnpm demo         # Seed + print demo URLs
 ```
 
 ---
 
-## Packages
+## CLI Usage
 
-| Package | Description | npm |
-|---------|-------------|-----|
-| [`packages/sdk`](./packages/sdk) | TypeScript SDK — client, registry, workflow engine, Seal, Walrus | `@agentos/sdk` |
-| [`packages/mcp`](./packages/mcp) | MCP server — Claude Code, Cursor, Kiro | `@agentos/mcp` |
-| [`packages/cli`](./packages/cli) | CLI — agent create, skill publish, skill execute | — |
-| [`packages/contracts`](./packages/contracts) | Move 2024 — AgentPassport, SkillDescriptor, Delegation | — |
-| [`packages/frontend`](./packages/frontend) | Next.js 15 — workflow builder, agent explorer | — |
+```bash
+agentos init                                              # Initialize in current project
+agentos agent create --name my-agent.sui --wallet 0x...  # Create an agent
+agentos skill publish --agent my-agent.sui --manifest ./skill.json
+agentos skill execute --name defi-rebalancer.my-agent.sui
+agentos skill list --agent my-agent.sui
+agentos mcp                                               # Start MCP server
+```
 
 ---
 
-## MCP Server
+## MCP Integration
+
+Add to your IDE config (`.claude/mcp.json`, `.cursor/mcp.json`, or `.kiro/settings/mcp.json`):
 
 ```json
 {
- "mcpServers": {
- "agentos": {
- "command": "node",
- "args": ["packages/mcp/dist/index.js"],
- "cwd": "/path/to/SuiNS-AgentOS",
- "env": { "SUI_PRIVATE_KEY": "<key>", "AGENTOS_PACKAGE_ID": "0x..." }
- }
- }
+  "mcpServers": {
+    "agentos": {
+      "command": "npx",
+      "args": ["@agentos-sui/mcp"]
+    }
+  }
 }
 ```
 
-| Tool | Description |
-|------|-------------|
-| `agentos_publish_skill` | Publish manifest → Walrus + on-chain SkillDescriptor |
-| `agentos_execute_skill` | Execute skill by SuiNS name |
-| `agentos_import_skill` | Import from catalog or SKILL.md |
-| `agentos_resolve` | Resolve agent passport + skills |
-| `agentos_list_skills` | List skills under an agent |
-| `agentos_register_agent` | Register agent locally |
-| `agentos_resolve_manifest` | Download + verify manifest |
-| `agentos_dashboard_url` | Get dashboard URL |
+Tools: `agentos_resolve`, `agentos_register_agent`, `agentos_publish_skill`, `agentos_execute_skill`, `agentos_resolve_manifest`, `agentos_list_skills`, `agentos_import_skill`, `agentos_dashboard_url`
 
 ---
 
-## Workflow Engine
-
-1. **Create Workflow** — pick agent, name it → SuiNS subname
-2. **Build on Canvas** — drag skills from My Skills palette, connect nodes
-3. **Run** — execute step-by-step (Enoki gas-sponsored)
-4. **Publish** — upload graph manifest to Walrus
-
-**Node types:** `Trigger` · `Walrus` · `Harbor` · `Sui` · `Memory` · `Import Agent` · `Delegate` · `Call Sub-Agent` · `Attest`
-
----
-
-## On-Chain Contracts (Move 2024)
-
-| Module | Description |
-|--------|-------------|
-| `agent_passport` | Mint/revoke identity, record executions |
-| `skill_descriptor` | Skill on-chain records (blobId, hash, version) |
-| `delegation` | Scoped DelegationCaps with spend limits |
-| `attestation` | Reputation attestations (kind, score, URI) |
-| `bucket_policy` | Seal access-control for private skills |
-
----
-
-## Development
+## Smart Contracts (Move)
 
 ```bash
-pnpm build # sdk → mcp → cli → frontend
-pnpm test # 351 tests passing
-pnpm dev # watch mode
+pnpm contracts:build
+pnpm contracts:test
+pnpm contracts:publish
+```
+
+- `agent_passport` — on-chain agent identity (mint, transfer, metadata)
+- `skill_descriptor` — skill registration (blobId, hash, version, deps)
+- `delegation` — scoped delegation caps (spend limits, expiry, revocation)
+- `attestation` — peer-to-peer reputation scores
+- `bucket_policy` — Harbor/Seal access control for private skills
+
+---
+
+## How It Works
+
+```
+1. Register   → mint AgentPassport → bind SuiNS name
+2. Publish    → upload manifest to Walrus → create SkillDescriptor → bind subname (skill.agent.sui)
+3. Discover   → resolve via SuiNS → download from Walrus → verify SHA-256
+4. Delegate   → create DelegationCap with scope/limits → delegatee executes on behalf
+5. Attest     → record reputation on-chain → build trust graph
 ```
 
 ---
 
-## Contributing
+## Demo
 
-`main` is protected — all changes go through Pull Requests. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+<div align="center">
+
+https://x.com/HUC0610/status/2068966786889101355
+
+_Create an agent, publish skills from your IDE, compose workflows on canvas, execute on-chain._
+
+</div>
+
+| Route                   | Description                       |
+| ----------------------- | --------------------------------- |
+| `/`                     | Landing (hero + search)           |
+| `/explore`              | Public agent directory            |
+| `/create`               | Create new agent (wallet connect) |
+| `/agent/:name`          | Agent profile & skills            |
+| `/agent/:name/delegate` | Delegation UI                     |
+| `/dashboard`            | Agent management                  |
+| `/analytics`            | Network analytics                 |
+
+---
+
+## Documentation
+
+| Doc                                                      | Description                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Post-Suiperpower Flow](./docs/post-suiperpower-flow.md) | Full pipeline — Suiperpower ↔ AgentOS, publish, CLI/MCP, MVR, Walrus |
+| [Create Agent UX](./docs/create-agent-ux.md)             | Two-path UX: terminal → web, two wallets                             |
+| [Setup & Deploy](./docs/setup-env-auth-deploy.md)        | Enoki, Google OAuth, Cloudflare, GitHub secrets                      |
+| [Storage Adapter](./docs/storage-adapter.md)             | Pluggable persistence (file/memory/DB)                               |
+| [Cloudflare Deploy](./docs/cloudflare-deploy-plan.md)    | Deploy to Cloudflare Workers + D1                                    |
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+[MIT](./LICENSE) · Built by [@Huc06](https://github.com/Huc06)
+
+<div align="center">
+
+**Built on Sui · Powered by SuiNS · Stored on Walrus**
+
+</div>
