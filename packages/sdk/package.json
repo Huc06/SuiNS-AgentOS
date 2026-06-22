@@ -1,7 +1,28 @@
 {
   "name": "@agentos/sdk",
   "version": "0.0.1",
+  "description": "TypeScript SDK for SuiNS AgentOS — Sui-native identity, skill discovery, and delegation for AI agents",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Huc06/SuiNS-AgentOS.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/Huc06/SuiNS-AgentOS#readme",
+  "bugs": {
+    "url": "https://github.com/Huc06/SuiNS-AgentOS/issues"
+  },
+  "keywords": [
+    "sui",
+    "suins",
+    "agent",
+    "ai-agent",
+    "walrus",
+    "move",
+    "web3",
+    "sdk"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,11 +38,20 @@
       "require": "./dist/node.cjs"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build",
     "codegen": "echo 'Run sui codegen after @mysten/codegen is configured for packages/contracts'"
   },
   "peerDependencies": {
@@ -30,6 +60,20 @@
     "@mysten/sui": "^1.0.0",
     "@tanstack/react-query": "^5.0.0",
     "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@mysten/dapp-kit": {
+      "optional": true
+    },
+    "@mysten/seal": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@mysten/dapp-kit": "^0.14.0",
