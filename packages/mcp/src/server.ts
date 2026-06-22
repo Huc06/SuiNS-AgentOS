@@ -22,6 +22,9 @@ import {
   convertToAgentOSManifest,
   formatSkillSubname,
   parseSkillMd,
+  WalrusClient,
+  serializeManifest,
+  computeManifestHash,
 } from "@agentos/sdk";
 
 function openRegistry(): LocalRegistry {
@@ -401,12 +404,30 @@ async function handlePublishSkill(
     }
   }
 
-  // Fallback: local-only publish (no signer available)
+  // Fallback: no signer available — still upload manifest to Walrus public
+  // publisher (no key needed) so the blobId is real, not a placeholder.
+  // This is the root cause fix: placeholder blobs cause RESOLVE_FAILED /
+  // blob-parse errors when the workflow engine tries to download the manifest.
   const suinsName = formatSkillSubname(manifest.name, input.agentName);
+  let walrusBlobId = input.walrusBlob;
+  let manifestHash: string | undefined;
+  if (!walrusBlobId) {
+    try {
+      const bytes = serializeManifest(manifest as import("@agentos/sdk").SkillManifest);
+      manifestHash = computeManifestHash(bytes);
+      const walrus = new WalrusClient();
+      const { blobId } = await walrus.uploadBlob(bytes);
+      walrusBlobId = blobId;
+    } catch {
+      // Walrus upload failed (offline / testnet down) — fall back to placeholder.
+      // Skills published this way will fail manifest download at run time.
+    }
+  }
   const record = registry.publishSkill({
     agentName: input.agentName,
     manifest: manifest as import("@agentos/sdk").SkillManifest,
-    walrusManifestBlob: input.walrusBlob,
+    walrusManifestBlob: walrusBlobId,
+    manifestHash,
     suinsName,
   });
   return textResult({ skill: record });
@@ -693,11 +714,24 @@ async function handleImportSkill(
     }
   }
 
-  // Local-only publish (no signer or no Harbor key).
+  // Local-only publish — still upload to Walrus public publisher so blobId is real.
+  let importBlobId: string | undefined;
+  let importHash: string | undefined;
+  try {
+    const bytes = serializeManifest(manifest);
+    importHash = computeManifestHash(bytes);
+    const walrus = new WalrusClient();
+    const { blobId } = await walrus.uploadBlob(bytes);
+    importBlobId = blobId;
+  } catch {
+    // Walrus unavailable — placeholder will be used.
+  }
   try {
     const record = registry.publishSkill({
       agentName: input.agentName,
       manifest,
+      walrusManifestBlob: importBlobId,
+      manifestHash: importHash,
       suinsName: fallbackSuins,
     });
     return textResult({
