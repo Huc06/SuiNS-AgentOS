@@ -10,8 +10,8 @@
 
 [![CI](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Huc06/SuiNS-AgentOS/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![SDK](https://img.shields.io/npm/v/@agentos-sui/sdk?label=%40agentos-sui%2Fsdk)](https://www.npmjs.com/package/@agentos-sui/sdk)
-[![MCP](https://img.shields.io/npm/v/@agentos-sui/mcp?label=%40agentos-sui%2Fmcp)](https://www.npmjs.com/package/@agentos-sui/mcp)
+[![SDK](https://www.npmjs.com/package/@agentos-sui/sdk?activeTab=readme)](https://www.npmjs.com/package/@agentos-sui/sdk)
+[![MCP](https://www.npmjs.com/package/@agentos-sui/mcp)](https://www.npmjs.com/package/@agentos-sui/mcp)
 [![Network](https://img.shields.io/badge/network-Sui%20Testnet-4DA2FF)](https://suiscan.xyz/testnet)
 
 [Demo](https://www.youtube.com/watch?v=ELUr0hHXM5E) · [SDK](./packages/sdk/) · [MCP Server](./packages/mcp/) · [CLI](./packages/cli/)
