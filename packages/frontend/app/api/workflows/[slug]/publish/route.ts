@@ -4,7 +4,7 @@ import {
   serializeWorkflowManifest,
   validateWorkflowManifest,
   type WorkflowManifest,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
 
 import { registryWorkflowToCard } from "../../../../../lib/registry-mappers";

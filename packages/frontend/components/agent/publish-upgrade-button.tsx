@@ -4,7 +4,7 @@ import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
-import type { SkillManifest } from "@agentos/sdk";
+import type { SkillManifest } from "@agentos-sui/sdk";
 import { Transaction } from "@mysten/sui/transactions";
 import { useRef, useState } from "react";
 
@@ -93,7 +93,7 @@ export function PublishUpgradeButton({ skill }: { skill: AgentSkillRow }) {
 
     // 2. Build the on-chain update transaction and sign it with the wallet.
     // The `skill_descriptor::update` move call is inlined here (rather than
-    // imported from the `@agentos/sdk` barrel) to keep the browser bundle free
+    // imported from the `@agentos-sui/sdk` barrel) to keep the browser bundle free
     // of the SDK's Node-only modules (config/registry use `node:fs`).
     setState({ kind: "signing" });
     try {

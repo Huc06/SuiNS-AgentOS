@@ -1,14 +1,14 @@
 import { join } from "node:path";
 
-import { createDefaultRunsStore, type RunsStore } from "@agentos/sdk/node";
-import type { WorkflowRunRecord } from "@agentos/sdk/node";
+import { createDefaultRunsStore, type RunsStore } from "@agentos-sui/sdk/node";
+import type { WorkflowRunRecord } from "@agentos-sui/sdk/node";
 
 export type { WorkflowRunRecord };
 
 /**
  * Workflow-run persistence for the deployed app.
  *
- * Delegates to the async {@link RunsStore} from `@agentos/sdk/node`. The default
+ * Delegates to the async {@link RunsStore} from `@agentos-sui/sdk/node`. The default
  * file-backed impl writes ONE FILE PER RUN (in `runs.d/`), which eliminates the
  * old `appendRun` read-modify-write race that silently dropped concurrent runs.
  * Behavior is otherwise identical: runs live next to the registry (the repo-root

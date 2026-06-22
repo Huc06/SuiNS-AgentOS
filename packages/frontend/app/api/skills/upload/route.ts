@@ -5,7 +5,7 @@ import {
   serializeManifest,
   validateManifest,
   type SkillManifest,
-} from "@agentos/sdk/node";
+} from "@agentos-sui/sdk/node";
 
 export const dynamic = "force-dynamic";
 

@@ -10,7 +10,7 @@
  *
  * Browser-safe: no Node-only imports. Validation mirrors the SDK's own checks
  * (`isValidSuiNSName`, the `0x…` address regex, the attest 0..=100 score range)
- * locally so the client never imports `@agentos/sdk/node`.
+ * locally so the client never imports `@agentos-sui/sdk/node`.
  */
 
 export type WfType =

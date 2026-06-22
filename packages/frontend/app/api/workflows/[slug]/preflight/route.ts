@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from "@agentos/sdk/node";
+import type { WorkflowGraph } from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 

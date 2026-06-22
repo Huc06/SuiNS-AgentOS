@@ -1,4 +1,4 @@
-import { contracts } from '@agentos/sdk/node';
+import { contracts } from '@agentos-sui/sdk/node';
 import { Transaction } from '@mysten/sui/transactions';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

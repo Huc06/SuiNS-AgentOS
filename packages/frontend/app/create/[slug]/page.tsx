@@ -47,7 +47,7 @@ import {
 } from "../../../lib/workflow-templates";
 import { defaultGraphForSlug } from "../../../lib/agent-workflows";
 
-// ===== Run / status types (mirror @agentos/sdk workflow types, kept local so
+// ===== Run / status types (mirror @agentos-sui/sdk workflow types, kept local so
 // this client component never imports the Node-only SDK entry) =====
 
 type NodeStatus = "idle" | "pending" | "running" | "done" | "error" | "skipped";
@@ -70,7 +70,7 @@ interface SkillNodeData {
   status?: NodeStatus;
   txDigest?: string;
   blobId?: string;
-  // Structured diagnosis carried from the run result (see @agentos/sdk diagnose).
+  // Structured diagnosis carried from the run result (see @agentos-sui/sdk diagnose).
   error?: string;
   errorCode?: string;
   cause?: string;

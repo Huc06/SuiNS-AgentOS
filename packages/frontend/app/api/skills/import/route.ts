@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { SkillManifest } from "@agentos/sdk/node";
+import type { SkillManifest } from "@agentos-sui/sdk/node";
 
 import { getRegistryStore } from "../../../../lib/registry-server";
 import { registrySkillToRow } from "../../../../lib/registry-mappers";
