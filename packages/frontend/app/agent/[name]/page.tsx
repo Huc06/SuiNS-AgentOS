@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AgentNotFound } from "../../../components/agent/agent-not-found";
+import { AgentProfileTabs } from "../../../components/agent/agent-profile-tabs";
 import { resolveAgentPageData } from "../../../lib/registry-resolve";
 import { shortObjectId } from "../../../lib/registry-mappers";
 import { explorerObjectUrl } from "../../../lib/explorer-links";
@@ -305,78 +306,9 @@ export default async function AgentPortfolioPage({ params }: Props) {
 
             <Separator />
 
-            {/* ===== Stack (Skills as tech stack) ===== */}
+            {/* ===== Stack (Skills) + Memory ===== */}
             <section className="border-x border-pure-black/10 px-6 py-6">
-              <h2 className="mb-4 text-lg font-bold tracking-tight text-black">
-                Stack
-                <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded bg-electric-purple/10 font-mono text-xs font-bold text-electric-purple">
-                  {skills.length}
-                </span>
-              </h2>
-              {skills.length === 0 ? (
-                <p className="font-mono text-sm text-black/50">
-                  No skills published yet.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {skills.map((skill) => (
-                    <div
-                      key={skill.id}
-                      className="flex items-center gap-3 rounded-lg border border-pure-black/10 bg-white px-3 py-3 transition-colors hover:border-electric-purple/30 hover:bg-electric-purple/[0.02]"
-                    >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pure-black/10 bg-black/[0.02] text-black/60">
-                        {skill.icon === "token" ? (
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 6v12M6 12h12" />
-                          </svg>
-                        ) : skill.icon === "wallet" ? (
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <rect x="2" y="6" width="20" height="14" rx="2" />
-                            <path d="M22 10H18a2 2 0 000 4h4" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M16 3l5 5-5 5" />
-                            <path d="M21 8H9" />
-                            <path d="M8 21l-5-5 5-5" />
-                            <path d="M3 16h12" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-black">
-                          {skill.name}
-                        </p>
-                        <p className="truncate font-mono text-[12px] text-black/40">
-                          {skill.mvrPackage}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <AgentProfileTabs skills={skills} agentSlug={agent.suinsName} />
             </section>
 
             <Separator />
