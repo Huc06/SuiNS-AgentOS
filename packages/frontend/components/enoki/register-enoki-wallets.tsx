@@ -13,6 +13,7 @@ import { getPublicEnokiApiKey } from '../../lib/enoki-config';
 
 export function RegisterEnokiWallets() {
   const { client, network } = useSuiClientContext();
+  // TODO: set NEXT_PUBLIC_ENOKI_API_KEY + NEXT_PUBLIC_ENOKI_SPONSOR=true before demo
   const apiKey = getPublicEnokiApiKey();
   const [providerConfig, setProviderConfig] = useState<
     RegisterEnokiWalletsOptions['providers'] | null
