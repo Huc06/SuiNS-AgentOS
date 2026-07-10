@@ -3,12 +3,13 @@
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSuiClient,
 } from "@mysten/dapp-kit";
 import { useCallback, useEffect, useState } from "react";
 
 import { getAgentosPackageId, getSuiNetwork } from "../../lib/enoki-config";
 import { explorerTxUrl } from "../../lib/explorer-links";
-import { buildDelegateTx } from "../../lib/delegation-tx";
+import { buildDelegateTx, buildRevokeTx } from "../../lib/delegation-tx";
 import type { DelegationRecord } from "../../lib/delegation-types";
 import {
   isValidSuinsNameInput,
@@ -40,6 +41,7 @@ export function DelegateContent({
 }: DelegateContentProps) {
   const account = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
   const network = getSuiNetwork();
   const packageId = getAgentosPackageId();
 
@@ -107,6 +109,7 @@ export function DelegateContent({
 
     try {
       let digest: string | undefined;
+      let capId: string | undefined;
 
       if (packageId && passportId) {
         const tx = buildDelegateTx({
@@ -118,6 +121,19 @@ export function DelegateContent({
           expiryMs,
         });
         const result = await signAndExecute({ transaction: tx as never });
+        const txDetails = await suiClient.waitForTransaction({
+          digest: result.digest,
+          options: { showObjectChanges: true },
+        });
+        const capChange = txDetails.objectChanges?.find(
+          (c) =>
+            c.type === "created" &&
+            typeof (c as { objectType?: string }).objectType === "string" &&
+            (c as { objectType: string }).objectType.includes(
+              "::delegation::DelegationCap",
+            ),
+        ) as { objectId?: string } | undefined;
+        capId = capChange?.objectId ?? undefined;
         digest = result.digest;
       }
 
@@ -138,7 +154,7 @@ export function DelegateContent({
             spent: "0",
             expiryMs: expiryMs.toString(),
             revoked: false,
-            capId: undefined,
+            capId,
             createdAt: new Date().toISOString(),
           },
         }),
@@ -404,16 +420,31 @@ export function DelegateContent({
                           )
                         )
                           return;
-                        // Mark as revoked in registry
-                        await fetch("/api/delegations", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            agentSlug,
-                            delegation: { ...del, revoked: true },
-                          }),
-                        });
-                        void loadDelegations();
+                        try {
+                          if (del.capId && packageId) {
+                            const revokeTx = buildRevokeTx({
+                              capId: del.capId,
+                            });
+                            await signAndExecute({
+                              transaction: revokeTx as never,
+                            });
+                          }
+                          await fetch("/api/delegations", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              agentSlug,
+                              delegation: { ...del, revoked: true },
+                            }),
+                          });
+                          void loadDelegations();
+                        } catch (err) {
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "Revoke failed",
+                          );
+                        }
                       }}
                       className="mt-3 border-2 border-error bg-white px-3 py-1 font-mono text-xs font-bold text-error transition-colors hover:bg-error hover:text-white"
                     >
