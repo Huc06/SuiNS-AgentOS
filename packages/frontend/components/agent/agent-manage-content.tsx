@@ -17,6 +17,8 @@ type AgentManageContentProps = {
   passportVersion: string;
   description?: string;
   initialSkills: AgentSkillRow[];
+  passportId?: string;
+  agentOwnerAddress?: string;
 };
 
 export function AgentManageContent({
@@ -26,6 +28,8 @@ export function AgentManageContent({
   passportVersion,
   description,
   initialSkills,
+  passportId,
+  agentOwnerAddress,
 }: AgentManageContentProps) {
   const [skills, setSkills] = useState(initialSkills);
   const [query, setQuery] = useState('');
@@ -128,7 +132,15 @@ export function AgentManageContent({
 
       <div className="min-w-0 space-y-6">
         {filtered.length > 0 ? (
-          filtered.map((skill) => <SkillListItem key={skill.id} skill={skill} />)
+          filtered.map((skill) => (
+            <SkillListItem
+              key={skill.id}
+              skill={skill}
+              passportId={passportId}
+              agentOwnerAddress={agentOwnerAddress}
+              agentSlug={agentSlug}
+            />
+          ))
         ) : (
           <p className="border-2 border-dashed border-pure-black py-12 text-center font-mono text-sm text-on-surface-variant">
             {skills.length === 0

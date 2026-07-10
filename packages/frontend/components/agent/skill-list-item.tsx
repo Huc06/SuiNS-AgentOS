@@ -40,7 +40,17 @@ const sourceBadge: Record<
   },
 };
 
-export function SkillListItem({ skill }: { skill: AgentSkillRow }) {
+export function SkillListItem({
+  skill,
+  passportId,
+  agentOwnerAddress,
+  agentSlug,
+}: {
+  skill: AgentSkillRow;
+  passportId?: string;
+  agentOwnerAddress?: string;
+  agentSlug?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   // null = not yet checked / checking (don't show warning to avoid flicker);
@@ -264,6 +274,9 @@ export function SkillListItem({ skill }: { skill: AgentSkillRow }) {
           <SkillExecutionConsole
             skill={skill}
             onClose={() => setConsoleOpen(false)}
+            passportId={passportId}
+            agentOwnerAddress={agentOwnerAddress}
+            agentSlug={agentSlug}
           />
         </div>
       )}

@@ -60,7 +60,13 @@ export default async function AgentSkillsPage({ params }: Props) {
           <div className="min-w-0 space-y-6">
             {skills.length > 0 ? (
               skills.map((skill) => (
-                <SkillListItem key={skill.id} skill={skill} />
+                <SkillListItem
+                  key={skill.id}
+                  skill={skill}
+                  passportId={data.resolved.agent.passportId}
+                  agentOwnerAddress={data.resolved.agent.runtimeWallet}
+                  agentSlug={data.resolved.agent.suinsName}
+                />
               ))
             ) : (
               <p className="border-2 border-dashed border-pure-black py-12 text-center font-mono text-sm text-on-surface-variant">
