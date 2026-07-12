@@ -41,3 +41,20 @@ export function buildDelegateTx(options: {
 
   return tx;
 }
+
+/**
+ * Build a PTB to revoke a DelegationCap on-chain.
+ * The cap must be owned by the transaction sender.
+ */
+export function buildRevokeTx(options: { capId: string }): Transaction {
+  const packageId = getAgentosPackageId();
+  if (!packageId) {
+    throw new Error('AgentOS package ID not configured');
+  }
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${packageId}::delegation::revoke`,
+    arguments: [tx.object(options.capId)],
+  });
+  return tx;
+}

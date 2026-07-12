@@ -29,6 +29,12 @@ type ConsoleState =
 interface SkillExecutionConsoleProps {
   skill: AgentSkillRow;
   onClose: () => void;
+  /** AgentPassport object ID — enables exec_count increment and memory write. */
+  passportId?: string;
+  /** Runtime wallet address of the agent owner. Only fires record_execution when account matches. */
+  agentOwnerAddress?: string;
+  /** Agent slug for scoping Walrus Memory namespace. */
+  agentSlug?: string;
 }
 
 /**
@@ -38,6 +44,9 @@ interface SkillExecutionConsoleProps {
 export function SkillExecutionConsole({
   skill,
   onClose,
+  passportId,
+  agentOwnerAddress,
+  agentSlug,
 }: SkillExecutionConsoleProps) {
   const account = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -161,6 +170,44 @@ export function SkillExecutionConsole({
       tx.moveCall({ target, arguments: moveArgs as never[] });
       const result = await signAndExecute({ transaction: tx as never });
       setState({ kind: "success", digest: result.digest });
+
+      // Fire-and-forget: increment exec_count on the AgentPassport (best-effort).
+      if (
+        passportId &&
+        agentOwnerAddress &&
+        account?.address === agentOwnerAddress &&
+        packageId
+      ) {
+        void (async () => {
+          try {
+            const recordTx = new Transaction();
+            recordTx.moveCall({
+              target: `${packageId}::agent_passport::record_execution`,
+              arguments: [recordTx.object(passportId)],
+            });
+            await signAndExecute({ transaction: recordTx as never });
+          } catch (e) {
+            console.warn(
+              "[exec_count] record_execution failed (non-blocking):",
+              e,
+            );
+          }
+        })();
+      }
+
+      // Fire-and-forget: write Walrus Memory entry (best-effort).
+      if (agentSlug) {
+        void fetch("/api/memory/remember", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agentSlug,
+            text: `Executed skill ${skill.name} (${skill.id}) | digest: ${result.digest} | ${new Date().toISOString()}`,
+          }),
+        }).catch(() => {
+          /* silent */
+        });
+      }
     } catch (err) {
       setState({
         kind: "error",
