@@ -31,7 +31,12 @@ export type {
 } from "./workflow/types.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
-export { DEFAULT_WALRUS_EPOCHS, WalrusClient } from "./walrus.js";
+export {
+  DEFAULT_WALRUS_AGGREGATOR,
+  DEFAULT_WALRUS_EPOCHS,
+  DEFAULT_WALRUS_PUBLISHER,
+  WalrusClient,
+} from "./walrus.js";
 export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
 export * from "./types.js";
 export * from "./hooks/index.js";
