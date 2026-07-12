@@ -58,8 +58,19 @@ export function RegisterEnokiWallets() {
     const hasProvider = Object.values(providerConfig).some((p) => p?.clientId);
     if (!hasProvider) return;
 
+    // Enoki defaults redirectUrl to `window.location.href` (the full current
+    // page URL, e.g. http://localhost:3000/create/some-slug) when unset. Google
+    // OAuth requires an EXACT match against an Authorized redirect URI, so if
+    // the registered URI is just the origin (http://localhost:3000) and the
+    // user clicks "Sign in with Google" from any other page/path, Google
+    // rejects the request with "invalid_request" before the account picker
+    // ever shows. Pin redirectUrl to the origin so it always matches.
+    const redirectUrl =
+      typeof window !== "undefined" ? window.location.origin : undefined;
     const filtered = Object.fromEntries(
-      Object.entries(providerConfig).filter(([, v]) => v?.clientId),
+      Object.entries(providerConfig)
+        .filter(([, v]) => v?.clientId)
+        .map(([provider, v]) => [provider, { ...v, redirectUrl }]),
     ) as RegisterEnokiWalletsOptions['providers'];
 
     const { unregister } = registerEnokiWallets({
