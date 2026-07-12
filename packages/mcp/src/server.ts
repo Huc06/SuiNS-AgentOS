@@ -149,7 +149,13 @@ export async function startMcpServer(): Promise<void> {
             },
             manifestJson: {
               type: "string",
-              description: "Full sui-agent-skill/v1 manifest as JSON string",
+              description:
+                'Full sui-agent-skill/v1 manifest as a JSON string matching the schema: ' +
+                '{ name, version, publisher, manifestType: "sui-agent-skill/v1", ' +
+                "mcp: { compatible, tools }, sui: { movePackage, entry, policyRequired, " +
+                "parameters?: [{name, type}] }, dependencies }. The optional sui.parameters " +
+                "array declares Move param types for type-safe PTB construction " +
+                '(e.g. [{name:"recipient",type:"address"},{name:"amount",type:"u64"}]).',
             },
             walrusBlob: {
               type: "string",
@@ -352,7 +358,12 @@ async function handlePublishSkill(
     publisher: string;
     manifestType: string;
     mcp: { compatible: boolean; tools: unknown[] };
-    sui: { movePackage: string; entry: string; policyRequired: string[] };
+    sui: {
+      movePackage: string;
+      entry: string;
+      policyRequired: string[];
+      parameters?: Array<{ name: string; type: string }>;
+    };
     dependencies: string[];
   };
   try {
