@@ -1,4 +1,5 @@
 import {
+  DEFAULT_WALRUS_EPOCHS,
   WalrusClient,
   computeWorkflowManifestHash,
   serializeWorkflowManifest,
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const serialized = serializeWorkflowManifest(manifest);
     manifestHash = computeWorkflowManifestHash(serialized);
     const walrus = new WalrusClient();
-    ({ blobId } = await walrus.uploadBlob(serialized));
+    ({ blobId } = await walrus.uploadBlob(serialized, { epochs: DEFAULT_WALRUS_EPOCHS }));
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Walrus upload failed" },

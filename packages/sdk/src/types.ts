@@ -47,6 +47,14 @@ export interface SkillManifest {
     movePackage: string;
     entry: string;
     policyRequired: string[];
+    /**
+     * Positional parameter type declarations for the Move entry function.
+     * Each entry maps a param name to its Sui Move type string (e.g. "address",
+     * "u64", "u8", "bool", "std::string::String", "vector<u8>").
+     * When present, the PTB builder uses `tx.pure(type, value)` for exact
+     * type-safe encoding instead of heuristic inference.
+     */
+    parameters?: Array<{ name: string; type: string }>;
   };
   dependencies: string[];
 }

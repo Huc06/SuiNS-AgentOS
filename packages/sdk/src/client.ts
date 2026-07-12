@@ -8,7 +8,7 @@ import { SUI_CLOCK_OBJECT_ID } from "./contracts/attestation.js";
 import { DependencyResolver } from "./dependency-resolver.js";
 import { HarborClient } from "./harbor.js";
 import type { HarborUploadResult } from "./harbor.js";
-import { WalrusClient } from "./walrus.js";
+import { DEFAULT_WALRUS_EPOCHS, WalrusClient } from "./walrus.js";
 import {
   computeManifestHash,
   deserializeManifest,
@@ -897,7 +897,7 @@ export class AgentOSClient {
       ? isCallableSkillEntry(packageAddr, module, this.#packageId)
       : false;
     const moveCallArgs = skillEntryCallable
-      ? this.#bindParams(transaction, params)
+      ? this.#bindParams(transaction, params, manifest?.sui?.parameters)
       : [];
 
     // 5a. Delegated path: validate the cap BEFORE the skill runs.
@@ -1021,8 +1021,7 @@ export class AgentOSClient {
       manifest.sui.entry,
     );
 
-    // Build arguments from params if provided
-    const moveCallArgs = this.#bindParams(transaction, params);
+    const moveCallArgs = this.#bindParams(transaction, params, manifest.sui.parameters);
 
     transaction.moveCall({
       target: `${packageAddr}::${module}::${func}`,
@@ -1066,28 +1065,33 @@ export class AgentOSClient {
   /**
    * Bind a `params` record into positional moveCall arguments.
    *
-   * Supports, in addition to the original flat primitives:
+   * Supports:
    *  - `{ object: "0x…" }` → `tx.object(id)` (object reference)
-   *  - `{ result: i, index?: j }` → a value returned by an earlier command in
-   *    the same PTB (chained object/result). `result` indexes `tx`'s prior
-   *    commands' results; `index` selects a slot when that command returned a
-   *    tuple.
-   *
-   * Primitive `string`/`number`/`boolean` keep their original encoding
-   * (`pure.string` / `pure.u64` / `pure.bool`) so the non-object path is
-   * unchanged.
+   *  - `{ result: i, index?: j }` → chained PTB result reference
+   *  - Typed params when `paramTypes` is provided (from manifest.sui.parameters):
+   *    uses `tx.pure(type, value)` generic syntax for exact Move type encoding.
+   *    Supported types: "address", "u8", "u16", "u32", "u64", "u128", "u256",
+   *    "bool", "std::string::String", "vector<u8>", and any other BCS-pure type.
+   *  - Fallback heuristics when no manifest type info:
+   *    - string matching Sui address pattern → `tx.pure.address()`
+   *    - string → `tx.pure.string()`
+   *    - number → `tx.pure.u64()`
+   *    - boolean → `tx.pure.bool()`
    */
   #bindParams(
     transaction: Transaction,
     params?: Record<string, unknown>,
+    paramTypes?: Array<{ name: string; type: string }>,
   ): TransactionObjectArgument[] {
     const moveCallArgs: TransactionObjectArgument[] = [];
     if (!params) return moveCallArgs;
 
-    for (const value of Object.values(params)) {
+    for (const [key, value] of Object.entries(params)) {
       if (isObjectRef(value)) {
         moveCallArgs.push(transaction.object(value.object));
-      } else if (isResultRef(value)) {
+        continue;
+      }
+      if (isResultRef(value)) {
         const command = transaction.getData().commands[value.result];
         if (!command) {
           throw new Error(
@@ -1099,11 +1103,32 @@ export class AgentOSClient {
             ? { Result: value.result }
             : { NestedResult: [value.result, value.index] };
         moveCallArgs.push(slot as unknown as TransactionObjectArgument);
-      } else if (typeof value === "string") {
+        continue;
+      }
+
+      // Typed path: manifest declared explicit Move type for this param.
+      const declaredType = paramTypes?.find((p) => p.name === key)?.type;
+      if (declaredType) {
         moveCallArgs.push(
-          transaction.pure.string(
+          // tx.pure(type, value) is the generic SDK syntax that accepts any
+          // BCS-pure Move type string — avoids a hand-rolled switch table.
+          (transaction.pure as (type: string, value: unknown) => unknown)(
+            declaredType,
             value,
           ) as unknown as TransactionObjectArgument,
+        );
+        continue;
+      }
+
+      // Fallback heuristics (no manifest type info).
+      if (typeof value === "string") {
+        // Sui addresses are 0x-prefixed hex strings (up to 64 hex chars).
+        // Treat them as address type to avoid encoding as UTF-8 string bytes.
+        const looksLikeAddress = /^0x[0-9a-fA-F]{1,64}$/.test(value);
+        moveCallArgs.push(
+          (looksLikeAddress
+            ? transaction.pure.address(value)
+            : transaction.pure.string(value)) as unknown as TransactionObjectArgument,
         );
       } else if (typeof value === "number") {
         moveCallArgs.push(
@@ -1363,7 +1388,7 @@ export class AgentOSClient {
         publisherUrl: this.#walrusPublisherUrl,
         aggregatorUrl: this.#walrusAggregatorUrl,
       });
-      const uploaded = await walrus.uploadBlob(content);
+      const uploaded = await walrus.uploadBlob(content, { epochs: DEFAULT_WALRUS_EPOCHS });
       blobId = uploaded.blobId;
     }
 

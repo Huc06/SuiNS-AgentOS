@@ -20,6 +20,7 @@ import {
 import {
   AgentOSClient,
   convertToAgentOSManifest,
+  DEFAULT_WALRUS_EPOCHS,
   formatSkillSubname,
   parseSkillMd,
   WalrusClient,
@@ -416,7 +417,7 @@ async function handlePublishSkill(
       const bytes = serializeManifest(manifest as import("@agentos-sui/sdk").SkillManifest);
       manifestHash = computeManifestHash(bytes);
       const walrus = new WalrusClient();
-      const { blobId } = await walrus.uploadBlob(bytes);
+      const { blobId } = await walrus.uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
       walrusBlobId = blobId;
     } catch {
       // Walrus upload failed (offline / testnet down) — fall back to placeholder.
@@ -721,7 +722,7 @@ async function handleImportSkill(
     const bytes = serializeManifest(manifest);
     importHash = computeManifestHash(bytes);
     const walrus = new WalrusClient();
-    const { blobId } = await walrus.uploadBlob(bytes);
+    const { blobId } = await walrus.uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
     importBlobId = blobId;
   } catch {
     // Walrus unavailable — placeholder will be used.

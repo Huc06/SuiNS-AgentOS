@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   AgentOSClient,
   contracts,
+  DEFAULT_WALRUS_EPOCHS,
   HarborClient,
   memwalFromEnv,
   resolveAgentAddress,
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     } else {
       bytes = new TextEncoder().encode(JSON.stringify(payload ?? {}));
     }
-    return walrus.uploadBlob(bytes);
+    return walrus.uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
   };
 
   // Walrus-backed agent memory. `null` when MEMWAL_RELAYER_URL / MEMWAL_API_KEY
