@@ -93,6 +93,8 @@ export interface RegistryWorkflowRecord {
   walrusManifestBlob: string;
   /** Hex SHA-256 of the serialized manifest (empty until first publish). */
   manifestHash: string;
+  /** Walrus storage end epoch for the manifest blob. Undefined until first publish. */
+  endEpoch?: number;
   network: "mainnet" | "testnet";
   status: "draft" | "active" | "archived";
   /** Optional human-readable summary. */

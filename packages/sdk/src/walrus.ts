@@ -50,10 +50,14 @@ export interface WalrusUploadOptions {
 /** Shape of the publisher store response (subset we rely on). */
 interface WalrusStoreResponse {
   newlyCreated?: {
-    blobObject?: { blobId?: string };
+    blobObject?: {
+      blobId?: string;
+      storage?: { endEpoch?: number };
+    };
   };
   alreadyCertified?: {
     blobId?: string;
+    endEpoch?: number;
   };
 }
 
@@ -82,7 +86,7 @@ export class WalrusClient {
   async uploadBlob(
     content: Uint8Array,
     options: WalrusUploadOptions = {},
-  ): Promise<{ blobId: string }> {
+  ): Promise<{ blobId: string; endEpoch?: number }> {
     const params = new URLSearchParams();
     if (options.epochs !== undefined) {
       params.set("epochs", String(options.epochs));
@@ -113,7 +117,10 @@ export class WalrusClient {
         `Walrus upload failed: response missing blobId (${JSON.stringify(result)})`,
       );
     }
-    return { blobId };
+    const endEpoch =
+      result.newlyCreated?.blobObject?.storage?.endEpoch ??
+      result.alreadyCertified?.endEpoch;
+    return { blobId, endEpoch };
   }
 
   /**
