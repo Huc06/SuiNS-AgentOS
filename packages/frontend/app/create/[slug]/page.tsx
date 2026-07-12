@@ -1569,6 +1569,7 @@ interface WorkflowMeta {
   agentSlug: string;
   version: string;
   walrusManifestBlob: string;
+  endEpoch?: number;
   status: "draft" | "active" | "archived";
 }
 
@@ -1610,6 +1611,154 @@ function workflowGraphToFlow(graph: {
   return { nodes, edges };
 }
 
+// ===== WALRUS tab panel =====
+// Blob storage info (endEpoch, expiry status) + a one-click renew form.
+function WalrusPanel({
+  workflowMeta,
+  currentEpoch,
+  renewEpochs,
+  setRenewEpochs,
+  renewState,
+  setRenewState,
+  renewError,
+  handleRenew,
+}: {
+  workflowMeta: WorkflowMeta | null;
+  currentEpoch: number | null;
+  renewEpochs: 13 | 26 | 53 | 183;
+  setRenewEpochs: (v: 13 | 26 | 53 | 183) => void;
+  renewState: "idle" | "loading" | "done" | "error";
+  setRenewState: (v: "idle" | "loading" | "done" | "error") => void;
+  renewError: string | null;
+  handleRenew: () => void;
+}) {
+  const endEpoch = workflowMeta?.endEpoch;
+  const blobId = workflowMeta?.walrusManifestBlob;
+  const epochsLeft =
+    endEpoch !== undefined && currentEpoch !== null
+      ? endEpoch - currentEpoch
+      : null;
+
+  const statusColor =
+    epochsLeft === null
+      ? "text-black/40"
+      : epochsLeft > 14
+        ? "text-green-700"
+        : epochsLeft > 6
+          ? "text-yellow-600"
+          : epochsLeft > 0
+            ? "text-red-600"
+            : "text-red-700";
+
+  const statusLabel =
+    epochsLeft === null
+      ? endEpoch !== undefined
+        ? "○ UNKNOWN"
+        : "○ NOT PUBLISHED"
+      : epochsLeft > 14
+        ? "● ACTIVE"
+        : epochsLeft > 0
+          ? "⚠ EXPIRING SOON"
+          : "✕ EXPIRED";
+
+  const walruscanUrl = blobId ? walruscanBlobUrl(blobId) : null;
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {/* Blob info card */}
+      <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+        <h4 className="mb-3 font-mono text-xs font-bold text-black">
+          MANIFEST BLOB
+        </h4>
+        <div className="mb-3">
+          <p className="font-mono text-[10px] text-black/50">BLOB ID</p>
+          {blobId ? (
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-sm font-bold text-black">
+                {blobId.slice(0, 8)}…{blobId.slice(-6)}
+              </p>
+              {walruscanUrl && (
+                <a
+                  href={walruscanUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-[10px] text-electric-purple underline"
+                >
+                  ↗ Walruscan
+                </a>
+              )}
+            </div>
+          ) : (
+            <p className="font-mono text-sm text-black/40">—</p>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="font-mono text-[10px] text-black/50">END EPOCH</p>
+            <p className="font-mono text-lg font-bold text-black">
+              {endEpoch ?? "—"}
+            </p>
+          </div>
+          <div>
+            <p className="font-mono text-[10px] text-black/50">NETWORK</p>
+            <p className="font-mono text-lg font-bold uppercase text-black">
+              {endEpoch !== undefined ? NETWORK : "—"}
+            </p>
+          </div>
+        </div>
+        <p className={`mt-3 font-mono text-[10px] font-bold ${statusColor}`}>
+          {statusLabel}
+        </p>
+      </div>
+
+      {/* Renew card */}
+      <div className="border-2 border-pure-black bg-white p-4 shadow-[4px_4px_0_0_#000]">
+        <h4 className="mb-3 font-mono text-xs font-bold text-black">
+          RENEW STORAGE
+        </h4>
+        <p className="mb-2 font-mono text-[10px] text-black/50">EXTEND BY</p>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {([13, 26, 53, 183] as const).map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => {
+                setRenewEpochs(e);
+                setRenewState("idle");
+              }}
+              className={`border-2 px-2 py-1 font-mono text-[10px] font-bold ${
+                renewEpochs === e
+                  ? "border-electric-purple bg-electric-purple text-white shadow-[2px_2px_0_0_#000]"
+                  : "border-pure-black/20 bg-white text-black hover:border-electric-purple"
+              }`}
+            >
+              {e} days
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={handleRenew}
+          disabled={renewState === "loading" || !blobId}
+          className="border-2 border-pure-black bg-pure-black px-4 py-2 font-mono text-[10px] font-bold text-white shadow-[2px_2px_0_0_#6800FF] hover:bg-electric-purple disabled:opacity-40"
+        >
+          {renewState === "loading" ? "RENEWING…" : "RENEW BLOB"}
+        </button>
+        {renewState === "done" && (
+          <p className="mt-2 font-mono text-[10px] font-bold text-green-700">
+            ✓ Renewed — new end epoch: {workflowMeta?.endEpoch}
+          </p>
+        )}
+        {renewState === "error" && (
+          <p className="mt-2 font-mono text-[10px] font-bold text-red-700">
+            ✕ {renewError}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function WorkflowEditorPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -1637,8 +1786,18 @@ export default function WorkflowEditorPage() {
   const [runError, setRunError] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
   const [txFilter, setTxFilter] = useState<"all" | WfType>("all");
-  // Bottom-panel view: metrics tables vs. the per-node Logs view.
-  const [panelView, setPanelView] = useState<"metrics" | "logs">("metrics");
+  // Bottom-panel view: metrics tables vs. the per-node Logs view vs. WALRUS.
+  const [panelView, setPanelView] = useState<"metrics" | "logs" | "walrus">(
+    "metrics",
+  );
+  // WALRUS tab: renew epoch picker + request state, and the current Walrus
+  // testnet epoch (fetched lazily once the tab is opened).
+  const [renewEpochs, setRenewEpochs] = useState<13 | 26 | 53 | 183>(53);
+  const [renewState, setRenewState] = useState<
+    "idle" | "loading" | "done" | "error"
+  >("idle");
+  const [renewError, setRenewError] = useState<string | null>(null);
+  const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
   // Preflight (predicted before a run) + the env-presence summary.
   const [preflight, setPreflight] = useState<PreflightPayload | null>(null);
   // Known Walrus-memory namespaces (registry-derived) for the memory-node
@@ -1847,6 +2006,16 @@ export default function WorkflowEditorPage() {
       }
     })();
   }, [fetchRuns, fetchNamespaces, slug]);
+
+  // Lazily fetch the current Walrus testnet epoch once the WALRUS tab is
+  // opened, so days-remaining can be computed from workflowMeta.endEpoch.
+  useEffect(() => {
+    if (panelView !== "walrus" || currentEpoch !== null) return;
+    fetch("/api/walrus-epoch")
+      .then((r) => r.json())
+      .then((d: { epoch?: number }) => setCurrentEpoch(d.epoch ?? null))
+      .catch(() => {});
+  }, [panelView, currentEpoch]);
 
   // Seed the canvas with this agent's DISTINCT default workflow on first load
   // (once per slug). Each known demo agent (@alpha, @beta-agent, @walrus-bot,
@@ -2189,6 +2358,49 @@ export default function WorkflowEditorPage() {
       setPublishing(false);
     }
   }, [workflowMeta, publishing, buildRunnableGraph, slug]);
+
+  // Re-upload the published manifest with a new epoch count to extend Walrus
+  // storage (does not require a wallet — the renew route is a server-side
+  // Walrus HTTP call, not an on-chain transaction).
+  const handleRenew = useCallback(async () => {
+    if (!workflowMeta) return;
+    setRenewState("loading");
+    setRenewError(null);
+    try {
+      const res = await fetch(
+        `/api/workflows/${encodeURIComponent(slug)}/renew`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ epochs: renewEpochs }),
+        },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        blobId?: string;
+        endEpoch?: number;
+        error?: string;
+      };
+      if (res.ok && data.ok) {
+        setRenewState("done");
+        setWorkflowMeta((prev) =>
+          prev
+            ? {
+                ...prev,
+                walrusManifestBlob: data.blobId ?? prev.walrusManifestBlob,
+                endEpoch: data.endEpoch,
+              }
+            : prev,
+        );
+      } else {
+        setRenewState("error");
+        setRenewError(data.error ?? "Renew failed");
+      }
+    } catch (e) {
+      setRenewState("error");
+      setRenewError(e instanceof Error ? e.message : "Network error");
+    }
+  }, [workflowMeta, slug, renewEpochs]);
 
   // Drag to resize bottom panel
   const handleDragResize = useCallback(
@@ -2604,6 +2816,7 @@ export default function WorkflowEditorPage() {
                   [
                     ["metrics", "METRICS"],
                     ["logs", "LOGS"],
+                    ["walrus", "WALRUS"],
                   ] as const
                 ).map(([val, label]) => (
                   <button
@@ -2622,12 +2835,31 @@ export default function WorkflowEditorPage() {
                         {logSteps.length}
                       </span>
                     )}
+                    {val === "walrus" &&
+                      workflowMeta?.endEpoch !== undefined &&
+                      currentEpoch !== null &&
+                      workflowMeta.endEpoch - currentEpoch < 7 && (
+                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center bg-yellow-500 px-1 text-[9px] text-white">
+                          ⚠
+                        </span>
+                      )}
                   </button>
                 ))}
               </div>
 
               {panelView === "logs" ? (
                 <LogsView steps={steps} runTime={runTime} />
+              ) : panelView === "walrus" ? (
+                <WalrusPanel
+                  workflowMeta={workflowMeta}
+                  currentEpoch={currentEpoch}
+                  renewEpochs={renewEpochs}
+                  setRenewEpochs={setRenewEpochs}
+                  renewState={renewState}
+                  setRenewState={setRenewState}
+                  renewError={renewError}
+                  handleRenew={handleRenew}
+                />
               ) : (
                 <div className="grid h-full grid-cols-3 gap-4">
                   {/* Run summary (real, derived from latest run) */}
