@@ -2816,7 +2816,7 @@ export default function WorkflowEditorPage() {
                   [
                     ["metrics", "METRICS"],
                     ["logs", "LOGS"],
-                    ["walrus", "WALRUS"],
+                    ["walrus", "RENEWAL"],
                   ] as const
                 ).map(([val, label]) => (
                   <button
