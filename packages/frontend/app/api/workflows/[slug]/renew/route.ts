@@ -1,6 +1,5 @@
 import {
   DEFAULT_WALRUS_AGGREGATOR,
-  DEFAULT_WALRUS_EPOCHS,
   WalrusClient,
 } from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
@@ -47,6 +46,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       { error: `Workflow not found: ${key}` },
       { status: 404 },
+    );
+  }
+
+  if (!workflow.walrusManifestBlob) {
+    return NextResponse.json(
+      { error: "workflow has not been published — publish via MCP first" },
+      { status: 422 },
     );
   }
 

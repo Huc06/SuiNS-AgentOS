@@ -1,7 +1,7 @@
 import { DEFAULT_WALRUS_PUBLISHER } from "@agentos-sui/sdk/node";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 /** Shape of the publisher store response (subset we rely on). */
 interface WalrusStoreResponse {

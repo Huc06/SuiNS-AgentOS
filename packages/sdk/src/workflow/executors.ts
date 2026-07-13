@@ -16,7 +16,7 @@ import {
 } from "../contracts/package-id.js";
 import { sealEncrypt } from "../seal.js";
 import { isValidSuiNSName } from "../suins-resolve.js";
-import { WalrusClient } from "../walrus.js";
+import { DEFAULT_WALRUS_EPOCHS, WalrusClient } from "../walrus.js";
 import type {
   RunContext,
   StepResult,
@@ -130,7 +130,7 @@ const walrus: StepExecutor = async (node, ctx) => {
     return { status: "done", blobId, output: { blobId } };
   }
   const client = new WalrusClient();
-  const { blobId } = await client.uploadBlob(toBytes(payload));
+  const { blobId } = await client.uploadBlob(toBytes(payload), { epochs: DEFAULT_WALRUS_EPOCHS });
   return { status: "done", blobId, output: { blobId } };
 };
 
@@ -155,7 +155,7 @@ async function storeEncryptedOnWalrus(
     });
     return r.blobId;
   }
-  const r = await new WalrusClient().uploadBlob(bytes);
+  const r = await new WalrusClient().uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
   return r.blobId;
 }
 

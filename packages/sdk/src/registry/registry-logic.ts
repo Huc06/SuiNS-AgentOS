@@ -376,7 +376,7 @@ export function publishWorkflow(
     version: input.version ?? "1.0.0",
     walrusManifestBlob: input.walrusManifestBlob ?? "",
     manifestHash: input.manifestHash ?? "",
-    ...(input.endEpoch !== undefined ? { endEpoch: input.endEpoch } : {}),
+    endEpoch: input.endEpoch,
     network: input.network ?? resolved.agent.network,
     status: input.status ?? (input.walrusManifestBlob ? "active" : "draft"),
     createdAt: existing?.createdAt ?? now,
