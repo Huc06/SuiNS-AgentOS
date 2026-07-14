@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
     mvrPackage?: string;
     version?: string;
     walrusManifestBlob?: string;
+    manifestHash?: string;
+    endEpoch?: number;
     manifest?: SkillManifest;
     source?: SkillSource;
   };
@@ -93,6 +95,8 @@ export async function POST(request: NextRequest) {
       agentName: agentName.trim(),
       manifest,
       walrusManifestBlob: walrusManifestBlob?.trim(),
+      manifestHash: body.manifestHash?.trim(),
+      endEpoch: body.endEpoch,
       source,
     });
     return NextResponse.json({ skill: registrySkillToRow(skill) });

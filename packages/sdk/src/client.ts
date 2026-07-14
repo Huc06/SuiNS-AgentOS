@@ -468,9 +468,13 @@ export class AgentOSClient {
       );
     }
 
-    // 3. Compute SHA-256 hash and verify against expected
+    // 3. Compute SHA-256 hash and verify against expected. `expectedHash`
+    // sometimes carries a `0x` prefix (some registry writers add it) while
+    // `computeManifestHash` never does — normalize both before comparing so a
+    // prefix mismatch alone doesn't fail an otherwise-correct manifest.
     const actualHash = computeManifestHash(content);
-    if (actualHash !== expectedHash) {
+    const normalize = (h: string) => h.trim().toLowerCase().replace(/^0x/, "");
+    if (normalize(actualHash) !== normalize(expectedHash)) {
       throw new Error(
         `Manifest integrity check failed: expected ${expectedHash}, got ${actualHash}`,
       );
