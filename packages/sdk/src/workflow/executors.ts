@@ -234,7 +234,15 @@ const harbor: StepExecutor = async (node, ctx) => {
     let encrypted: Uint8Array | null = null;
     if (ctx.seal) {
       try {
-        const real = await ctx.seal(plaintext, sealPolicyId);
+        // 8-second timeout: Seal key-server lookups can hang on testnet when
+        // the sealPolicyId is invalid or key servers are unreachable.
+        const timeout = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 8000),
+        );
+        const real = await Promise.race([
+          ctx.seal(plaintext, sealPolicyId),
+          timeout,
+        ]);
         if (real && real.length > 0) {
           encrypted = real;
           sealMode = "real-seal";
@@ -668,7 +676,26 @@ const delegate: StepExecutor = async (node, ctx) => {
     })(),
   });
 
-  const result = await ctx.execute(tx);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(tx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Delegate: skipped — passport not found on testnet. Mint a real AgentPassport to enable delegation.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   const capId = createdObjectId(
     result.objectChanges,
     "delegation::DelegationCap",
@@ -923,7 +950,26 @@ const attest: StepExecutor = async (node, ctx) => {
     ...(recipient ? { recipient } : { share: true }),
   });
 
-  const result = await ctx.execute(tx);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(tx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Attest: skipped — passport not found on testnet. Mint a real AgentPassport to enable on-chain attestations.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   return {
     status: "done",
     txDigest: result.digest,
@@ -1044,7 +1090,21 @@ const memory: StepExecutor = async (node, ctx, prevOutputs) => {
   }
   const namespace = memoryNamespace(node, ctx);
   const text = buildMemoryText(node, prevOutputs);
-  const result = await ctx.memory.remember(namespace, text);
+  let result: unknown;
+  try {
+    result = await ctx.memory.remember(namespace, text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Auth failure (401/403) or relayer unavailable — skip gracefully rather
+    // than failing the whole run. Memory is best-effort.
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unavailable")) {
+      return {
+        status: "skipped",
+        output: { note: `Memory: skipped — relayer auth failed (${msg.slice(0, 80)}). Check MEMWAL_ACCOUNT_ID and MEMWAL_DELEGATE_KEY.` },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   const blobId = extractBlobId(result);
   return {
     status: "done",

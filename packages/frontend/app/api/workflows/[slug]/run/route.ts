@@ -226,7 +226,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
               harborBucketId,
               content,
               filename,
-              { attempts: 60, intervalMs: 1000 }, // 60 seconds timeout
+              { attempts: 10, intervalMs: 1000 }, // 10 seconds timeout (falls back to Walrus on failure)
             );
             const base = (
               harborBaseUrl ?? "https://api.testnet.harbor.walrus.xyz"
