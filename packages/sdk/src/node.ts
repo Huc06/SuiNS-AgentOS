@@ -23,7 +23,12 @@ export * from "./storage/index.js";
 export * as contracts from "./contracts/index.js";
 export { HarborClient } from "./harbor.js";
 export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
-export { WalrusClient } from "./walrus.js";
+export {
+  DEFAULT_WALRUS_AGGREGATOR,
+  DEFAULT_WALRUS_EPOCHS,
+  DEFAULT_WALRUS_PUBLISHER,
+  WalrusClient,
+} from "./walrus.js";
 export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
 export {
   MemwalClient,

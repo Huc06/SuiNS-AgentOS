@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS workflows (
   version              TEXT NOT NULL,
   walrus_manifest_blob TEXT NOT NULL DEFAULT '',
   manifest_hash        TEXT NOT NULL DEFAULT '',
+  end_epoch            INTEGER,
   network              TEXT NOT NULL DEFAULT 'testnet',
   status               TEXT NOT NULL DEFAULT 'draft',
   description          TEXT,
@@ -284,6 +285,7 @@ function rowToWorkflow(row: SqlRow): RegistryWorkflowRecord {
     version: str(row.version),
     walrusManifestBlob: str(row.walrus_manifest_blob),
     manifestHash: str(row.manifest_hash),
+    ...(typeof row.end_epoch === "number" ? { endEpoch: row.end_epoch } : {}),
     network: str(row.network) === "mainnet" ? "mainnet" : "testnet",
     status: status === "active" || status === "archived" ? status : "draft",
     createdAt: str(row.created_at),
@@ -411,9 +413,9 @@ export class SqlRegistryStore implements RegistryStore {
     await db.query(
       `INSERT INTO workflows
          (slug, agent_slug, workflow_id, name, suins_name, version,
-          walrus_manifest_blob, manifest_hash, network, status, description,
+          walrus_manifest_blob, manifest_hash, end_epoch, network, status, description,
           dependencies, created_at, last_updated)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(slug) DO UPDATE SET
          agent_slug = excluded.agent_slug,
          workflow_id = excluded.workflow_id,
@@ -422,6 +424,7 @@ export class SqlRegistryStore implements RegistryStore {
          version = excluded.version,
          walrus_manifest_blob = excluded.walrus_manifest_blob,
          manifest_hash = excluded.manifest_hash,
+         end_epoch = excluded.end_epoch,
          network = excluded.network,
          status = excluded.status,
          description = excluded.description,
@@ -437,6 +440,7 @@ export class SqlRegistryStore implements RegistryStore {
         w.version,
         w.walrusManifestBlob,
         w.manifestHash,
+        w.endEpoch ?? null,
         w.network,
         w.status,
         w.description ?? null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "agentos-onboarded-v1";
@@ -26,10 +26,12 @@ const FEATURES = [
 
 export function OnboardingModal() {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
   useEffect(() => {
+    if (pathname === "/") return;
     try {
       if (!localStorage.getItem(STORAGE_KEY)) {
         setOpen(true);
@@ -37,7 +39,7 @@ export function OnboardingModal() {
     } catch {
       /* localStorage unavailable */
     }
-  }, []);
+  }, [pathname]);
 
   const dismiss = () => {
     try {

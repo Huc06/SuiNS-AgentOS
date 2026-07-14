@@ -73,6 +73,7 @@ export interface PublishWorkflowInput {
   walrusManifestBlob?: string;
   /** Hex SHA-256 of the serialized manifest (empty for a draft). */
   manifestHash?: string;
+  endEpoch?: number;
   description?: string;
   dependencies?: string[];
   network?: "mainnet" | "testnet";
@@ -375,6 +376,7 @@ export function publishWorkflow(
     version: input.version ?? "1.0.0",
     walrusManifestBlob: input.walrusManifestBlob ?? "",
     manifestHash: input.manifestHash ?? "",
+    endEpoch: input.endEpoch,
     network: input.network ?? resolved.agent.network,
     status: input.status ?? (input.walrusManifestBlob ? "active" : "draft"),
     createdAt: existing?.createdAt ?? now,

@@ -22,6 +22,17 @@ export const DEFAULT_WALRUS_PUBLISHER =
 export const DEFAULT_WALRUS_AGGREGATOR =
   "https://aggregator.walrus-testnet.walrus.space";
 
+/**
+ * Default epoch count for AgentOS-managed manifest uploads (skills, workflow
+ * graphs). The public testnet publisher defaults to 1 epoch (~1 day on
+ * testnet — see docs.wal.app/glossary: testnet epoch duration = 1 day), which
+ * is far too short for a published skill/workflow to stay resolvable. 53
+ * epochs (~53 days on testnet) comfortably outlives a demo/dev cycle without
+ * requesting the network max (183 on testnet). Callers that want the blob to
+ * live indefinitely can pass `permanent: true` instead/additionally.
+ */
+export const DEFAULT_WALRUS_EPOCHS = 53;
+
 export interface WalrusClientOptions {
   /** Publisher base URL (write). Defaults to the testnet publisher. */
   publisherUrl?: string;
@@ -39,10 +50,14 @@ export interface WalrusUploadOptions {
 /** Shape of the publisher store response (subset we rely on). */
 interface WalrusStoreResponse {
   newlyCreated?: {
-    blobObject?: { blobId?: string };
+    blobObject?: {
+      blobId?: string;
+      storage?: { endEpoch?: number };
+    };
   };
   alreadyCertified?: {
     blobId?: string;
+    endEpoch?: number;
   };
 }
 
@@ -71,7 +86,7 @@ export class WalrusClient {
   async uploadBlob(
     content: Uint8Array,
     options: WalrusUploadOptions = {},
-  ): Promise<{ blobId: string }> {
+  ): Promise<{ blobId: string; endEpoch?: number }> {
     const params = new URLSearchParams();
     if (options.epochs !== undefined) {
       params.set("epochs", String(options.epochs));
@@ -102,7 +117,10 @@ export class WalrusClient {
         `Walrus upload failed: response missing blobId (${JSON.stringify(result)})`,
       );
     }
-    return { blobId };
+    const endEpoch =
+      result.newlyCreated?.blobObject?.storage?.endEpoch ??
+      result.alreadyCertified?.endEpoch;
+    return { blobId, endEpoch };
   }
 
   /**
