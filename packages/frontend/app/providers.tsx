@@ -2,15 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui/client';
 import { useState } from 'react';
 
 import { RegisterEnokiWallets } from '../components/enoki/register-enoki-wallets';
-import { getSuiNetwork } from '../lib/enoki-config';
+import { getSuiNetwork, getSuiRpcUrl } from '../lib/enoki-config';
 
 const { networkConfig } = createNetworkConfig({
-  testnet: { url: getFullnodeUrl('testnet') },
-  mainnet: { url: getFullnodeUrl('mainnet') },
+  testnet: { url: getSuiRpcUrl('testnet') },
+  mainnet: { url: getSuiRpcUrl('mainnet') },
 });
 
 const defaultNetwork = getSuiNetwork() === 'mainnet' ? 'mainnet' : 'testnet';

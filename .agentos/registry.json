@@ -131,7 +131,7 @@
     {
       "slug": "my-first-agent",
       "suinsName": "my-first-agent.sui",
-      "passportId": "0xe6ea58dfc2b339949eb11d15fb1f4d558330c3af",
+      "passportId": "0x95b2b2104f7e7fb2d144771ee21d20ec2f7f9827d7da39529ae82608daece7b7",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
@@ -235,16 +235,32 @@
       "slug": "firstworkflow-alpha",
       "suinsName": "firstworkflow.alpha.sui",
       "version": "1.0.0",
-      "walrusManifestBlob": "-Re7diK30CtFOUja1una3-MtUP7ijFC4wMgUOP0XrEY",
-      "manifestHash": "2f5763e29fec6d283bd7e645534501eb63b709173a2718d31c568872789f3381",
+      "walrusManifestBlob": "TMg7HkMiIpUjp7XlI4uTYBgzMAmCTaCfbWkEAgdZstk",
+      "manifestHash": "06a2f1c8868f163337e8bfd5bbbfd12b8abc8dd9b0b6236cde27ef0be8323a51",
       "network": "testnet",
       "status": "active",
       "createdAt": "2026-06-22T10:50:31.121Z",
-      "lastUpdated": "2026-06-22T16:03:32.080Z",
+      "lastUpdated": "2026-07-14T08:13:36.726Z",
       "description": "Mint NFT",
       "dependencies": [
         "sui-nft-mint.alpha.sui"
-      ]
+      ],
+      "endEpoch": 511
+    },
+    {
+      "agentSlug": "my-first-agent",
+      "workflowId": "firstworkflow",
+      "name": "firstworkflow",
+      "slug": "firstworkflow-my-first-agent",
+      "suinsName": "firstworkflow.my-first-agent.sui",
+      "version": "1.0.0",
+      "walrusManifestBlob": "",
+      "manifestHash": "",
+      "network": "testnet",
+      "status": "draft",
+      "createdAt": "2026-07-14T08:38:13.302Z",
+      "lastUpdated": "2026-07-14T08:38:13.302Z",
+      "description": "Path B on-chain execution test"
     }
   ]
 }

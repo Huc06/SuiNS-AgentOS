@@ -1,5 +1,5 @@
 import { EnokiClient } from "@mysten/enoki";
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
+import { SuiClient } from "@mysten/sui/client";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import type { Transaction } from "@mysten/sui/transactions";
@@ -9,6 +9,7 @@ import {
   deriveSponsorAllowlist,
   getAgentosPackageId,
   getSuiNetwork,
+  getSuiRpcUrl,
 } from "./enoki-config";
 
 /** Minimal object-change shape extracted from the executed transaction. */
@@ -94,7 +95,7 @@ export function getEnokiClient(): EnokiClient {
 
 function getSuiClient(): SuiClient {
   if (cachedSuiClient) return cachedSuiClient;
-  cachedSuiClient = new SuiClient({ url: getFullnodeUrl(getSuiNetwork()) });
+  cachedSuiClient = new SuiClient({ url: getSuiRpcUrl(getSuiNetwork()) });
   return cachedSuiClient;
 }
 

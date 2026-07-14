@@ -5,7 +5,7 @@ import {
   createSuinsClient,
   normalizeSuinsInput,
 } from "../../../lib/suins-helpers";
-import { getSuiNetwork } from "../../../lib/enoki-config";
+import { getSuiNetwork, getSuiRpcUrl } from "../../../lib/enoki-config";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +28,9 @@ export async function GET(request: NextRequest) {
 
     // 2. Fall back to on-chain SuiNS resolution
     const network = getSuiNetwork();
-    const { getFullnodeUrl } = await import("@mysten/sui/client");
     const { SuiClient } = await import("@mysten/sui/client");
     const client = new SuiClient({
-      url: getFullnodeUrl(network === "mainnet" ? "mainnet" : "testnet"),
+      url: getSuiRpcUrl(network === "mainnet" ? "mainnet" : "testnet"),
     });
     const suins = createSuinsClient(client as never, network);
     const normalized = normalizeSuinsInput(name);

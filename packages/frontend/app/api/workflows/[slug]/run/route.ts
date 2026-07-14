@@ -18,7 +18,7 @@ import {
   type RunContext,
   type WorkflowGraph,
 } from "@agentos-sui/sdk/node";
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
+import { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -26,6 +26,7 @@ import { z } from "zod";
 import {
   getAgentosPackageId,
   getSuiNetwork,
+  getSuiRpcUrl,
 } from "../../../../../lib/enoki-config";
 import { loadRootEnv } from "../../../../../lib/load-root-env";
 import {
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const packageId = getAgentosPackageId();
   const graph = parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
 
-  const suiClient = new SuiClient({ url: getFullnodeUrl(getSuiNetwork()) });
+  const suiClient = new SuiClient({ url: getSuiRpcUrl(getSuiNetwork()) });
 
   // Walrus-backed uploader (the SDK's storage client). Serializes a real
   // manifest, otherwise uploads JSON/bytes verbatim.
