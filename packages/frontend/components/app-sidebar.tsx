@@ -49,7 +49,7 @@ export function AppSidebar() {
         </p>
       </div>
       <nav className="space-y-1 px-2">
-        <SidebarLink href="/" label="Home" active={pathname === "/"} />
+        <SidebarLink href="/" label="About" active={pathname === "/"} />
       </nav>
 
       <div className="flex-1" />
