@@ -1652,9 +1652,11 @@ function WalrusPanel({
 
   const statusLabel =
     epochsLeft === null
-      ? endEpoch !== undefined
-        ? "○ UNKNOWN"
-        : "○ NOT PUBLISHED"
+      ? !blobId
+        ? "○ NOT PUBLISHED"
+        : endEpoch !== undefined
+          ? "○ UNKNOWN"
+          : "○ PUBLISHED"
       : epochsLeft > 14
         ? "● ACTIVE"
         : epochsLeft > 0
@@ -1702,7 +1704,7 @@ function WalrusPanel({
           <div>
             <p className="font-mono text-[10px] text-black/50">NETWORK</p>
             <p className="font-mono text-lg font-bold uppercase text-black">
-              {endEpoch !== undefined ? NETWORK : "—"}
+              {blobId ? NETWORK : "—"}
             </p>
           </div>
         </div>
