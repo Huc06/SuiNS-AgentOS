@@ -39,6 +39,8 @@ export interface RegistrySkillRecord {
   version: string;
   walrusManifestBlob: string;
   manifestHash: string;
+  /** Walrus storage end epoch for the manifest blob. Undefined until first publish. */
+  endEpoch?: number;
   objectId: string;
   suinsName?: string;
   sealPolicyId?: string;
