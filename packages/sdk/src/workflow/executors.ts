@@ -399,12 +399,32 @@ const sui: StepExecutor = async (node, ctx) => {
     };
   }
 
-  const result = await ctx.execute(tx);
-  return {
-    status: "done",
-    txDigest: result.digest,
-    output: { digest: result.digest, objectChanges: result.objectChanges },
-  };
+  try {
+    const result = await ctx.execute(tx);
+    return {
+      status: "done",
+      txDigest: result.digest,
+      output: { digest: result.digest, objectChanges: result.objectChanges },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Passport or package object doesn't exist on-chain yet (demo/seeded registry
+    // data). Degrade to a clear skip so the rest of the workflow still runs.
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — passport or package not found on testnet. Mint a real AgentPassport to enable on-chain recording.",
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
 };
 
 /** Read a node param as a string, or `undefined` when missing/non-string. */
@@ -756,26 +776,57 @@ const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
       ctx.passport?.id)
     : strParam(node, "subjectPassportId");
 
-  const built = await ctx.build.buildCallSubAgentTx({
-    suinsName,
-    ...(node.params?.params && typeof node.params.params === "object"
-      ? { params: node.params.params as Record<string, unknown> }
-      : ctx.params
-        ? { params: ctx.params }
+  let built: Awaited<ReturnType<typeof ctx.build.buildCallSubAgentTx>>;
+  try {
+    built = await ctx.build.buildCallSubAgentTx({
+      suinsName,
+      ...(node.params?.params && typeof node.params.params === "object"
+        ? { params: node.params.params as Record<string, unknown> }
+        : ctx.params
+          ? { params: ctx.params }
+          : {}),
+      ...(strArrayParam(node, "agentCapabilities")
+        ? { agentCapabilities: strArrayParam(node, "agentCapabilities") }
         : {}),
-    ...(strArrayParam(node, "agentCapabilities")
-      ? { agentCapabilities: strArrayParam(node, "agentCapabilities") }
-      : {}),
-    ...(delegationCapId ? { delegationCapId } : {}),
-    ...(subjectPassportId ? { subjectPassportId } : {}),
-    ...(typeof node.params?.cost === "number"
-      ? { cost: node.params.cost }
-      : typeof node.params?.cost === "string" && node.params.cost.length > 0
-        ? { cost: Number(node.params.cost) }
-        : {}),
-  });
+      ...(delegationCapId ? { delegationCapId } : {}),
+      ...(subjectPassportId ? { subjectPassportId } : {}),
+      ...(typeof node.params?.cost === "number"
+        ? { cost: node.params.cost }
+        : typeof node.params?.cost === "string" && node.params.cost.length > 0
+          ? { cost: Number(node.params.cost) }
+          : {}),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      status: "skipped",
+      output: {
+        note: `Call Sub-Agent: skipped — could not build PTB for skill "${suinsName}": ${msg}`,
+      },
+    };
+  }
 
-  const result = await ctx.execute(built.transaction);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(built.transaction);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("ArityMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Call Sub-Agent: skipped — on-chain execution failed (${msg.slice(0, 120)}). Ensure skill and passport are published on testnet.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   // When the skill did NOT resolve (an older/saved canvas graph passed the agent
   // name instead of a real skill) the builder ran the delegation accounting only
   // — no skill move-call. Surface a clear note so the degraded run is legible,
