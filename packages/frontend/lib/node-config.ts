@@ -202,6 +202,13 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       hint: "Override the deployed AgentOS package. Leave blank to use the configured one.",
       validate: validateHexId,
     },
+    {
+      key: "extraArgs",
+      label: "Move-call arguments (one key=value per line)",
+      placeholder: "name=My NFT\ndescription=...\nimage_url=https://...",
+      kind: "textarea",
+      hint: "Positional args for the custom entry function above, in order. Ignored for record_execution (no movePackage set).",
+    },
   ],
 
   // Memory = save a note into the agent's Walrus-backed memory so a later run

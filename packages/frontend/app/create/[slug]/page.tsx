@@ -1878,6 +1878,22 @@ export default function WorkflowEditorPage() {
           ([, v]) => typeof v === "string" && v.trim().length > 0,
         ),
       );
+      // The "Extra move-call args" field lets a user type one `key=value` pair
+      // per line for custom Move entry functions (e.g. an NFT mint's `name`,
+      // `description`, `image_url`). Expand it into individual params here —
+      // the executor's buildMoveArgs() already turns any non-reserved param
+      // key into a positional u8-vector argument, so no executor change is
+      // needed; this just gets those keys into the request body correctly.
+      if (typeof params.extraArgs === "string") {
+        for (const line of params.extraArgs.split("\n")) {
+          const eq = line.indexOf("=");
+          if (eq <= 0) continue;
+          const key = line.slice(0, eq).trim();
+          const value = line.slice(eq + 1).trim();
+          if (key && value) params[key] = value;
+        }
+        delete params.extraArgs;
+      }
       runnable.push({
         id: n.id,
         type,

@@ -102,6 +102,7 @@ const RESERVED_PARAM_KEYS = new Set([
  "private", "sealPolicyId", "filename", "skill", "cost", "agent", "child",
  "spendLimit", "expiryMs", "allowedSkills", "allowedCapabilities", "kind",
  "score", "share", "recipient", "namespace", "text", "query", "limit",
+ "extraArgs",
 ]);
 function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
  if (!params) return [];
