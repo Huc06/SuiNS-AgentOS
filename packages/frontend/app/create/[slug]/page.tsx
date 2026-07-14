@@ -3315,8 +3315,21 @@ export default function WorkflowEditorPage() {
                   },
                   {
                     category: "blockchain",
-                    tools: [{ label: "Sui", subtitle: "Execute PTB" }],
-                    count: 1,
+                    tools: [
+                      { label: "Sui", subtitle: "Execute PTB" },
+                      {
+                        label: "Sui",
+                        subtitle: "Mint NFT (nft_mint package)",
+                        params: {
+                          movePackage:
+                            "0x0a351793399bc2f97bc292db26c4403db4af07a84bcb8e5fad7e343b06769331",
+                          entry: "nft::mint_and_transfer",
+                          extraArgs:
+                            "name=My NFT\ndescription=Minted from AgentOS\nimage_url=https://example.com/nft.png",
+                        },
+                      },
+                    ],
+                    count: 2,
                   },
                   {
                     category: "coordination",
@@ -3342,7 +3355,7 @@ export default function WorkflowEditorPage() {
                     <div className="space-y-1 border-t border-pure-black/10 p-2">
                       {cat.tools.map((tool) => (
                         <div
-                          key={tool.label}
+                          key={`${tool.label}-${tool.subtitle}`}
                           onClick={() => {
                             setNodes((nds) => [
                               ...nds,
@@ -3356,6 +3369,9 @@ export default function WorkflowEditorPage() {
                                 data: {
                                   label: tool.label,
                                   subtitle: tool.subtitle,
+                                  ...("params" in tool && tool.params
+                                    ? { params: tool.params }
+                                    : {}),
                                 },
                               },
                             ]);
