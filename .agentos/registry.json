@@ -45,6 +45,9 @@
           "capId": "0x439093f29e370f3492fcaa67539dd2f458c1fcd21af93f8c28258642666656a3",
           "createdAt": "2026-06-18T14:03:00.000Z"
         }
+      ],
+      "memoryNamespaces": [
+        "alpha.sui"
       ]
     },
     {
@@ -131,13 +134,16 @@
     {
       "slug": "my-first-agent",
       "suinsName": "my-first-agent.sui",
-      "passportId": "0xe6ea58dfc2b339949eb11d15fb1f4d558330c3af",
+      "passportId": "0x95b2b2104f7e7fb2d144771ee21d20ec2f7f9827d7da39529ae82608daece7b7",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
       "status": "active",
       "createdAt": "2026-06-20T10:07:29.183Z",
-      "description": "hulk agent"
+      "description": "hulk agent",
+      "memoryNamespaces": [
+        "my-first-agent.sui"
+      ]
     }
   ],
   "skills": [
@@ -149,14 +155,15 @@
       "version": "v1.0.0",
       "walrusManifestBlob": "LK2Z0TwyWvN_nK0s9ychfQSpCGulrxBQm3RMYEkjad0",
       "manifestHash": "0x30c99c1b18d5b8e7c944bc119d879648082e500cdfba437459a7ac912dc6f854",
-      "objectId": "0xc9e7320045e2588102b024f519a502a3d4a4c4071d8f6da7a496eee2bd8aa1fe",
+      "objectId": "0x994b627d12c9967c624aff1a0b8d35044eac0c6cfa3abbab6bfbb156cdc379ac",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-06-21T10:54:46.748Z",
+      "lastUpdated": "just now",
       "icon": "token",
       "source": "custom",
-      "suinsName": "web-search.alpha.sui"
+      "suinsName": "web-search.alpha.sui",
+      "endEpoch": 511
     },
     {
       "agentSlug": "alpha",
@@ -166,14 +173,15 @@
       "version": "v1.0.0",
       "walrusManifestBlob": "8lQiOR01nJnfRS5GzjISs_nDJxThW6cn9R783trPNDI",
       "manifestHash": "0x8893b18d1ff2747d82de7703fe39eb91e3e3e030b0421d6110aa30e2180c3e23",
-      "objectId": "0x714c15ff86f8b1169d46ff84b885ab7745d331c4559a2febfbb8885054200c3a",
+      "objectId": "0x5e02dbbab9a1b2e0accfc5cbb876396d05ce7dbd10b5e755947023d928291762",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-06-21T10:54:58.402Z",
+      "lastUpdated": "just now",
       "icon": "token",
       "source": "custom",
-      "suinsName": "delegate-policy.alpha.sui"
+      "suinsName": "delegate-policy.alpha.sui",
+      "endEpoch": 511
     },
     {
       "agentSlug": "beta-agent",
@@ -183,14 +191,15 @@
       "version": "v0.9.0",
       "walrusManifestBlob": "ONCe_S_UlstaM-FDd1fgdzYK1qMXP6aYWA7rR682s-c",
       "manifestHash": "0x1bd91d2f3dcf398a91ead96e6e0d8c6b84e4f74852a92697a48a66a554b218bf",
-      "objectId": "0xbf78cd582888a636a3ccf21aa8e277307b326cd4803f3093bf2ad26187f20549",
+      "objectId": "0xce56c40ba5f1e53cdabcd21c19e8ab74686a115b2ec6e1af65283271615b9dae",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-06-21T10:55:09.488Z",
+      "lastUpdated": "just now",
       "icon": "token",
       "source": "custom",
-      "suinsName": "sandbox-tool.beta-agent.sui"
+      "suinsName": "sandbox-tool.beta-agent.sui",
+      "endEpoch": 511
     },
     {
       "agentSlug": "walrus-bot",
@@ -200,31 +209,33 @@
       "version": "v2.0.0",
       "walrusManifestBlob": "v3dChBEhd9Zs0haFVutcfxDeT22Oo86wCyqocFUXWgs",
       "manifestHash": "0x79976ddc2576ddd52bc3832c97bdfa94627812c0dfce286927ab776c90eec7bd",
-      "objectId": "0xe33f58e1989b8fdbd4be93c365b1be11d1dc552442a2e6037ed2fd75b21d897b",
-      "network": "testnet",
-      "status": "active",
-      "resolutions": "0",
-      "lastUpdated": "2026-06-21T10:55:20.600Z",
-      "icon": "token",
-      "source": "custom",
-      "suinsName": "walrus-read.walrus-bot.sui"
-    },
-    {
-      "agentSlug": "alpha",
-      "skillId": "sui-nft-mint",
-      "name": "sui-nft-mint",
-      "mvrPackage": "@alpha/sui-nft-mint",
-      "version": "v1.0.0",
-      "walrusManifestBlob": "hAb4FD6c43sDrFsYUfr_R0-vhfOtBKsyp6qtSTTgB60",
-      "manifestHash": "6ac83778162be923631dda987954c1a49493b387aeb77fd92364103d0959f2c6",
-      "objectId": "0xd90b03c8083140d3b0e1811bc2f58b8aee81f9b4",
+      "objectId": "0x8e58028a8b55e0aad614bd38eb45f9d25368c872d1ddcc8aef7719f1a5e7a000",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
       "lastUpdated": "just now",
       "icon": "token",
       "source": "custom",
-      "suinsName": "sui-nft-mint.alpha.sui"
+      "suinsName": "walrus-read.walrus-bot.sui",
+      "endEpoch": 511
+    },
+    {
+      "agentSlug": "alpha",
+      "skillId": "sui-nft-mint",
+      "name": "sui-nft-mint",
+      "mvrPackage": "@alpha",
+      "version": "v1.0.0",
+      "walrusManifestBlob": "jm6voSS2Ea66GjeBMEdMafAoPach05N8-Ynw4IJqtM4",
+      "manifestHash": "0x44fe815c8317a3ef94b399c97e6bef2ef0dafc3faca3475486dc3fdd71597ad8",
+      "objectId": "0x977ee38b2402f4f1fd57a242582bee6d82954894",
+      "network": "testnet",
+      "status": "active",
+      "resolutions": "0",
+      "lastUpdated": "just now",
+      "icon": "token",
+      "source": "custom",
+      "suinsName": "sui-nft-mint.alpha.sui",
+      "endEpoch": 511
     }
   ],
   "workflows": [
@@ -235,16 +246,32 @@
       "slug": "firstworkflow-alpha",
       "suinsName": "firstworkflow.alpha.sui",
       "version": "1.0.0",
-      "walrusManifestBlob": "-Re7diK30CtFOUja1una3-MtUP7ijFC4wMgUOP0XrEY",
-      "manifestHash": "2f5763e29fec6d283bd7e645534501eb63b709173a2718d31c568872789f3381",
+      "walrusManifestBlob": "TMg7HkMiIpUjp7XlI4uTYBgzMAmCTaCfbWkEAgdZstk",
+      "manifestHash": "06a2f1c8868f163337e8bfd5bbbfd12b8abc8dd9b0b6236cde27ef0be8323a51",
       "network": "testnet",
       "status": "active",
       "createdAt": "2026-06-22T10:50:31.121Z",
-      "lastUpdated": "2026-06-22T16:03:32.080Z",
+      "lastUpdated": "2026-07-14T08:13:36.726Z",
       "description": "Mint NFT",
       "dependencies": [
         "sui-nft-mint.alpha.sui"
-      ]
+      ],
+      "endEpoch": 511
+    },
+    {
+      "agentSlug": "my-first-agent",
+      "workflowId": "firstworkflow",
+      "name": "firstworkflow",
+      "slug": "firstworkflow-my-first-agent",
+      "suinsName": "firstworkflow.my-first-agent.sui",
+      "version": "1.0.0",
+      "walrusManifestBlob": "",
+      "manifestHash": "",
+      "network": "testnet",
+      "status": "draft",
+      "createdAt": "2026-07-14T08:38:13.302Z",
+      "lastUpdated": "2026-07-14T08:38:13.302Z",
+      "description": "Path B on-chain execution test"
     }
   ]
 }

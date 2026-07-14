@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS skills (
   version             TEXT NOT NULL,
   walrus_manifest_blob TEXT NOT NULL,
   manifest_hash       TEXT NOT NULL,
+  end_epoch           INTEGER,
   object_id           TEXT NOT NULL,
   suins_name          TEXT,
   seal_policy_id      TEXT,
@@ -247,6 +248,7 @@ function rowToSkill(row: SqlRow): RegistrySkillRecord {
     version: str(row.version),
     walrusManifestBlob: str(row.walrus_manifest_blob),
     manifestHash: str(row.manifest_hash),
+    ...(typeof row.end_epoch === "number" ? { endEpoch: row.end_epoch } : {}),
     objectId: str(row.object_id),
     network: str(row.network) === "mainnet" ? "mainnet" : "testnet",
     status: str(row.status) === "archived" ? "archived" : "active",
@@ -363,16 +365,17 @@ export class SqlRegistryStore implements RegistryStore {
     await db.query(
       `INSERT INTO skills
          (agent_slug, skill_id, name, mvr_package, version,
-          walrus_manifest_blob, manifest_hash, object_id, suins_name,
+          walrus_manifest_blob, manifest_hash, end_epoch, object_id, suins_name,
           seal_policy_id, network, status, resolutions, last_updated, icon,
           source, dependencies)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(agent_slug, skill_id) DO UPDATE SET
          name = excluded.name,
          mvr_package = excluded.mvr_package,
          version = excluded.version,
          walrus_manifest_blob = excluded.walrus_manifest_blob,
          manifest_hash = excluded.manifest_hash,
+         end_epoch = excluded.end_epoch,
          object_id = excluded.object_id,
          suins_name = excluded.suins_name,
          seal_policy_id = excluded.seal_policy_id,
@@ -391,6 +394,7 @@ export class SqlRegistryStore implements RegistryStore {
         s.version,
         s.walrusManifestBlob,
         s.manifestHash,
+        s.endEpoch ?? null,
         s.objectId,
         s.suinsName ?? null,
         s.sealPolicyId ?? null,

@@ -11,6 +11,8 @@ const DEFAULT_BASE_URL = "https://api.testnet.harbor.walrus.xyz";
 export interface HarborUploadResult {
   blobId: string;
   manifestHash: string;
+  /** Walrus storage end epoch for the manifest blob (Walrus backend only; undefined for Harbor). */
+  endEpoch?: number;
 }
 
 /**

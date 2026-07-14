@@ -44,6 +44,7 @@ export interface PublishSkillInput {
   walrusManifestBlob?: string;
   /** Real SHA-256 manifest hash (hex) from the upload pipeline. */
   manifestHash?: string;
+  endEpoch?: number;
   /** On-chain SkillDescriptor object id. */
   objectId?: string;
   /** Full qualified SuiNS subname (e.g. `trade.alpha.sui`). */
@@ -315,6 +316,7 @@ export function publishSkill(
     version: `v${input.manifest.version}`,
     walrusManifestBlob,
     manifestHash,
+    ...(input.endEpoch !== undefined ? { endEpoch: input.endEpoch } : {}),
     objectId: input.objectId ?? `0x${randomBytes(20).toString("hex")}`,
     network: input.network ?? resolved.agent.network,
     status: "active",

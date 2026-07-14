@@ -1878,6 +1878,22 @@ export default function WorkflowEditorPage() {
           ([, v]) => typeof v === "string" && v.trim().length > 0,
         ),
       );
+      // The "Extra move-call args" field lets a user type one `key=value` pair
+      // per line for custom Move entry functions (e.g. an NFT mint's `name`,
+      // `description`, `image_url`). Expand it into individual params here —
+      // the executor's buildMoveArgs() already turns any non-reserved param
+      // key into a positional u8-vector argument, so no executor change is
+      // needed; this just gets those keys into the request body correctly.
+      if (typeof params.extraArgs === "string") {
+        for (const line of params.extraArgs.split("\n")) {
+          const eq = line.indexOf("=");
+          if (eq <= 0) continue;
+          const key = line.slice(0, eq).trim();
+          const value = line.slice(eq + 1).trim();
+          if (key && value) params[key] = value;
+        }
+        delete params.extraArgs;
+      }
       runnable.push({
         id: n.id,
         type,
@@ -3299,8 +3315,21 @@ export default function WorkflowEditorPage() {
                   },
                   {
                     category: "blockchain",
-                    tools: [{ label: "Sui", subtitle: "Execute PTB" }],
-                    count: 1,
+                    tools: [
+                      { label: "Sui", subtitle: "Execute PTB" },
+                      {
+                        label: "Sui",
+                        subtitle: "Mint NFT (nft_mint package)",
+                        params: {
+                          movePackage:
+                            "0x0a351793399bc2f97bc292db26c4403db4af07a84bcb8e5fad7e343b06769331",
+                          entry: "nft::mint_and_transfer",
+                          extraArgs:
+                            "name=My NFT\ndescription=Minted from AgentOS\nimage_url=https://example.com/nft.png",
+                        },
+                      },
+                    ],
+                    count: 2,
                   },
                   {
                     category: "coordination",
@@ -3326,7 +3355,7 @@ export default function WorkflowEditorPage() {
                     <div className="space-y-1 border-t border-pure-black/10 p-2">
                       {cat.tools.map((tool) => (
                         <div
-                          key={tool.label}
+                          key={`${tool.label}-${tool.subtitle}`}
                           onClick={() => {
                             setNodes((nds) => [
                               ...nds,
@@ -3340,6 +3369,9 @@ export default function WorkflowEditorPage() {
                                 data: {
                                   label: tool.label,
                                   subtitle: tool.subtitle,
+                                  ...("params" in tool && tool.params
+                                    ? { params: tool.params }
+                                    : {}),
                                 },
                               },
                             ]);

@@ -165,6 +165,7 @@ export class LocalRegistry {
     walrusManifestBlob?: string;
     /** Real SHA-256 manifest hash (hex) from the upload pipeline. */
     manifestHash?: string;
+    endEpoch?: number;
     /** On-chain SkillDescriptor object id. */
     objectId?: string;
     /** Full qualified SuiNS subname (e.g. `trade.alpha.sui`). */

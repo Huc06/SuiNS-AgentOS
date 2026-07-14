@@ -567,22 +567,26 @@ describe("call-sub-agent executor", () => {
     expect(ctx.execute).not.toHaveBeenCalled();
   });
 
-  it("degrades to error (does not throw) when the builder rejects", async () => {
+  it("degrades to a skipped step (does not throw) when the builder rejects", async () => {
     const build = makeBuild({
       buildCallSubAgentTx: vi.fn(async () => {
         throw new Error("Missing required capability: defi:swap");
       }),
     });
     const ctx = makeCtx({ build });
-    // The executor itself throws; runWorkflow catches it. Assert it rejects so
-    // the engine records an error step.
-    await expect(
-      executors["call-sub-agent"](
-        node("call-sub-agent", { skill: "trade.alpha.sui" }),
-        ctx,
-        [],
-      ),
-    ).rejects.toThrow(/Missing required capability/);
+    // The executor now catches builder errors and returns a "skipped" step
+    // instead of throwing, so one bad node degrades gracefully rather than
+    // aborting the whole workflow run (see executors.ts's call-sub-agent).
+    const r = await executors["call-sub-agent"](
+      node("call-sub-agent", { skill: "trade.alpha.sui" }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(
+      /Missing required capability/,
+    );
+    expect(ctx.execute).not.toHaveBeenCalled();
   });
 });
 

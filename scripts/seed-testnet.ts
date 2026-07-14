@@ -281,14 +281,34 @@ async function main() {
         (s as { agentSlug?: string }).agentSlug === skill.agent,
     );
 
-    // Skip if already has real blob (not placeholder)
+    // Skip only if already has a real, STILL-REACHABLE blob (not a placeholder
+    // and not expired — Walrus testnet blobs die after their epoch lifetime,
+    // and the previous "already seeded" check only looked at the blobId's
+    // shape, so it kept skipping re-upload for blobs that had already expired).
     if (existingSkill) {
       const blob =
         (existingSkill as { walrusManifestBlob?: string }).walrusManifestBlob ??
         "";
       if (!blob.startsWith("walrus://")) {
-        console.log(`   ⏭  ${skill.agent}/${skill.skillId} — already seeded`);
-        continue;
+        try {
+          const statusRes = await fetch(
+            `${WALRUS_AGGREGATOR}/v1/blobs/${encodeURIComponent(blob)}`,
+            { method: "HEAD" },
+          );
+          if (statusRes.ok) {
+            console.log(
+              `   ⏭  ${skill.agent}/${skill.skillId} — already seeded (blob alive)`,
+            );
+            continue;
+          }
+          console.log(
+            `   ♻  ${skill.agent}/${skill.skillId} — existing blob expired, re-uploading`,
+          );
+        } catch {
+          console.log(
+            `   ♻  ${skill.agent}/${skill.skillId} — could not verify existing blob, re-uploading`,
+          );
+        }
       }
     }
 
@@ -316,23 +336,29 @@ async function main() {
 
     // Upload manifest to Walrus
     let blobId = `walrus://blob/${skill.skillId}-${skill.version}`;
+    let endEpoch: number | undefined;
     try {
-      const uploadRes = await fetch(`${WALRUS_PUBLISHER}/v1/blobs`, {
+      const uploadRes = await fetch(`${WALRUS_PUBLISHER}/v1/blobs?epochs=53`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: manifestBytes,
       });
       if (uploadRes.ok) {
         const uploadData = (await uploadRes.json()) as {
-          newlyCreated?: { blobObject?: { blobId?: string } };
-          alreadyCertified?: { blobId?: string };
+          newlyCreated?: {
+            blobObject?: { blobId?: string; storage?: { endEpoch?: number } };
+          };
+          alreadyCertified?: { blobId?: string; endEpoch?: number };
         };
         blobId =
           uploadData.newlyCreated?.blobObject?.blobId ??
           uploadData.alreadyCertified?.blobId ??
           blobId;
+        endEpoch =
+          uploadData.newlyCreated?.blobObject?.storage?.endEpoch ??
+          uploadData.alreadyCertified?.endEpoch;
         console.log(
-          `   ✓  ${skill.agent}/${skill.skillId} — uploaded to Walrus: ${blobId.slice(0, 16)}…`,
+          `   ✓  ${skill.agent}/${skill.skillId} — uploaded to Walrus: ${blobId.slice(0, 16)}… (endEpoch=${endEpoch ?? "?"})`,
         );
       } else {
         console.log(
@@ -412,6 +438,7 @@ async function main() {
       version: skill.version,
       walrusManifestBlob: blobId,
       manifestHash,
+      ...(endEpoch !== undefined ? { endEpoch } : {}),
       objectId,
       network,
       status: "active",

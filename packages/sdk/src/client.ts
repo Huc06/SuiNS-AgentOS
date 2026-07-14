@@ -468,9 +468,13 @@ export class AgentOSClient {
       );
     }
 
-    // 3. Compute SHA-256 hash and verify against expected
+    // 3. Compute SHA-256 hash and verify against expected. `expectedHash`
+    // sometimes carries a `0x` prefix (some registry writers add it) while
+    // `computeManifestHash` never does — normalize both before comparing so a
+    // prefix mismatch alone doesn't fail an otherwise-correct manifest.
     const actualHash = computeManifestHash(content);
-    if (actualHash !== expectedHash) {
+    const normalize = (h: string) => h.trim().toLowerCase().replace(/^0x/, "");
+    if (normalize(actualHash) !== normalize(expectedHash)) {
       throw new Error(
         `Manifest integrity check failed: expected ${expectedHash}, got ${actualHash}`,
       );
@@ -594,6 +598,7 @@ export class AgentOSClient {
     // 2. Upload manifest to Walrus (or use provided blobId)
     let blobId: string;
     let manifestHash: string;
+    let endEpoch: number | undefined;
     if (providedBlobId) {
       blobId = providedBlobId;
       const serialized = serializeManifest(manifest);
@@ -604,6 +609,7 @@ export class AgentOSClient {
       });
       blobId = uploadResult.blobId;
       manifestHash = uploadResult.manifestHash;
+      endEpoch = uploadResult.endEpoch;
     }
 
     // 3. Determine whether this is a create or update
@@ -770,6 +776,7 @@ export class AgentOSClient {
         manifest,
         walrusManifestBlob: blobId,
         manifestHash,
+        endEpoch,
         objectId: descriptorObjectId,
         suinsName,
         sealPolicyId,
@@ -1365,6 +1372,7 @@ export class AgentOSClient {
 
     // 5. Upload via the configured storage backend.
     let blobId: string;
+    let endEpoch: number | undefined;
     if (this.#storageBackend === "harbor") {
       // Harbor (Seal-encrypted gateway) — opt-in. Requires API key + space.
       const apiKey = this.#harborApiKey ?? HarborClient.getApiKey();
@@ -1390,10 +1398,11 @@ export class AgentOSClient {
       });
       const uploaded = await walrus.uploadBlob(content, { epochs: DEFAULT_WALRUS_EPOCHS });
       blobId = uploaded.blobId;
+      endEpoch = uploaded.endEpoch;
     }
 
     // 6. Return blobId + hash
-    return { blobId, manifestHash };
+    return { blobId, manifestHash, endEpoch };
   }
 
   tx = {

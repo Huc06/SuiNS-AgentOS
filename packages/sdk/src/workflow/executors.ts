@@ -102,6 +102,7 @@ const RESERVED_PARAM_KEYS = new Set([
  "private", "sealPolicyId", "filename", "skill", "cost", "agent", "child",
  "spendLimit", "expiryMs", "allowedSkills", "allowedCapabilities", "kind",
  "score", "share", "recipient", "namespace", "text", "query", "limit",
+ "extraArgs",
 ]);
 function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
  if (!params) return [];
@@ -234,7 +235,15 @@ const harbor: StepExecutor = async (node, ctx) => {
     let encrypted: Uint8Array | null = null;
     if (ctx.seal) {
       try {
-        const real = await ctx.seal(plaintext, sealPolicyId);
+        // 8-second timeout: Seal key-server lookups can hang on testnet when
+        // the sealPolicyId is invalid or key servers are unreachable.
+        const timeout = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 8000),
+        );
+        const real = await Promise.race([
+          ctx.seal(plaintext, sealPolicyId),
+          timeout,
+        ]);
         if (real && real.length > 0) {
           encrypted = real;
           sealMode = "real-seal";
@@ -399,12 +408,32 @@ const sui: StepExecutor = async (node, ctx) => {
     };
   }
 
-  const result = await ctx.execute(tx);
-  return {
-    status: "done",
-    txDigest: result.digest,
-    output: { digest: result.digest, objectChanges: result.objectChanges },
-  };
+  try {
+    const result = await ctx.execute(tx);
+    return {
+      status: "done",
+      txDigest: result.digest,
+      output: { digest: result.digest, objectChanges: result.objectChanges },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Passport or package object doesn't exist on-chain yet (demo/seeded registry
+    // data). Degrade to a clear skip so the rest of the workflow still runs.
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — passport or package not found on testnet. Mint a real AgentPassport to enable on-chain recording.",
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
 };
 
 /** Read a node param as a string, or `undefined` when missing/non-string. */
@@ -648,7 +677,26 @@ const delegate: StepExecutor = async (node, ctx) => {
     })(),
   });
 
-  const result = await ctx.execute(tx);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(tx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Delegate: skipped — passport not found on testnet. Mint a real AgentPassport to enable delegation.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   const capId = createdObjectId(
     result.objectChanges,
     "delegation::DelegationCap",
@@ -756,26 +804,57 @@ const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
       ctx.passport?.id)
     : strParam(node, "subjectPassportId");
 
-  const built = await ctx.build.buildCallSubAgentTx({
-    suinsName,
-    ...(node.params?.params && typeof node.params.params === "object"
-      ? { params: node.params.params as Record<string, unknown> }
-      : ctx.params
-        ? { params: ctx.params }
+  let built: Awaited<ReturnType<typeof ctx.build.buildCallSubAgentTx>>;
+  try {
+    built = await ctx.build.buildCallSubAgentTx({
+      suinsName,
+      ...(node.params?.params && typeof node.params.params === "object"
+        ? { params: node.params.params as Record<string, unknown> }
+        : ctx.params
+          ? { params: ctx.params }
+          : {}),
+      ...(strArrayParam(node, "agentCapabilities")
+        ? { agentCapabilities: strArrayParam(node, "agentCapabilities") }
         : {}),
-    ...(strArrayParam(node, "agentCapabilities")
-      ? { agentCapabilities: strArrayParam(node, "agentCapabilities") }
-      : {}),
-    ...(delegationCapId ? { delegationCapId } : {}),
-    ...(subjectPassportId ? { subjectPassportId } : {}),
-    ...(typeof node.params?.cost === "number"
-      ? { cost: node.params.cost }
-      : typeof node.params?.cost === "string" && node.params.cost.length > 0
-        ? { cost: Number(node.params.cost) }
-        : {}),
-  });
+      ...(delegationCapId ? { delegationCapId } : {}),
+      ...(subjectPassportId ? { subjectPassportId } : {}),
+      ...(typeof node.params?.cost === "number"
+        ? { cost: node.params.cost }
+        : typeof node.params?.cost === "string" && node.params.cost.length > 0
+          ? { cost: Number(node.params.cost) }
+          : {}),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      status: "skipped",
+      output: {
+        note: `Call Sub-Agent: skipped — could not build PTB for skill "${suinsName}": ${msg}`,
+      },
+    };
+  }
 
-  const result = await ctx.execute(built.transaction);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(built.transaction);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("ArityMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Call Sub-Agent: skipped — on-chain execution failed (${msg.slice(0, 120)}). Ensure skill and passport are published on testnet.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   // When the skill did NOT resolve (an older/saved canvas graph passed the agent
   // name instead of a real skill) the builder ran the delegation accounting only
   // — no skill move-call. Surface a clear note so the degraded run is legible,
@@ -872,7 +951,26 @@ const attest: StepExecutor = async (node, ctx) => {
     ...(recipient ? { recipient } : { share: true }),
   });
 
-  const result = await ctx.execute(tx);
+  let result: Awaited<ReturnType<typeof ctx.execute>>;
+  try {
+    result = await ctx.execute(tx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("404") ||
+      msg.includes("TypeMismatch") ||
+      msg.includes("dry_run_failed") ||
+      msg.includes("not found")
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: `Attest: skipped — passport not found on testnet. Mint a real AgentPassport to enable on-chain attestations.`,
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   return {
     status: "done",
     txDigest: result.digest,
@@ -993,7 +1091,21 @@ const memory: StepExecutor = async (node, ctx, prevOutputs) => {
   }
   const namespace = memoryNamespace(node, ctx);
   const text = buildMemoryText(node, prevOutputs);
-  const result = await ctx.memory.remember(namespace, text);
+  let result: unknown;
+  try {
+    result = await ctx.memory.remember(namespace, text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Auth failure (401/403) or relayer unavailable — skip gracefully rather
+    // than failing the whole run. Memory is best-effort.
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unavailable")) {
+      return {
+        status: "skipped",
+        output: { note: `Memory: skipped — relayer auth failed (${msg.slice(0, 80)}). Check MEMWAL_ACCOUNT_ID and MEMWAL_DELEGATE_KEY.` },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   const blobId = extractBlobId(result);
   return {
     status: "done",
