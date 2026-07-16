@@ -6,6 +6,8 @@ import {
   DEFAULT_WALRUS_EPOCHS,
   HarborClient,
   memwalFromEnv,
+  passportFromRecord,
+  descriptorFromRecord,
   resolveAgentAddress,
   runWorkflow,
   sealEncryptReal,
@@ -276,10 +278,50 @@ export async function POST(request: NextRequest, context: RouteContext) {
   });
 
   const resolve: RunResolveBundle = {
-    resolveAgent: (name) => agentClient.resolveAgent(name),
-    resolveSkill: (nameOrId, agentName) =>
-      agentClient.resolveSkill(nameOrId, agentName),
-    listSkills: (agentName) => agentClient.listSkills(agentName),
+    // Try on-chain SuiNS resolution first (agentClient.resolveAgent already
+    // does this), then fall back to the SAME async RegistryStore this route
+    // resolved `agent` from at the top (`registry`) — NOT agentClient's own
+    // internal LocalRegistry, which always reads the local `.agentos/
+    // registry.json` file. On Vercel with STORAGE_BACKEND=postgres, that file
+    // is never written to (the Postgres store is), so falling back to it here
+    // would silently resolve stale/seed data instead of what was just
+    // published. See docs/storage-adapter.md and lib/db.ts.
+    resolveAgent: async (name) => {
+      try {
+        return await agentClient.resolveAgent(name);
+      } catch {
+        const found = await registry.resolveAgent(name);
+        if (!found) throw new Error(`Agent not found: ${name}`);
+        return passportFromRecord(found.agent);
+      }
+    },
+    resolveSkill: async (nameOrId, agentName) => {
+      try {
+        return await agentClient.resolveSkill(nameOrId, agentName);
+      } catch {
+        const skills = agentName
+          ? await registry.listSkills(agentName)
+          : (await registry.getSkills());
+        const record = skills.find(
+          (s) =>
+            s.skillId === nameOrId ||
+            s.mvrPackage === nameOrId ||
+            s.suinsName === nameOrId,
+        );
+        if (!record) throw new Error(`Skill not found: ${nameOrId}`);
+        return descriptorFromRecord(record);
+      }
+    },
+    listSkills: async (agentName) => {
+      try {
+        const skills = await agentClient.listSkills(agentName);
+        if (skills.length > 0) return skills;
+      } catch {
+        // fall through to the registry store below
+      }
+      const records = await registry.listSkills(agentName);
+      return records.map(descriptorFromRecord);
+    },
     downloadManifest: (blobId, expectedHash, options) =>
       agentClient.downloadManifest(blobId, expectedHash, options),
     // Resolve a `.sui` name to its on-chain 0x address (SuiNS), with a registry
@@ -293,8 +335,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         // SuiNS lookup failed (network / unregistered) → try the registry.
       }
       try {
-        const r = await agentClient.resolveAgent(name);
-        return r.runtimeWallet ?? r.owner ?? null;
+        const found = await registry.resolveAgent(name);
+        if (!found) return null;
+        return found.agent.runtimeWallet ?? null;
       } catch {
         return null;
       }
