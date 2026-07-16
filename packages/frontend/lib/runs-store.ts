@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { createDefaultRunsStore, type RunsStore } from "@agentos-sui/sdk/node";
 import type { WorkflowRunRecord } from "@agentos-sui/sdk/node";
 
+import { getPostgresStores } from "./db";
+
 export type { WorkflowRunRecord };
 
 /**
@@ -14,14 +16,17 @@ export type { WorkflowRunRecord };
  * Behavior is otherwise identical: runs live next to the registry (the repo-root
  * `.agentos/` dir, or `/tmp` on Vercel) and legacy `runs.json` is still read for
  * back-compat. `STORAGE_BACKEND=memory` switches to an ephemeral store for a
- * read-only serverless filesystem.
+ * read-only serverless filesystem; `STORAGE_BACKEND=postgres` switches to a
+ * real shared Postgres-backed store (see lib/db.ts) — required on Vercel to
+ * avoid the per-instance `/tmp` data-loss bug the file backend has there.
  */
 
-type StorageBackend = "file" | "memory";
+type StorageBackend = "file" | "memory" | "postgres";
 
 function selectedBackend(): StorageBackend {
   const raw = process.env.STORAGE_BACKEND?.trim().toLowerCase();
   if (raw === "memory") return "memory";
+  if (raw === "postgres") return "postgres";
   return "file";
 }
 
@@ -45,6 +50,11 @@ function getRunsStore(): RunsStore {
   const backend = selectedBackend();
   if (cached && cached.backend === backend) {
     return cached.store;
+  }
+  if (backend === "postgres") {
+    const store = getPostgresStores().runs;
+    cached = { backend, store };
+    return store;
   }
   const store = createDefaultRunsStore({
     cwd: process.cwd(),

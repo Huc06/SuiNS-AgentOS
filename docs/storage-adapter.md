@@ -86,9 +86,10 @@ diverge** in behavior — they differ only in *where bytes land*.
 
 | Backend | Impl (`@agentos/sdk/node`) | Durability | When |
 | --- | --- | --- | --- |
-| **file** (default) | `FileRegistryStore`, `FileRunsStore` | Atomic temp-file + `fs.rename` for the registry; **one file per run** in `runs.d/` for runs | Local dev, Vercel `/tmp`, any writable fs. The default. |
-| **memory** | `InMemoryRegistryStore`, `InMemoryRunsStore` | Ephemeral (process lifetime) | Tests; read-only serverless fs with no writable `/tmp`. |
-| **DB** (you wire it) | `SqlRegistryStore`, `SqlRunsStore` (+ `createPostgresStores`/`createD1Stores`) | Durable, multi-instance, read-after-write | Production on Workers/Vercel where the fs is ephemeral. |
+| **file** (default) | `FileRegistryStore`, `FileRunsStore` | Atomic temp-file + `fs.rename` for the registry; **one file per run** in `runs.d/` for runs | Local dev only. **NOT safe on Vercel** — `/tmp` is per-instance, so concurrent requests can land on different instances with no shared filesystem, and any instance can cold-start and reset to the bundled seed at any time. Observed real bug: publishing a workflow then refreshing (or navigating away and back) can show a stale/reseeded workflow, because the read landed on an instance that never saw the write. |
+| **memory** | `InMemoryRegistryStore`, `InMemoryRunsStore` | Ephemeral (process lifetime) | Tests; read-only serverless fs with no writable `/tmp`. Same per-instance problem as `file`, plus it doesn't even persist across a cold start. |
+| **postgres** | `SqlRegistryStore`, `SqlRunsStore` via `createPostgresStores` (wired in `lib/db.ts`) | Durable, multi-instance, read-after-write | **Production on Vercel.** Real shared state — every instance reads/writes the same database, so the `/tmp` data-loss class of bug is structurally impossible. Set `DATABASE_URL` + `STORAGE_BACKEND=postgres`; run `scripts/schema.sql` once. |
+| **d1** | `SqlRegistryStore`/`SqlRunsStore` via `createD1Stores` | Durable, multi-instance | You wire it (see §6A) — needed only for a Cloudflare Workers deploy, not Vercel. |
 
 Why the file backend is now safe:
 
@@ -109,9 +110,10 @@ The frontend selects a backend at runtime via `STORAGE_BACKEND`
 
 | Value | Effect |
 | --- | --- |
-| _(unset)_ / `file` | File-backed stores (the durable default). |
-| `memory` | In-memory stores (ephemeral; for a read-only serverless fs). |
-| `d1` / `postgres` | **You add these** — one `case` that builds a `SqlRegistryStore`/`SqlRunsStore` (see §6). The route layer is untouched. |
+| _(unset)_ / `file` | File-backed stores. **Not safe on Vercel** (see the table above) — use only for local dev. |
+| `memory` | In-memory stores (ephemeral; for a read-only serverless fs, e.g. Cloudflare Workers without D1). |
+| `postgres` | **Wired and production-ready.** Neon/Vercel Postgres via `lib/db.ts`. Requires `DATABASE_URL`. |
+| `d1` | **You add this** — one `case` that builds a `SqlRegistryStore`/`SqlRunsStore` via `createD1Stores` (see §6A). Only needed for a Cloudflare Workers deploy. |
 
 Path resolution (`AGENTOS_REGISTRY_PATH` / `AGENTOS_RUNS_PATH` env overrides and
 the Vercel `/tmp` seed-copy) lives in `packages/sdk/src/storage/factory.ts`
@@ -264,24 +266,52 @@ side is small: build a `SqlDatabase`, then add a `STORAGE_BACKEND` case.
 > rely on the FK `ON DELETE CASCADE` in the schema (or batch via `d1.batch([...])`).
 > See the `createD1Stores` TODO in `sql-store.ts`.
 
-### B. Vercel Postgres / Neon / `pg`
+### B. Vercel Postgres / Neon (wired — this is what the deployed app uses)
 
-1. **(USER)** Provision the DB and run `SQL_SCHEMA` (a migration, or `psql -f schema.sql`).
-2. **(CODE)** Add a `postgres` case:
-   ```ts
-   import { sql } from "@vercel/postgres";
-   import { createPostgresStores } from "@agentos/sdk/node";
-   // ...
-   if (backend === "postgres") {
-     const { registry, runs } = createPostgresStores((text, params) =>
-       sql.query(text, params as unknown[]),
-     );
-   }
+`@vercel/postgres` is deprecated (Vercel transitioned all Postgres storage to
+Neon's native integration in Q4 2024–Q1 2025); this uses
+[`@neondatabase/serverless`](https://neon.tech/docs/serverless/serverless-driver)
+directly, per Neon's own recommendation for serverless environments.
+
+1. **(USER)** Provision a database:
+   - Via Vercel: **Storage tab → Create Database → Neon (Serverless Postgres)**.
+     This sets `DATABASE_URL` in your project's env automatically.
+   - Or directly via [console.neon.tech](https://console.neon.tech): create a
+     project, copy the connection string from **Connection Details**.
+2. **(USER)** Apply the schema once:
+   ```bash
+   psql "$DATABASE_URL" -f scripts/schema.sql
+   # or paste scripts/schema.sql into the Neon SQL Editor
    ```
-   `createPostgresStores` rewrites the stores' `?` placeholders to `$1, $2, …`.
-   For true atomicity, wrap a `BEGIN/COMMIT` using a dedicated pooled client (the
-   `transaction` TODO in `sql-store.ts`).
-3. **(USER)** Set `STORAGE_BACKEND=postgres` and the DB connection env vars; seed once.
+3. **(USER, optional)** Migrate existing `.agentos/registry.json` data:
+   ```bash
+   cd packages/frontend
+   DATABASE_URL="..." npx tsx ../../scripts/migrate-to-postgres.ts
+   ```
+   Safe to re-run — every write is an upsert.
+4. **(USER)** Set env and deploy:
+   ```
+   DATABASE_URL=postgresql://...
+   STORAGE_BACKEND=postgres
+   ```
+
+The wiring (already in the codebase, no further code changes needed):
+- `packages/frontend/lib/db.ts` — `getPostgresStores()`, a cached
+  `{ registry, runs }` pair built from `neon(DATABASE_URL)` passed to
+  `createPostgresStores`.
+- `lib/registry-server.ts` / `lib/runs-store.ts` — `STORAGE_BACKEND=postgres`
+  routes to `getPostgresStores()` instead of the file/memory factory.
+- `app/api/workflows/[slug]/run/route.ts`'s `resolve` bundle also falls back to
+  the SAME async `RegistryStore` (whatever `STORAGE_BACKEND` resolves to)
+  instead of `AgentOSClient`'s own internal file-based `LocalRegistry` — that
+  internal registry always reads the local `.agentos/registry.json` path
+  regardless of `STORAGE_BACKEND`, which would silently defeat the Postgres
+  backend for skill/agent resolution during a workflow run.
+
+For true multi-statement atomicity beyond what `createPostgresStores` provides
+out of the box, wrap a `BEGIN/COMMIT` using a dedicated pooled client (the
+`transaction` TODO in `sql-store.ts`) — not required for the common
+single-statement paths this app uses.
 
 ### C. Turso / libSQL, Neon serverless, etc.
 
