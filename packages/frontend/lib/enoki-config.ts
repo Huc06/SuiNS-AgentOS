@@ -1,4 +1,3 @@
-import { getFullnodeUrl } from '@mysten/sui/client';
 import { fromBase64, normalizeSuiAddress, toHex } from '@mysten/sui/utils';
 import type { Transaction } from '@mysten/sui/transactions';
 
@@ -35,7 +34,7 @@ export function getSuiRpcUrl(network: SuiNetworkName = getSuiNetwork()): string 
     process.env.SUI_RPC_URL?.trim() ||
     process.env.NEXT_PUBLIC_SUI_RPC_URL?.trim();
   if (override) return override;
-  return PUBLIC_RPC_URLS[network] ?? getFullnodeUrl(network);
+  return PUBLIC_RPC_URLS[network] ?? `https://fullnode.${network}.sui.io:443`;
 }
 
 export function getAgentosPackageId(): string | undefined {

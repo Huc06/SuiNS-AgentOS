@@ -1,4 +1,6 @@
-import type { ClientWithCoreApi } from "@mysten/sui/experimental";
+import type { ClientWithExtensions, CoreClient } from "@mysten/sui/client";
+
+type ClientWithCoreApi = ClientWithExtensions<{ core: CoreClient }>;
 import type { Signer } from "@mysten/sui/cryptography";
 import { Transaction } from "@mysten/sui/transactions";
 import type { TransactionObjectArgument } from "@mysten/sui/transactions";

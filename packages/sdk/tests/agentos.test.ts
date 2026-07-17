@@ -1,5 +1,7 @@
-import type { ClientWithCoreApi } from "@mysten/sui/experimental";
 import { describe, expect, it } from "vitest";
+import type { ClientWithExtensions, CoreClient } from "@mysten/sui/client";
+
+type ClientWithCoreApi = ClientWithExtensions<{ core: CoreClient }>;
 
 import { agentOS } from "../src/agentos.js";
 import { AgentOSClient } from "../src/client.js";

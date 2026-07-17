@@ -83,6 +83,19 @@ function pickPayload(node: WorkflowNode, ctx: RunContext): unknown {
   );
 }
 
+/** Build NFT metadata from the canvas' individual fields when any is supplied. */
+function nftMetadataPayload(node: WorkflowNode): Record<string, string> | undefined {
+  const name = strParam(node, "nftName");
+  const description = strParam(node, "nftDescription");
+  const image = strParam(node, "nftImageUri");
+  if (!name && !description && !image) return undefined;
+  return {
+    ...(name ? { name } : {}),
+    ...(description ? { description } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
 /** Parse a `package::module::function` (or `module::function`) entry target. */
 function parseTarget(
   movePackage: string,
@@ -246,7 +259,36 @@ const harbor: StepExecutor = async (node, ctx) => {
     };
   }
 
-  const plaintext = toBytes(pickPayload(node, ctx));
+  const fileUrl = strParam(node, "fileUrl") ?? strParam(node, "imageUrl");
+  let sourceImage:
+    | { filename: string; contentType: "image/jpeg" | "image/png"; bytes: Uint8Array }
+    | undefined;
+  let plaintext: Uint8Array;
+  if (fileUrl) {
+    if (!ctx.media) {
+      return {
+        status: "error",
+        error: "harbor image URL requires a server-side media downloader",
+      };
+    }
+    try {
+      sourceImage = await ctx.media.fetchImage(fileUrl);
+      plaintext = sourceImage.bytes;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { status: "error", error: `Harbor image download failed: ${message}` };
+    }
+  } else {
+    plaintext = toBytes(nftMetadataPayload(node) ?? pickPayload(node, ctx));
+  }
+  const sourceOutput = sourceImage
+    ? {
+        sourceUrl: fileUrl,
+        sourceFilename: sourceImage.filename,
+        sourceContentType: sourceImage.contentType,
+        sourceBytes: plaintext.length,
+      }
+    : {};
 
   // PRIVATE → encrypt (real Seal, else AES envelope). PUBLIC → upload the plain
   // payload (no Seal). `payload` is the bytes we actually store.
@@ -293,9 +335,16 @@ const harbor: StepExecutor = async (node, ctx) => {
     const ext = isPrivate ? "seal" : "json";
     const filename =
       strParam(node, "filename") ??
-      `${sealPolicyId || "public"}-${Date.now()}.${ext}`;
+      (sourceImage
+        ? sourceImage.filename
+        : `${sealPolicyId || "public"}-${Date.now()}.${ext}`);
+    const uploadOptions = sourceImage
+      ? { contentType: sourceImage.contentType }
+      : undefined;
     try {
-      const r = await ctx.harbor.upload(payload, filename);
+      const r = uploadOptions
+        ? await ctx.harbor.upload(payload, filename, uploadOptions)
+        : await ctx.harbor.upload(payload, filename);
       if (r.blobId) {
         return {
           status: "done",
@@ -307,6 +356,7 @@ const harbor: StepExecutor = async (node, ctx) => {
             bytes: payload.length,
             encryption: sealMode,
             storage: "harbor",
+            ...sourceOutput,
             ...(sealMode === "aes-demo"
               ? { note: "AES demo envelope (real Seal unavailable)" }
               : {}),
@@ -349,6 +399,7 @@ const harbor: StepExecutor = async (node, ctx) => {
         bytes: payload.length,
         encryption: sealMode,
         storage: "walrus",
+        ...sourceOutput,
         ...(notes.length > 0 ? { note: notes.join("; ") } : {}),
         ...(harborError ? { harborError } : {}),
       },

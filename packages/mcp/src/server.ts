@@ -8,7 +8,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { z } from "zod";
 import {
@@ -52,8 +52,11 @@ function createAgentOSClient(registryPath: string): AgentOSClient | null {
 
     // We need a SuiClient-like object created from the configured RPC.
     const network = config.network ?? "testnet";
-    const url = rpcUrl ?? getFullnodeUrl(network);
-    const suiClient = new SuiClient({ url });
+    const grpcNetwork = network === "mainnet" ? "mainnet" : "testnet";
+    const suiClient = new SuiGrpcClient({
+      network: grpcNetwork,
+      baseUrl: rpcUrl ?? `https://fullnode.${grpcNetwork}.sui.io:443`,
+    });
 
     // Storage backend: default to Walrus (skills are stored on the public
     // Walrus publisher/aggregator). Only use Harbor when explicitly opted in

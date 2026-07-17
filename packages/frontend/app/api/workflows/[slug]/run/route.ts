@@ -4,12 +4,14 @@ import {
   AgentOSClient,
   contracts,
   DEFAULT_WALRUS_EPOCHS,
+  fetchRemoteImage,
   HarborClient,
   memwalFromEnv,
   passportFromRecord,
   descriptorFromRecord,
   resolveAgentAddress,
   runWorkflow,
+  sealEncryptHarbor,
   sealEncryptReal,
   serializeManifest,
   validateManifest,
@@ -20,7 +22,7 @@ import {
   type RunContext,
   type WorkflowGraph,
 } from "@agentos-sui/sdk/node";
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -43,6 +45,7 @@ import { sponsoredExecuteServer } from "../../../../../lib/sponsored-execute";
 // skipped. Idempotent; never logs values.
 loadRootEnv();
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -164,7 +167,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const packageId = getAgentosPackageId();
   const graph = parsed.data.graph ?? defaultGraph(agent.passportId, packageId);
 
-  const suiClient = new SuiClient({ url: getSuiRpcUrl(getSuiNetwork()) });
+  const suiClient = new SuiGrpcClient({
+    network: getSuiNetwork() === "mainnet" ? "mainnet" : "testnet",
+    baseUrl: `https://fullnode.${getSuiNetwork() === "mainnet" ? "mainnet" : "testnet"}.sui.io:443`,
+  });
 
   // Walrus-backed uploader (the SDK's storage client). Serializes a real
   // manifest, otherwise uploads JSON/bytes verbatim.
@@ -215,11 +221,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const harborApiKey = process.env.HARBOR_API_KEY?.trim();
   const harborSpaceId = process.env.HARBOR_SPACE_ID?.trim();
   const harborBucketId = process.env.HARBOR_BUCKET_ID?.trim();
+  const harborSealPolicyId = process.env.HARBOR_SEAL_POLICY_ID?.trim();
   const harborBaseUrl = process.env.HARBOR_BASE_URL?.trim();
   const harbor =
     harborApiKey && harborSpaceId && harborBucketId
       ? {
-          upload: async (content: Uint8Array, filename: string) => {
+          ...(harborSealPolicyId ? { sealPolicyId: harborSealPolicyId } : {}),
+          upload: async (
+            content: Uint8Array,
+            filename: string,
+            options?: { contentType?: string },
+          ) => {
             const client = new HarborClient({
               apiKey: harborApiKey,
               ...(harborBaseUrl ? { baseUrl: harborBaseUrl } : {}),
@@ -229,7 +241,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
               harborBucketId,
               content,
               filename,
-              { attempts: 10, intervalMs: 1000 }, // 10 seconds timeout (falls back to Walrus on failure)
+              { attempts: 30, intervalMs: 1000 }, // Harbor docs: testnet certification commonly completes within 30 seconds.
+              options,
             );
             const base = (
               harborBaseUrl ?? "https://api.testnet.harbor.walrus.xyz"
@@ -244,28 +257,36 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
       : null;
 
-  // REAL Mysten Seal encryptor (write path). Threshold-seals the bytes to the
-  // published AgentOS bucket_policy package using the network's allowlisted key
-  // servers, fetched via the read-only SuiClient. Returns null on ANY failure
-  // (no published package, offline, no key servers) → the harbor executor then
-  // falls back to the AES envelope, so a run never hard-fails. The SDK helper is
-  // self-contained and signer-agnostic; we only hand it the read-only client +
-  // the package id + the network. Seal supports testnet/mainnet only, so we map
-  // devnet → testnet.
+  // Active Harbor private buckets require raw Seal ciphertext under Harbor's
+  // canonical bucket-policy package. The configured policy takes precedence;
+  // the older AgentOS policy helper remains available for non-Harbor runs.
   const sealNetwork = getSuiNetwork() === "mainnet" ? "mainnet" : "testnet";
-  const seal = packageId
-    ? async (data: Uint8Array, sealPolicyId: string) => {
-        const r = await sealEncryptReal({
+  const harborSealSuiClient = harborSealPolicyId
+    ? new SuiGrpcClient({
+        network: sealNetwork,
+        baseUrl: `https://fullnode.${sealNetwork}.sui.io:443`,
+      })
+    : null;
+  const seal = harborSealPolicyId
+    ? async (data: Uint8Array, sealPolicyId: string) =>
+        sealEncryptHarbor({
           data,
           sealPolicyId,
-          suiClient,
-          packageId,
-          network: sealNetwork,
-          threshold: 1,
-        });
-        return r ? r.bytes : null;
-      }
-    : null;
+          suiClient: harborSealSuiClient!,
+        })
+    : packageId
+      ? async (data: Uint8Array, sealPolicyId: string) => {
+          const r = await sealEncryptReal({
+            data,
+            sealPolicyId,
+            suiClient,
+            packageId,
+            network: sealNetwork,
+            threshold: 1,
+          });
+          return r ? r.bytes : null;
+        }
+      : null;
 
   // A server-side AgentOSClient backs the read-only `resolve` bundle and the
   // unsigned-PTB `build` bundle. It shares the one registry file with the rest
@@ -429,6 +450,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // / attest-share are all sponsorable without a static per-flow list here.
     execute: (tx: unknown) => sponsoredExecuteServer(tx as Transaction),
     uploadManifest,
+    // This Node-only downloader validates public HTTPS targets, redirects,
+    // MIME, signature and streaming size before the Harbor executor sees bytes.
+    media: { fetchImage: fetchRemoteImage },
     resolve,
     build,
     ...(memory ? { memory } : {}),

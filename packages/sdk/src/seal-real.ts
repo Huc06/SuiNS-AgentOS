@@ -1,209 +1,161 @@
 /**
- * REAL Mysten Seal encryption (write path), Node-only.
+ * Real Mysten Seal encryption helpers (Node-only).
  *
- * ---------------------------------------------------------------------------
- * What this is (and what it is NOT)
- * ---------------------------------------------------------------------------
- * This module performs a genuine `@mysten/seal` threshold (TSS) encryption:
- * it fetches the network's allowlisted key servers, retrieves their on-chain
- * state, and runs `encrypt(...)` to produce an `EncryptedObject` whose shares
- * are sealed to the AgentOS `bucket_policy` package + a policy `id`. Only the
- * Seal key servers (gated by the on-chain `seal_approve` access check) can
- * later hand out decryption shares — there is NO symmetric key derivable from
- * the policy id alone (unlike the AES demo in `seal.ts`).
- *
- * It is the ENCRYPT (write) half only. DECRYPT is intentionally NOT here: it
- * requires a `SessionKey` signed by the *user's wallet* plus a round-trip to
- * the key servers, which is inherently client-side and signer-bound. The
- * signer-agnostic SDK / server-side workflow engine cannot do it, so this file
- * exposes encryption only.
- *
- * Because real Seal needs a live network (key-server objects fetched via a
- * read-only `SuiClient`), every failure mode — offline, missing package,
- * key-server outage — is swallowed and surfaced as `null`, so the caller can
- * cleanly fall back to the AES envelope (`sealEncrypt` in `seal.ts`) and never
- * hard-fail a run.
- *
- * This module is exported from the Node entry (`@agentos/sdk/node`) only. It is
- * NOT in the browser entry and NOT imported by `src/workflow/` — the workflow
- * engine stays signer-agnostic and reaches real Seal exclusively through an
- * injected host function (`ctx.seal`).
+ * `sealEncryptReal` retains AgentOS's marked envelope for legacy workflows.
+ * `sealEncryptHarbor` emits raw BCS EncryptedObject bytes required by active
+ * Harbor private buckets.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
-import { encrypt, getAllowlistedKeyServers, retrieveKeyServers } from "@mysten/seal";
+import { SealClient } from "@mysten/seal";
+import { bcs } from "@mysten/sui/bcs";
 import { fromHex, normalizeSuiAddress } from "@mysten/sui/utils";
 
-/**
- * Marker prepended to a real-Seal payload so a future decrypt path can tell a
- * genuine `EncryptedObject` apart from the AES demo envelope (`AOSEAL1`). The
- * raw bytes after this prefix are the BCS-encoded Seal `EncryptedObject`.
- */
+/** Prefix used only for AgentOS legacy encrypted envelopes. */
 export const SEAL_REAL_MAGIC = "SEALREAL1";
 
-/** Networks the allowlisted-key-server helper accepts. */
+/** Networks accepted by the historical AgentOS write helper. */
 export type SealNetwork = "testnet" | "mainnet";
 
-/** The read-only Sui client type `retrieveKeyServers` expects (internal). */
-type SealSuiClient = Parameters<typeof retrieveKeyServers>[0]["client"];
-
-/** Options for {@link sealEncryptReal}. */
 export interface SealEncryptRealOptions {
-  /** The bytes to encrypt (e.g. a serialized skill manifest). */
   data: Uint8Array;
-  /**
-   * The Seal access-policy id. Drives the `EncryptedObject`'s identity `id`
-   * (the value the on-chain `seal_approve(id, ...)` check matches). Accepts a
-   * `0x…` Sui address/object id (used verbatim as the identity bytes) or any
-   * opaque string (hashed to a stable 32-byte id).
-   */
   sealPolicyId: string;
-  /**
-   * Read-only `SuiClient` (a `@mysten/sui` client) used to fetch the key-server
-   * objects from chain. Typed `unknown` to avoid pinning a specific
-   * `@mysten/sui` client class version (the host's `SuiClient` and the one
-   * `@mysten/seal` was built against may differ across minor versions — they are
-   * structurally compatible at runtime). Cast to the seal client internally.
-   */
   suiClient: unknown;
-  /**
-   * The Move package that owns the Seal access policy — the published AgentOS
-   * package whose `bucket_policy` module exposes `seal_approve`. Must be a
-   * concrete `0x…` package id.
-   */
   packageId: string;
-  /** Network whose allowlisted key servers to use. Defaults to `"testnet"`. */
   network?: SealNetwork;
-  /** TSS threshold (shares needed to decrypt). Defaults to `1`. */
   threshold?: number;
 }
 
-/** What {@link sealEncryptReal} returns on success. */
 export interface SealEncryptRealResult {
-  /**
-   * The full payload to persist: `SEAL_REAL_MAGIC` ++ BCS(`EncryptedObject`).
-   * Carries the marker so a decrypt path can route real-Seal vs AES.
-   */
+  /** `SEALREAL1` followed by raw BCS EncryptedObject bytes. */
   bytes: Uint8Array;
-  /** The BCS `EncryptedObject` bytes, without the marker prefix. */
   encryptedObject: Uint8Array;
-  /** How many key servers backed the encryption. */
   keyServerCount: number;
-  /** The TSS threshold used. */
   threshold: number;
 }
 
-/**
- * Derive the 32-byte Seal identity `id` from a policy id. A `0x…` address/object
- * id maps to its raw bytes (left-padded to 32 by `normalizeSuiAddress`); any
- * other string is hashed (sha256) to a stable 32-byte id.
- */
+/** Harbor's canonical bucket-policy package and testnet Seal key servers. */
+export const HARBOR_SEAL_ORIGINAL_PACKAGE_ID =
+  "0x8b2429358e9b0f005b69fe8ad3cbd1268ad87f35047a21612e082c64824faf8d";
+export const HARBOR_SEAL_KEY_SERVER_OBJECT_IDS = [
+  "0x6068c0acb197dddbacd4746a9de7f025b2ed5a5b6c1b1ab44dade4426d141da2",
+  "0x164ac3d2b3b8694b8181c13f671950004765c23f270321a45fdd04d40cccf0f2",
+  "0x9c949e53c36ab7a9c484ed9e8b43267a77d4b8d70e79aa6b39042e3d4c434105",
+] as const;
+
+/** Options for encrypting a payload for an active Harbor private bucket. */
+export interface HarborSealEncryptOptions {
+  data: Uint8Array;
+  sealPolicyId: string;
+  /** A SuiGrpcClient (or a Seal-compatible extended client). */
+  suiClient: unknown;
+}
+
 function deriveIdBytes(sealPolicyId: string): Uint8Array {
   const trimmed = sealPolicyId.trim();
   if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
     try {
       return fromHex(normalizeSuiAddress(trimmed));
     } catch {
-      // Fall through to the hash path on any normalization error.
+      // Fall through to the stable hash for malformed addresses.
     }
   }
   return new Uint8Array(createHash("sha256").update(`seal-id:${trimmed}`).digest());
 }
 
-/**
- * Prepend {@link SEAL_REAL_MAGIC} to the BCS `EncryptedObject` bytes.
- * `Buffer.concat` keeps this a plain `Uint8Array` for callers.
- */
 function withMarker(encryptedObject: Uint8Array): Uint8Array {
   const magic = Buffer.from(SEAL_REAL_MAGIC, "utf8");
   return new Uint8Array(Buffer.concat([magic, Buffer.from(encryptedObject)]));
 }
 
-/**
- * Return true when `bytes` begins with the real-Seal marker — i.e. it is a
- * genuine `EncryptedObject` payload produced by {@link sealEncryptReal} rather
- * than the AES demo envelope.
- */
 export function isRealSeal(bytes: Uint8Array): boolean {
   const magic = Buffer.from(SEAL_REAL_MAGIC, "utf8");
-  if (bytes.length < magic.length) return false;
-  return Buffer.from(bytes.subarray(0, magic.length)).equals(magic);
+  return bytes.length >= magic.length && Buffer.from(bytes.subarray(0, magic.length)).equals(magic);
+}
+
+function createSealClient(suiClient: unknown) {
+  return new SealClient({
+    // The Seal SDK's public type requires an extended Sui client. A SuiGrpcClient
+    // supplies the required `core` surface at runtime (as in Harbor Quickstart).
+    suiClient: suiClient as never,
+    serverConfigs: HARBOR_SEAL_KEY_SERVER_OBJECT_IDS.map((objectId) => ({
+      objectId,
+      weight: 1,
+    })),
+    verifyKeyServers: false,
+  });
 }
 
 /**
- * Perform a REAL `@mysten/seal` threshold encryption.
- *
- * Steps: `getAllowlistedKeyServers(network)` → `retrieveKeyServers({objectIds,
- * client})` → `encrypt({keyServers, threshold, packageId, id, encryptionInput:
- * new AesGcm256(data)})`. Returns the `EncryptedObject` bytes (with the marker)
- * on success.
- *
- * IMPORTANT: this NEVER throws. Any failure (no network, no key servers, bad
- * package id, SDK error) resolves to `null` so the caller falls back to the AES
- * envelope and the run never hard-fails.
+ * AgentOS's legacy real-Seal writer. It remains non-throwing so old non-Harbor
+ * workflows retain their AES fallback behavior.
  */
 export async function sealEncryptReal(
   options: SealEncryptRealOptions,
 ): Promise<SealEncryptRealResult | null> {
   try {
-    const {
-      data,
-      sealPolicyId,
-      suiClient,
-      packageId,
-      network = "testnet",
-      threshold = 1,
-    } = options;
-
-    if (!sealPolicyId || !sealPolicyId.trim()) return null;
-    if (!packageId || !/^0x[0-9a-fA-F]+$/.test(packageId.trim())) return null;
-    if (!suiClient) return null;
-
-    // 1. The network's allowlisted key-server object ids.
-    const objectIds = getAllowlistedKeyServers(network);
-    if (!objectIds || objectIds.length === 0) return null;
-
-    // 2. Their on-chain state (name, url, pubkey) — read-only, needs the client.
-    //    The client is typed `unknown` on our public API to stay version-agnostic;
-    //    cast to the seal client type for the call (structurally compatible).
-    const keyServers = await retrieveKeyServers({
-      objectIds,
-      client: suiClient as SealSuiClient,
-    });
-    if (!keyServers || keyServers.length === 0) return null;
-
-    const effectiveThreshold = Math.max(
+    const policyId = options.sealPolicyId.trim();
+    const packageId = options.packageId.trim();
+    if (!policyId || !/^0x[0-9a-fA-F]+$/.test(packageId) || !options.suiClient) {
+      return null;
+    }
+    const threshold = Math.max(
       1,
-      Math.min(threshold, keyServers.length),
+      Math.min(options.threshold ?? 1, HARBOR_SEAL_KEY_SERVER_OBJECT_IDS.length),
     );
-
-    // 3. Encrypt under the AgentOS bucket_policy package + the policy identity.
-    //    `AesGcm256` is the hybrid encryption input (the symmetric content layer
-    //    Seal seals the key for). Loaded dynamically to keep this helper's
-    //    static surface minimal and to avoid pulling the class at import time.
-    const { AesGcm256 } = await import("@mysten/seal");
-    const packageBytes = fromHex(normalizeSuiAddress(packageId.trim()));
-    const idBytes = deriveIdBytes(sealPolicyId);
-
-    const { encryptedObject } = await encrypt({
-      keyServers,
-      threshold: effectiveThreshold,
-      packageId: packageBytes,
-      id: idBytes,
-      encryptionInput: new AesGcm256(data, new Uint8Array()),
+    const { encryptedObject } = await createSealClient(options.suiClient).encrypt({
+      threshold,
+      packageId: normalizeSuiAddress(packageId),
+      id: Buffer.from(deriveIdBytes(policyId)).toString("hex"),
+      data: options.data,
     });
-
-    if (!encryptedObject || encryptedObject.length === 0) return null;
-
+    if (!encryptedObject?.length) return null;
     return {
       bytes: withMarker(encryptedObject),
       encryptedObject,
-      keyServerCount: keyServers.length,
-      threshold: effectiveThreshold,
+      keyServerCount: HARBOR_SEAL_KEY_SERVER_OBJECT_IDS.length,
+      threshold,
     };
   } catch {
-    // Any failure → null so the caller falls back to the AES envelope.
     return null;
   }
+}
+
+/**
+ * Encrypt bytes in native Harbor Seal format. The returned value is raw BCS
+ * `EncryptedObject` bytes — deliberately without the AgentOS `SEALREAL1`
+ * marker — because Harbor persists ciphertext verbatim.
+ */
+export async function sealEncryptHarbor(
+  options: HarborSealEncryptOptions,
+): Promise<Uint8Array> {
+  const policyId = options.sealPolicyId.trim();
+  if (!/^0x[0-9a-fA-F]{1,64}$/.test(policyId)) {
+    throw new Error("Harbor Seal requires a concrete 0x seal_policy_id");
+  }
+  if (!options.suiClient) {
+    throw new Error("Harbor Seal requires a read-only Sui client");
+  }
+
+  const sealIdentity = bcs.struct("HarborSealIdentity", {
+    policyObjectId: bcs.Address,
+    nonce: bcs.fixedArray(32, bcs.u8()),
+  });
+  const id = sealIdentity
+    .serialize({
+      policyObjectId: normalizeSuiAddress(policyId),
+      nonce: Array.from(randomBytes(32)),
+    })
+    .toHex();
+  const { encryptedObject } = await createSealClient(options.suiClient).encrypt({
+    threshold: 2,
+    packageId: HARBOR_SEAL_ORIGINAL_PACKAGE_ID,
+    id,
+    data: options.data,
+  });
+  if (!encryptedObject?.length) {
+    throw new Error("Harbor Seal returned an empty encrypted object");
+  }
+  return encryptedObject;
 }

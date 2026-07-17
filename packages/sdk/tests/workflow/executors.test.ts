@@ -120,6 +120,95 @@ describe("harbor executor", () => {
     expect(r.error).toMatch(/no sealPolicyId/);
   });
 
+  it("builds NFT metadata JSON from separate name, description and image URI inputs", async () => {
+    const seal = vi.fn(async (bytes: Uint8Array, _policy: string) => bytes);
+    const upload = vi.fn(async (_bytes: Uint8Array, _filename: string) => ({
+      blobId: "NFT_METADATA",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        nftName: "Golden Harbor",
+        nftDescription: "Stored privately",
+        nftImageUri: "walrus://image-blob",
+        manifest: { legacy: "must not win" },
+      }),
+      makeCtx({ seal, harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    const [plaintext] = seal.mock.calls[0] as [Uint8Array, string];
+    expect(JSON.parse(new TextDecoder().decode(plaintext))).toEqual({
+      name: "Golden Harbor",
+      description: "Stored privately",
+      image: "walrus://image-blob",
+    });
+  });
+
+  it("downloads a configured image URL server-side and Seal-encrypts its original bytes", async () => {
+    const sourceBytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7,
+    ]);
+    const fetchImage = vi.fn(async () => ({
+      bytes: sourceBytes,
+      filename: "nft-art.png",
+      contentType: "image/png" as const,
+    }));
+    const seal = vi.fn(async (bytes: Uint8Array) => new Uint8Array([...bytes, 99]));
+    const upload = vi.fn(async (_bytes: Uint8Array, _filename: string) => ({
+      blobId: "HARBOR_IMAGE",
+      fileId: "FILE_IMAGE",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        fileUrl: "https://images.example/nft-art.png",
+        // This must lose to fileUrl rather than being JSON-stringified.
+        manifest: { wrong: "payload" },
+      }),
+      makeCtx({ media: { fetchImage }, seal, harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(fetchImage).toHaveBeenCalledWith("https://images.example/nft-art.png");
+    expect(seal).toHaveBeenCalledWith(sourceBytes, "0xpolicy");
+    const [uploadedBytes, filename, uploadOptions] = upload.mock.calls[0] as unknown as [
+      Uint8Array,
+      string,
+      { contentType?: string } | undefined,
+    ];
+    expect(uploadedBytes).toEqual(new Uint8Array([...sourceBytes, 99]));
+    expect(filename).toBe("nft-art.png");
+    expect(uploadOptions).toEqual({ contentType: "image/png" });
+    expect(r.output).toMatchObject({
+      sourceUrl: "https://images.example/nft-art.png",
+      sourceFilename: "nft-art.png",
+      sourceContentType: "image/png",
+      sourceBytes: sourceBytes.length,
+      storage: "harbor",
+    });
+  });
+
+  it("errors instead of fetching an image URL without a server media downloader", async () => {
+    const r = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "0xpolicy",
+        fileUrl: "https://images.example/nft.png",
+      }),
+      makeCtx({ harbor: { upload: vi.fn() } }),
+      [],
+    );
+    expect(r.status).toBe("error");
+    expect(r.error).toMatch(/server-side media downloader/);
+  });
+
   it("Seal-encrypts then uploads the ciphertext for a private skill", async () => {
     const uploadManifest = vi.fn(async (..._a: unknown[]) => ({
       blobId: "ENC_1",

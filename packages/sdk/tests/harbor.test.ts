@@ -68,7 +68,9 @@ describe("HarborClient", () => {
         "space-1",
         BUCKET,
         content,
-        "manifest.json",
+        "cover.png",
+        {},
+        { contentType: "image/png" },
       );
 
       expect(result).toMatchObject({ blobId: "abc123", fileId: "file-9" });
@@ -83,8 +85,12 @@ describe("HarborClient", () => {
       expect(headers.Authorization).toBe("Bearer hbr_test_key_123");
       expect(headers["Content-Type"]).toBeUndefined();
       // The body is multipart/form-data carrying the file.
-      expect(init.body).toBeInstanceOf(FormData);
-      expect((init.body as FormData).has("file")).toBe(true);
+      const form = init.body as FormData;
+      expect(form).toBeInstanceOf(FormData);
+      expect(form.has("file")).toBe(true);
+      const uploadedFile = form.get("file") as File;
+      expect(uploadedFile.name).toBe("cover.png");
+      expect(uploadedFile.type).toBe("image/png");
     });
 
     it("polls the upload status job for an async upload and reads back blob_id", async () => {
@@ -172,6 +178,36 @@ describe("HarborClient", () => {
           intervalMs: 0,
         }),
       ).rejects.toThrow("Harbor upload failed: job f1 reported failed");
+    });
+
+    it("reads current nested status and surfaces the Harbor upstream error", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: { id: "f1", blob_id: null } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: {
+              state: "failed",
+              error: {
+                code: "upload_upstream_unavailable",
+                message: "Storage service is temporarily unavailable.",
+                http_status: 503,
+              },
+            },
+          }),
+        });
+
+      await expect(
+        client.uploadBlob("s", BUCKET, new Uint8Array([1]), "f.png", {
+          attempts: 3,
+          intervalMs: 0,
+        }),
+      ).rejects.toThrow(
+        "Harbor upload failed: job f1 reported failed: upload_upstream_unavailable: Storage service is temporarily unavailable.",
+      );
     });
   });
 
