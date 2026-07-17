@@ -236,23 +236,33 @@ describe("AgentOSClient skill lifecycle", () => {
       );
     });
 
-    it("throws 'Skill not found' when resolved object has invalid fields", async () => {
+    it("surfaces an invalid resolved SkillDescriptor instead of hiding it as not found", async () => {
       const mockClient = createMockSuiClient({
         resolveAddress: "0xsome_obj",
         objectFields: null,
       });
 
-      // Override getObject to return no data
+      // Override getObject to return no data.
       mockClient.getObject.mockResolvedValue({ data: undefined });
 
       const client = new AgentOSClient({
         client: mockClient as never,
       });
 
-      // The on-chain resolution throws "Invalid SkillDescriptor" which is caught,
-      // then falls through to local registry which is not set, resulting in "Skill not found"
       await expect(client.resolveSkill("bad.agent.sui")).rejects.toThrow(
-        "Skill not found: bad.agent.sui",
+        "Invalid SkillDescriptor at 0xsome_obj",
+      );
+    });
+
+    it("surfaces an RPC failure instead of converting it to Agent not found", async () => {
+      const mockClient = createMockSuiClient();
+      mockClient.resolveNameServiceAddress.mockRejectedValue(
+        new Error("Sui RPC unavailable"),
+      );
+      const client = new AgentOSClient({ client: mockClient as never });
+
+      await expect(client.resolveAgent("alpha.sui")).rejects.toThrow(
+        "Sui RPC unavailable",
       );
     });
   });

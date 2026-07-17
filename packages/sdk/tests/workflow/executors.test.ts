@@ -417,6 +417,27 @@ describe("sui executor", () => {
     expect(r.txDigest).toBe("0xCALL");
   });
 
+  it("keeps recipient as a valid generic Move argument", async () => {
+    const execute = vi.fn(async () => ({ digest: "0xRECIPIENT" }));
+    const r = await executors.sui(
+      node("sui", {
+        movePackage: "0x9",
+        entry: "mod::transfer",
+        recipient: "0x0000000000000000000000000000000000000000000000000000000000000001",
+      }),
+      makeCtx({ execute }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    const tx = execute.mock.calls[0]?.[0] as {
+      getData(): { inputs: Array<{ $kind: string }> };
+    };
+    // `recipient` used to be filtered because the shared reserved-key set also
+    // included Attest controls. The generic Sui call must have one pure arg.
+    expect(tx.getData().inputs.filter((input) => input.$kind === "Pure")).toHaveLength(1);
+  });
+
   it("skips when there is no passport id and no move target", async () => {
     const execute = vi.fn(async () => ({ digest: "x" }));
     const r = await executors.sui(node("sui"), makeCtx({ execute }), []);
