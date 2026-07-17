@@ -71,7 +71,12 @@ export type { SuiperpowerBuildResult } from "./suiperpower.js";
 // Real Mysten Seal encryption (write path only). Node-only — pulls @mysten/seal
 // + a read-only SuiClient; deliberately NOT in the browser entry or the
 // signer-agnostic workflow engine (the engine reaches it via injected ctx.seal).
-export { sealEncryptReal, isRealSeal, SEAL_REAL_MAGIC } from "./seal-real.js";
+export {
+  sealEncryptHarbor,
+  sealEncryptReal,
+  isRealSeal,
+  SEAL_REAL_MAGIC,
+} from "./seal-real.js";
 export type {
   SealEncryptRealOptions,
   SealEncryptRealResult,

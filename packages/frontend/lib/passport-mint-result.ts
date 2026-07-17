@@ -12,12 +12,27 @@ type TxClient = {
   }>;
 };
 
+const PASSPORT_CONFIRMATION_TIMEOUT_MS = 10_000;
+
 export async function resolvePassportFromDigest(
   client: TxClient,
   digest: string,
   packageId: string,
 ): Promise<{ passportObjectId?: string }> {
-  await client.waitForTransaction({ digest });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      client.waitForTransaction({ digest }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Timed out waiting for transaction confirmation")),
+          PASSPORT_CONFIRMATION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 
   const block = await client.getTransactionBlock({
     digest,

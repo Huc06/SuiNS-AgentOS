@@ -16,13 +16,15 @@ export type SuinsVerification = {
   targetMatchesRuntime: boolean;
   nftId: string | null;
   expirationTimestampMs: number | null;
+  /** Present only when the client could not complete an on-chain lookup. */
+  lookupError?: string;
 };
 
 export function normalizeSuinsInput(raw: string): string {
-  const trimmed = raw.trim().toLowerCase();
-  if (!trimmed) return '';
-  if (trimmed.endsWith('.sui')) return trimmed;
-  return `${trimmed.replace(/^@/, '')}.sui`;
+  const name = raw.trim().toLowerCase().replace(/^@/, '');
+  if (!name) return '';
+  if (name.endsWith('.sui')) return name;
+  return `${name}.sui`;
 }
 
 export function isValidSuinsNameInput(raw: string): boolean {
@@ -154,7 +156,10 @@ export async function verifySuinsForWallet(options: {
 }
 
 export function suinsStatusLabel(verification: SuinsVerification | null): string {
-  if (!verification) return 'Enter or select a .sui name to check your wallet.';
+  if (!verification) return '';
+  if (verification.lookupError) {
+    return `Could not check SuiNS on-chain: ${verification.lookupError}`;
+  }
   if (!verification.registered) return 'Name is not registered on-chain — get it on suins.io first.';
   if (verification.expired) return 'This name has expired. Renew on suins.io.';
   if (!verification.ownedByWallet) {
