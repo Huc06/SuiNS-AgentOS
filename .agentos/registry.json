@@ -265,13 +265,29 @@
       "slug": "firstworkflow-my-first-agent",
       "suinsName": "firstworkflow.my-first-agent.sui",
       "version": "1.0.0",
-      "walrusManifestBlob": "",
-      "manifestHash": "",
+      "walrusManifestBlob": "f_Q9ECZPrFAu5tA-uo7sH8299Rabxid9wO0c_otKCGQ",
+      "manifestHash": "509ae10a508c9693a0cbbe6cbb8e193a58bc54739513f7da99ec3c4de1406ab4",
       "network": "testnet",
-      "status": "draft",
+      "status": "active",
       "createdAt": "2026-07-14T08:38:13.302Z",
-      "lastUpdated": "2026-07-14T08:38:13.302Z",
-      "description": "Path B on-chain execution test"
+      "lastUpdated": "2026-07-16T07:17:43.050Z",
+      "description": "Path B on-chain execution test",
+      "endEpoch": 513
+    },
+    {
+      "agentSlug": "my-first-agent",
+      "workflowId": "brandnewflow",
+      "name": "brandnewflow",
+      "slug": "brandnewflow-my-first-agent",
+      "suinsName": "brandnewflow.my-first-agent.sui",
+      "version": "1.0.0",
+      "walrusManifestBlob": "_42UJQ1FlbhLDpIBYKBaamAthLThi0jyRf7Kq90vwXc",
+      "manifestHash": "5c7fb9976eb4e3707aacfdd3bea77ac7b492604beda3df80f99147476e6174bb",
+      "network": "testnet",
+      "status": "active",
+      "createdAt": "2026-07-16T07:17:57.781Z",
+      "lastUpdated": "2026-07-16T07:18:07.627Z",
+      "endEpoch": 513
     }
   ]
 }

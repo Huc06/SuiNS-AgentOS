@@ -1112,10 +1112,10 @@ export class AgentOSClient {
     const moveCallArgs: TransactionObjectArgument[] = [];
     if (!params) return moveCallArgs;
 
-    for (const [key, value] of Object.entries(params)) {
+    const bindOne = (key: string, value: unknown, declaredType?: string) => {
       if (isObjectRef(value)) {
         moveCallArgs.push(transaction.object(value.object));
-        continue;
+        return;
       }
       if (isResultRef(value)) {
         const command = transaction.getData().commands[value.result];
@@ -1129,11 +1129,10 @@ export class AgentOSClient {
             ? { Result: value.result }
             : { NestedResult: [value.result, value.index] };
         moveCallArgs.push(slot as unknown as TransactionObjectArgument);
-        continue;
+        return;
       }
 
       // Typed path: manifest declared explicit Move type for this param.
-      const declaredType = paramTypes?.find((p) => p.name === key)?.type;
       if (declaredType) {
         moveCallArgs.push(
           // tx.pure(type, value) is the generic SDK syntax that accepts any
@@ -1143,7 +1142,7 @@ export class AgentOSClient {
             value,
           ) as unknown as TransactionObjectArgument,
         );
-        continue;
+        return;
       }
 
       // Fallback heuristics (no manifest type info).
@@ -1165,7 +1164,33 @@ export class AgentOSClient {
           transaction.pure.bool(value) as unknown as TransactionObjectArgument,
         );
       }
+    };
+
+    if (paramTypes && paramTypes.length > 0) {
+      // The manifest declares the Move entry function's REAL parameter order —
+      // bind in THAT order (looking each value up by name), not the params
+      // object's key insertion order (which depends on how the caller happened
+      // to build it, e.g. the order a user typed lines into a UI form). A
+      // mismatch here silently binds an argument to the wrong position.
+      const consumed = new Set<string>();
+      for (const { name, type } of paramTypes) {
+        if (!(name in params)) continue;
+        bindOne(name, params[name], type);
+        consumed.add(name);
+      }
+      // Any remaining keys not covered by the manifest's typed parameter list
+      // (object/result refs, or untyped extras) — bind them after, in their
+      // original object order, using the fallback heuristics.
+      for (const [key, value] of Object.entries(params)) {
+        if (consumed.has(key)) continue;
+        bindOne(key, value);
+      }
+    } else {
+      for (const [key, value] of Object.entries(params)) {
+        bindOne(key, value);
+      }
     }
+
     return moveCallArgs;
   }
 

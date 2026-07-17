@@ -210,7 +210,7 @@ export function registerAgent(
 
   const slug = slugFromSuins(suinsName);
   const passportId =
-    input.passportId?.trim() || `0x${randomBytes(20).toString("hex")}`;
+    input.passportId?.trim() || `0x${randomBytes(32).toString("hex")}`;
   const record: RegistryAgentRecord = {
     slug,
     suinsName,
@@ -325,12 +325,14 @@ export function publishSkill(
     skillId: input.manifest.name,
     name: input.manifest.name,
     mvrPackage,
-    version: `v${input.manifest.version}`,
+    version: input.manifest.version.startsWith("v")
+      ? input.manifest.version
+      : `v${input.manifest.version}`,
     walrusManifestBlob,
     manifestHash,
     ...(input.endEpoch !== undefined ? { endEpoch: input.endEpoch } : {}),
     objectId:
-      input.objectId ?? existing?.objectId ?? `0x${randomBytes(20).toString("hex")}`,
+      input.objectId ?? existing?.objectId ?? `0x${randomBytes(32).toString("hex")}`,
     network: input.network ?? resolved.agent.network,
     status: "active",
     resolutions: "0",
