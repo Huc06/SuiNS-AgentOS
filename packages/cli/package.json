@@ -14,7 +14,7 @@
   "dependencies": {
     "@agentos-sui/mcp": "workspace:*",
     "@agentos-sui/sdk": "workspace:*",
-    "@mysten/sui": "^1.0.0",
+    "@mysten/sui": "2.22.0",
     "commander": "^12.0.0"
   },
   "devDependencies": {

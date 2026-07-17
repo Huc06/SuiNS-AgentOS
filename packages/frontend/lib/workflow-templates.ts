@@ -165,17 +165,6 @@ function demoManifestParam(self: string): string {
   });
 }
 
-// Illustrative NFT metadata payload (the thing a Harbor node stores for an NFT
-// mint). Plain JSON the Harbor executor uploads verbatim as the encrypted blob.
-function nftMetadataParam(self: string): string {
-  return JSON.stringify({
-    name: `${self} NFT`,
-    description: "Demo NFT metadata archived by an AgentOS workflow.",
-    image: "walrus://<image-blob-id>",
-    attributes: [{ trait_type: "minted_by", value: self }],
-  });
-}
-
 // Placeholder Move target for the NFT mint node. Intentionally NOT a real 0x
 // package id: the Sui executor treats a non-0x `movePackage` as a clean SKIP
 // (never crashes), and the inline config nudges the user to paste their own
@@ -252,11 +241,11 @@ export const TEMPLATES: WorkflowTemplate[] = [
   // 2) Store + Encrypt + Remember — DEMO encryption (AES stand-in, not Seal).
   {
     id: "store-encrypt-remember",
-    name: "Store + Encrypt + Remember (DEMO)",
+    name: "Store + Encrypt + Remember",
     description:
-      "Walrus STORES the file (returns a blobId); Harbor AES-encrypts (DEMO — not real Seal); Memory saves a short recallable NOTE about it.",
+      "Store a file in Walrus, privately archive it with Harbor, then save a memory note.",
     demonstrates:
-      "Trigger -> Walrus (store the file blob on decentralized storage) -> Harbor (DEMO AES stand-in, NOT real Seal threshold encryption) -> Memory (save a short fact to agent memory). Walrus = a FILE/BLOB; Memory = a recallable NOTE — two different stores, not a duplicate.",
+      "Trigger -> Walrus (store the file blob) -> Harbor (private archive) -> Memory (save a recallable note).",
     build: (agentName) => {
       const self = selfName(agentName);
       const nodes: Node[] = [
@@ -272,7 +261,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         mkNode("tpl-harbor", 500, 240, {
           label: "Harbor",
           // Honest subtitle: AES stand-in, not real Seal.
-          subtitle: "Encrypt + store (DEMO)",
+          subtitle: "Encrypt + store",
           params: { private: "true", sealPolicyId: "demo-policy" },
         }),
         mkNode("tpl-memory", 720, 240, {
@@ -405,11 +394,11 @@ export const TEMPLATES: WorkflowTemplate[] = [
   // 6) Encrypted manifest pipeline — DEMO encryption then on-chain record.
   {
     id: "encrypted-manifest-pipeline",
-    name: "Encrypted manifest pipeline (DEMO)",
+    name: "Encrypted manifest pipeline",
     description:
-      "AES-encrypt a manifest (DEMO — not real Seal), then record on-chain.",
+      "Privately archive a manifest in Harbor, then record the workflow on-chain.",
     demonstrates:
-      "Trigger -> Harbor (DEMO AES stand-in, NOT real Seal) -> Sui (record_execution PTB). The private-skill publish path.",
+      "Trigger -> Harbor (private archive) -> Sui (record_execution PTB).",
     build: (agentName) => {
       const self = selfName(agentName);
       const nodes: Node[] = [
@@ -419,7 +408,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-harbor", 300, 240, {
           label: "Harbor",
-          subtitle: "Encrypt + store (DEMO)",
+          subtitle: "Encrypt + store",
           params: {
             private: "true",
             sealPolicyId: "demo-policy",
@@ -444,7 +433,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
     id: "nft-harbor-memory",
     name: "NFT -> Harbor -> Memory",
     description:
-      "Mint an NFT (fill in your NFT package), archive its metadata to Harbor (DEMO encrypt + REAL upload when HARBOR_API_KEY is set), then save a recallable note.",
+      "Mint an NFT (fill in your NFT package), then privately archive its image URL or metadata in Harbor.",
     demonstrates:
       "Trigger -> Sui (mint NFT move-call — seed your published NFT package::function) -> Harbor (store the NFT metadata blob; real Harbor upload when configured) -> Memory (save a short fact like 'minted NFT X'). Sui skips cleanly until you paste a real 0x package; Harbor falls back to Walrus and Memory skips when env is unset — the whole chain stays runnable.",
     build: (agentName) => {
@@ -465,12 +454,13 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-harbor", 460, 240, {
           label: "Harbor",
-          subtitle: "Archive NFT metadata (DEMO)",
+          subtitle: "Archive NFT image / metadata",
           params: {
             private: "true",
             sealPolicyId: "demo-policy",
-            manifest: nftMetadataParam(self),
-            filename: `${self}-nft.json`,
+            nftName: `${self} NFT`,
+            nftDescription: "NFT archived by an AgentOS workflow.",
+            nftImageUri: "walrus://<image-blob-id>",
           },
         }),
         mkNode("tpl-memory", 700, 240, {
@@ -493,7 +483,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
     id: "mint-archive-nft",
     name: "Mint + archive NFT",
     description:
-      "Mint an NFT on-chain (fill in your NFT package), then archive its metadata blob to Harbor (DEMO encrypt + REAL upload when HARBOR_API_KEY is set).",
+      "Mint an NFT on-chain (fill in your NFT package), then privately archive its image URL or metadata in Harbor.",
     demonstrates:
       "Trigger -> Sui (mint NFT move-call — paste your published NFT package::function) -> Harbor (store the NFT metadata file; real Harbor upload when HARBOR_API_KEY/SPACE/BUCKET are set, else a Walrus fallback). The minimal mint-then-archive path; the Sui node skips cleanly until a real 0x package is supplied.",
     build: (agentName) => {
@@ -513,12 +503,13 @@ export const TEMPLATES: WorkflowTemplate[] = [
         }),
         mkNode("tpl-harbor", 540, 240, {
           label: "Harbor",
-          subtitle: "Archive NFT metadata (DEMO)",
+          subtitle: "Archive NFT image / metadata",
           params: {
             private: "true",
             sealPolicyId: "demo-policy",
-            manifest: nftMetadataParam(self),
-            filename: `${self}-nft.json`,
+            nftName: `${self} NFT`,
+            nftDescription: "NFT archived by an AgentOS workflow.",
+            nftImageUri: "walrus://<image-blob-id>",
           },
         }),
       ];

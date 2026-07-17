@@ -12,7 +12,7 @@
     "@agentos-sui/sdk": "workspace:*",
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/enoki": "0.12.15",
-    "@mysten/sui": "^1.0.0",
+    "@mysten/sui": "2.22.0",
     "@mysten/suins": "0.7.36",
     "@neondatabase/serverless": "0.10.4",
     "@tanstack/react-query": "^5.0.0",

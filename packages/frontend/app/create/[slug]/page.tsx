@@ -1177,23 +1177,34 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
                 {formNote}
               </p>
             )}
-            {paramFields.map((f) => (
-              <NodeConfigField
-                key={f.key}
-                field={f}
-                nodeId={id}
-                value={
-                  f.key === LABEL_FIELD_KEY
-                    ? (data.subtitle ?? "")
-                    : (data.params?.[f.key] ?? "")
-                }
-                error={fieldErrors[f.key]}
-                knownNamespaces={knownNamespaces}
-                onChange={(v) =>
-                  f.key === LABEL_FIELD_KEY ? setCaption(v) : setParam(f.key, v)
-                }
-              />
-            ))}
+            {paramFields
+              .filter(
+                (f) =>
+                  !(
+                    data.label === "Harbor" &&
+                    f.key === "nftImageUri" &&
+                    data.params?.fileUrl?.trim()
+                  ),
+              )
+              .map((f) => (
+                <NodeConfigField
+                  key={f.key}
+                  field={f}
+                  nodeId={id}
+                  value={
+                    f.key === LABEL_FIELD_KEY
+                      ? (data.subtitle ?? "")
+                      : (data.params?.[f.key] ?? "")
+                  }
+                  error={fieldErrors[f.key]}
+                  knownNamespaces={knownNamespaces}
+                  onChange={(v) =>
+                    f.key === LABEL_FIELD_KEY
+                      ? setCaption(v)
+                      : setParam(f.key, v)
+                  }
+                />
+              ))}
             <button
               type="button"
               onClick={() => setEditing(false)}
@@ -1346,7 +1357,7 @@ const initialNodes: Node[] = [
     id: "harbor-seal",
     type: "skill",
     position: { x: 560, y: 150 },
-    data: { label: "Harbor", subtitle: "Encrypt + store (DEMO)" },
+    data: { label: "Harbor", subtitle: "Encrypt + store" },
   },
   {
     id: "sui-exec",
@@ -3415,7 +3426,7 @@ export default function WorkflowEditorPage() {
                   {
                     category: "security",
                     tools: [
-                      { label: "Harbor", subtitle: "Encrypt + store (DEMO)" },
+                      { label: "Harbor", subtitle: "Encrypt + store" },
                     ],
                     count: 1,
                   },

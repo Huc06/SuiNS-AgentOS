@@ -1,11 +1,11 @@
-import type { SuiClient } from "@mysten/sui/client";
+import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import type { Transaction } from "@mysten/sui/transactions";
 
 import type { AgentOSConfig } from "@agentos-sui/sdk/node";
 
 export async function formatDryRun(
   transaction: Transaction,
-  suiClient: SuiClient,
+  suiClient: SuiGrpcClient,
   config: AgentOSConfig,
   kind: string,
 ): Promise<{ mode: "dry-run"; kind: string; txBytes?: string; note: string }> {

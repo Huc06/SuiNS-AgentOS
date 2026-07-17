@@ -176,8 +176,11 @@ export function nodeOutputSummary(
 
     case "harbor": {
       if (isRecord(output)) {
-        if (str(output.note)) return "public (skipped)";
         const blobId = findBlobId(output);
+        if (str(output.storage) === "walrus") {
+          return blobId ? `sealed · Walrus ${shortId(blobId)}` : "sealed · Walrus";
+        }
+        if (str(output.note)) return "public (skipped)";
         return blobId ? `sealed ${shortId(blobId)}` : "sealed";
       }
       return "sealed";
@@ -331,7 +334,16 @@ export function nodeOutputDetail(
     }
 
     case "harbor": {
-      if (rec && str(rec.note)) {
+      const storage = str(rec?.storage);
+      const note = str(rec?.note);
+      if (storage === "walrus") {
+        fields.push({ label: "seal", value: "encrypted · Walrus fallback" });
+        fields.push({ label: "storage", value: "walrus" });
+        if (note) fields.push({ label: "note", value: note });
+        pushBlob();
+        break;
+      }
+      if (note) {
         fields.push({ label: "seal", value: "public — skipped" });
         break;
       }
@@ -339,9 +351,20 @@ export function nodeOutputDetail(
       const policy = str(rec?.sealPolicyId);
       if (policy)
         fields.push({ label: "policy", value: policy, mono: true });
-      const bytes = num(rec?.encryptedBytes);
+      const bytes = num(rec?.encryptedBytes) ?? num(rec?.bytes);
       if (bytes !== undefined)
         fields.push({ label: "bytes", value: String(bytes) });
+      const sourceFilename = str(rec?.sourceFilename);
+      if (sourceFilename)
+        fields.push({ label: "source file", value: sourceFilename, mono: true });
+      const sourceContentType = str(rec?.sourceContentType);
+      if (sourceContentType)
+        fields.push({ label: "source type", value: sourceContentType, mono: true });
+      const sourceBytes = num(rec?.sourceBytes);
+      if (sourceBytes !== undefined)
+        fields.push({ label: "source bytes", value: String(sourceBytes) });
+      const sourceUrl = str(rec?.sourceUrl);
+      if (sourceUrl) fields.push({ label: "source URL", value: sourceUrl });
       // When the bytes landed in the user's REAL Harbor account, show where.
       if (str(rec?.storage) === "harbor") {
         fields.push({ label: "storage", value: "harbor" });
