@@ -236,6 +236,23 @@
       "source": "custom",
       "suinsName": "sui-nft-mint.alpha.sui",
       "endEpoch": 511
+    },
+    {
+      "agentSlug": "my-first-agent",
+      "skillId": "gm-overflow",
+      "name": "gm-overflow",
+      "mvrPackage": "@my-first-agent/gm-overflow",
+      "version": "v1.0.0",
+      "walrusManifestBlob": "uQfXmdLqncNWFgt4MHTdOF9qOCPGC6hkKOTMgvujL-M",
+      "manifestHash": "86476fac335e529b993e7fe8c48b8e6195ec0334ba1d1f372833b9dc76a537f6",
+      "objectId": "0x85b25bf9b31f7168b33b852cc154c25cbadee75f16be818b838424de2c155a3f",
+      "network": "testnet",
+      "status": "active",
+      "resolutions": "0",
+      "lastUpdated": "just now",
+      "icon": "token",
+      "source": "custom",
+      "suinsName": "gm-overflow.my-first-agent.sui"
     }
   ],
   "workflows": [

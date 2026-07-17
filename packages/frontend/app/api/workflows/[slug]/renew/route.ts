@@ -24,6 +24,12 @@ type RouteContext = { params: Promise<{ slug: string }> };
 export async function POST(request: NextRequest, context: RouteContext) {
   const { slug } = await context.params;
   const key = decodeURIComponent(slug).trim();
+  if (!key) {
+    return NextResponse.json(
+      { error: "workflow slug is required" },
+      { status: 400 },
+    );
+  }
 
   let body: { epochs?: unknown };
   try {
@@ -49,9 +55,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  if (!workflow.walrusManifestBlob) {
+  if (
+    !workflow.walrusManifestBlob ||
+    workflow.walrusManifestBlob.startsWith("walrus://")
+  ) {
     return NextResponse.json(
-      { error: "workflow has not been published — publish via MCP first" },
+      { error: "workflow has not been published to Walrus — publish via MCP first" },
       { status: 422 },
     );
   }

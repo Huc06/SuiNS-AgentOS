@@ -27,8 +27,10 @@ export function AgentExplorer() {
   const [hasSkillsOnly, setHasSkillsOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const loadAgents = useCallback(async () => {
-    setLoading(true);
+  const loadAgents = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch("/api/agents", { cache: "no-store" });
@@ -42,7 +44,9 @@ export function AgentExplorer() {
       setError(e instanceof Error ? e.message : "Could not load agents");
       setAgents([]);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -148,8 +152,7 @@ export function AgentExplorer() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
-          setCreateOpen(false);
-          void loadAgents();
+          void loadAgents(false);
         }}
       />
     </section>

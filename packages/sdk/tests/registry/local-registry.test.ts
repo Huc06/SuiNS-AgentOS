@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { LocalRegistry } from "../../src/registry/local-registry.js";
+import {
+  LocalRegistry,
+  passportFromRecord,
+} from "../../src/registry/local-registry.js";
 import type { SkillManifest } from "../../src/types.js";
 
 describe("LocalRegistry", () => {
@@ -117,6 +120,10 @@ describe("LocalRegistry", () => {
       "mem.sui",
       "project-x",
     ]);
+    expect(
+      passportFromRecord(reopened.resolveAgent("mem.sui")!.agent)
+        .memoryNamespace,
+    ).toBe("mem.sui");
 
     rmSync(dir, { recursive: true });
   });

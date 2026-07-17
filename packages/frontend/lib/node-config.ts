@@ -148,29 +148,47 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
     },
   ],
 
-  // Harbor encrypts a blob BEFORE it lands on Walrus, so the stored skill/
-  // manifest is private — only holders allowed by the Seal access policy can
-  // decrypt it. The first field below carries the honest-encryption caveat:
-  // today the encryption is an AES stand-in, not real threshold Seal yet.
   harbor: [
     {
       key: "private",
-      label: "Encrypt before storing?",
+      label: "Private upload",
       kind: "boolean",
-      hint: "ON: seal the content, then store the ciphertext on Walrus (private skill). OFF: skip this node and store a public blob — skipping is expected.",
+      hint: "Keep ON to Seal-encrypt before uploading to Harbor.",
     },
     {
-      key: "sealPolicyId",
-      label: "Access policy id (who can decrypt)",
-      placeholder: "demo-policy",
-      hint: "On-chain Seal policy that controls who may decrypt. Required only when 'Encrypt before storing?' is ON.",
+      key: "fileUrl",
+      label: "Image URL (JPG/PNG)",
+      placeholder: "https://cdn.example.com/nft.png",
+      hint: "Public HTTPS image, max 10 MiB. Overrides metadata below.",
+      validate: (value) => {
+        const v = value.trim();
+        if (!v) return undefined;
+        try {
+          const url = new URL(v);
+          return url.protocol === "https:" && !url.username && !url.password
+            ? undefined
+            : "must be a credential-free HTTPS URL";
+        } catch {
+          return "must be a valid HTTPS URL";
+        }
+      },
     },
     {
-      key: "manifest",
-      label: "Content to encrypt (manifest / text)",
-      placeholder: '{"name":"my skill"}',
+      key: "nftName",
+      label: "NFT name",
+      placeholder: "My NFT",
+    },
+    {
+      key: "nftDescription",
+      label: "NFT description",
+      placeholder: "Short description",
       kind: "textarea",
-      hint: "The actual blob to seal — JSON manifest or plain text. NOTE: encryption is a DEMO (AES stand-in), not real threshold Seal yet.",
+    },
+    {
+      key: "nftImageUri",
+      label: "NFT image URI",
+      placeholder: "walrus://<image-blob-id>",
+      hint: "Used in metadata when Image URL is blank.",
     },
   ],
 
@@ -185,29 +203,15 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
     {
       key: "entry",
       label: "Entry (module::function)",
-      placeholder: "skill::run",
-      hint: "The function to call, paired with the Move package above.",
-    },
-    {
-      key: "passportId",
-      label: "Passport id (0x…, optional)",
-      placeholder: "0x… (defaults to the agent's passport)",
-      hint: "The on-chain passport to act as. Leave blank to use this agent's own.",
-      validate: validateHexId,
-    },
-    {
-      key: "packageId",
-      label: "AgentOS package id (0x…, optional)",
-      placeholder: "0x… (overrides NEXT_PUBLIC_AGENTOS_PACKAGE_ID)",
-      hint: "Override the deployed AgentOS package. Leave blank to use the configured one.",
-      validate: validateHexId,
+      placeholder: "module::function",
+      hint: "The function to call, e.g. gm_overflow::gm::gm",
     },
     {
       key: "extraArgs",
-      label: "Move-call arguments (one key=value per line)",
-      placeholder: "name=My NFT\ndescription=...\nimage_url=https://...",
+      label: "Move-call arguments (one key=value per line, optional)",
+      placeholder: "name=My NFT\ndescription=...",
       kind: "textarea",
-      hint: "Positional args for the custom entry function above, in order. Ignored for record_execution (no movePackage set).",
+      hint: "Positional args for the entry function above. Leave blank if the function takes no parameters.",
     },
   ],
 
@@ -371,8 +375,7 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
  * threshold Seal yet. Keyed by node label (empty when a type has no note).
  */
 export const NODE_FORM_NOTES: Partial<Record<string, string>> = {
-  Harbor:
-    "Encrypts a blob before storing it on Walrus, so the skill/manifest is private — only holders allowed by the access policy can decrypt. DEMO: encryption is an AES stand-in, not real threshold Seal yet.",
+  Harbor: "Private Harbor upload. Paste an image URL or leave it blank for metadata/text.",
 };
 
 /** Look up the form-level note for a canvas node label (undefined when none). */

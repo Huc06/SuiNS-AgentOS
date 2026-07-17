@@ -1,4 +1,3 @@
-import { getFullnodeUrl } from '@mysten/sui/client';
 import { fromBase64, normalizeSuiAddress, toHex } from '@mysten/sui/utils';
 import type { Transaction } from '@mysten/sui/transactions';
 
@@ -18,27 +17,24 @@ export function getSuiNetwork(): SuiNetworkName {
   return 'testnet';
 }
 
+const PUBLIC_RPC_URLS: Partial<Record<SuiNetworkName, string>> = {
+  // Sui's former public JSON-RPC endpoints (`fullnode.{network}.sui.io`) were
+  // retired in 2026. Keep the app functional out of the box while allowing a
+  // deployment to override this with its own provider below.
+  testnet: 'https://sui-testnet-rpc.publicnode.com',
+  mainnet: 'https://sui-mainnet-rpc.publicnode.com',
+};
+
 /**
- * Resolve the Sui fullnode RPC URL to use, honoring `SUI_RPC_URL` /
- * `NEXT_PUBLIC_SUI_RPC_URL` overrides before falling back to
- * `getFullnodeUrl(network)`.
- *
- * Sui's public JSON-RPC endpoints (`fullnode.{network}.sui.io`) are being
- * deprecated and shut down network-by-network in 2026 (testnet the week of
- * 2026-07-06, full deactivation 2026-07-31 — see
- * docs.sui.io/develop/accessing-data/json-rpc-migration). Once a network's
- * public endpoint is turned off, `getFullnodeUrl` silently returns a dead URL
- * (verified: `getFullnodeUrl('testnet')` → `Unexpected status code: 404` as of
- * 2026-07-14). Set `SUI_RPC_URL` (server) / `NEXT_PUBLIC_SUI_RPC_URL` (client)
- * to a still-live provider (e.g. a free PublicNode or Ankr endpoint, or a paid
- * provider) to keep on-chain calls working after the cutover.
+ * Resolve the Sui fullnode RPC URL to use. Explicit server/client overrides
+ * take precedence; testnet and mainnet otherwise use a live public endpoint.
  */
 export function getSuiRpcUrl(network: SuiNetworkName = getSuiNetwork()): string {
   const override =
     process.env.SUI_RPC_URL?.trim() ||
     process.env.NEXT_PUBLIC_SUI_RPC_URL?.trim();
   if (override) return override;
-  return getFullnodeUrl(network);
+  return PUBLIC_RPC_URLS[network] ?? `https://fullnode.${network}.sui.io:443`;
 }
 
 export function getAgentosPackageId(): string | undefined {

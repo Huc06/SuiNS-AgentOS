@@ -28,9 +28,10 @@ export async function GET(request: NextRequest) {
 
     // 2. Fall back to on-chain SuiNS resolution
     const network = getSuiNetwork();
-    const { SuiClient } = await import("@mysten/sui/client");
-    const client = new SuiClient({
-      url: getSuiRpcUrl(network === "mainnet" ? "mainnet" : "testnet"),
+    const { SuiGrpcClient } = await import("@mysten/sui/grpc");
+    const client = new SuiGrpcClient({
+      network: network === "mainnet" ? "mainnet" : "testnet",
+      baseUrl: `https://fullnode.${network === "mainnet" ? "mainnet" : "testnet"}.sui.io:443`,
     });
     const suins = createSuinsClient(client as never, network);
     const normalized = normalizeSuinsInput(name);

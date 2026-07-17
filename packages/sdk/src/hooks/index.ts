@@ -1,7 +1,9 @@
 "use client";
 
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import type { SuiClient } from "@mysten/sui/client";
+import type { ClientWithExtensions, CoreClient } from "@mysten/sui/client";
+
+type SuiClient = ClientWithExtensions<{ core: CoreClient }>;
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useMemo, useCallback } from "react";
 

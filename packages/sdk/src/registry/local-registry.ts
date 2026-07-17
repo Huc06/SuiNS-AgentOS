@@ -190,7 +190,7 @@ export function passportFromRecord(record: RegistryAgentRecord) {
     runtimeWallet: record.runtimeWallet,
     policyRoot: "0x0",
     skillRoot: "0x0",
-    memoryNamespace: "",
+    memoryNamespace: record.memoryNamespaces?.[0] ?? record.suinsName,
     activityLogPointer: "",
     status: record.status,
   } as const;

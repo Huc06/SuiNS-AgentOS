@@ -547,6 +547,16 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
         severity: "skip",
       };
     }
+    if (/passport or package not found on testnet|passport not found on testnet|ensure skill and passport are published/i.test(note)) {
+      return {
+        code: "PASSPORT_NOT_ONCHAIN",
+        cause:
+          "The required passport, skill, or package object is not available on the configured Sui network.",
+        remediation:
+          "Mint/publish the required AgentPassport and skill on this network, then re-run the workflow.",
+        severity: "skip",
+      };
+    }
     if (/upstream skipped/i.test(note)) {
       return {
         code: "BLOCKED_UPSTREAM",

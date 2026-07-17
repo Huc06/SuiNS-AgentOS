@@ -333,6 +333,47 @@ describe("buildExecuteSkillTx — delegated path", () => {
     expect(inputs.some((i) => i.$kind === "Pure")).toBe(true);
   });
 
+  it("binds typed params in manifest order, not params object insertion order", async () => {
+    const recipient =
+      "0x0000000000000000000000000000000000000000000000000000000000000001";
+    const client = await setupClient(
+      validManifest({
+        sui: {
+          movePackage:
+            "0x0000000000000000000000000000000000000000000000000000000000000002",
+          entry: "mod::run",
+          policyRequired: [],
+          // This is the actual positional Move entry signature.
+          parameters: [
+            { name: "recipient", type: "address" },
+            { name: "amount", type: "u64" },
+          ],
+        },
+      }),
+    );
+
+    // Deliberately reverse the object key insertion order. Before the fix this
+    // emitted amount then recipient, binding both values to the wrong Move slots.
+    const { transaction } = await client.buildExecuteSkillTx({
+      suinsName: "trade.alpha.sui",
+      params: { amount: 42, recipient },
+    });
+
+    const pureInputLengths = transaction
+      .getData()
+      .inputs.filter((input) => input.$kind === "Pure")
+      .map((input) =>
+        Buffer.from(
+          (input as { Pure: { bytes: string } }).Pure.bytes,
+          "base64",
+        ).length,
+      );
+
+    // An address BCS-encodes to 32 bytes; u64 encodes to 8. The sequence proves
+    // the Move call was built in manifest order: recipient first, amount second.
+    expect(pureInputLengths).toEqual([32, 8]);
+  });
+
   // ───────────────────────────────────────────────────────────────────────────
   // Resilient Call: an UNRESOLVABLE skill must not abort a delegated Call.
   //

@@ -33,6 +33,13 @@ import {
 import { WizardStepIndicator } from "./wizard-steps";
 
 type NamePath = "new" | "own";
+type MintProgress = "idle" | "preparing" | "awaiting-signature" | "confirming";
+
+const MINT_PROGRESS_LABEL: Record<Exclude<MintProgress, "idle">, string> = {
+  preparing: "Preparing transaction…",
+  "awaiting-signature": "Approve the transaction in your wallet…",
+  confirming: "Transaction sent — confirming on-chain…",
+};
 
 type MintSuccess = {
   slug: string;
@@ -86,6 +93,7 @@ export function CreateAgentModal({
     null,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [mintProgress, setMintProgress] = useState<MintProgress>("idle");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<MintSuccess | null>(null);
   const [step, setStep] = useState<"connect" | "name" | "review" | "success">(
@@ -130,6 +138,7 @@ export function CreateAgentModal({
     setNamePath(initialPath);
     setOwnedNames([]);
     setVerification(null);
+    setMintProgress("idle");
     setError(null);
     setSuccess(null);
     setStep("connect");
@@ -218,8 +227,22 @@ export function CreateAgentModal({
       .then((result) => {
         if (!cancelled) setVerification(result);
       })
-      .catch(() => {
-        if (!cancelled) setVerification(null);
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setVerification({
+            name: suinsName,
+            registered: false,
+            ownedByWallet: false,
+            expired: false,
+            targetAddress: null,
+            runtimeWallet: effectiveRuntime,
+            targetMatchesRuntime: false,
+            nftId: null,
+            expirationTimestampMs: null,
+            lookupError:
+              err instanceof Error ? err.message : "Unknown SuiNS lookup error",
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setCheckingSuins(false);
@@ -246,6 +269,7 @@ export function CreateAgentModal({
     if (namePath === "new") return;
 
     setSubmitting(true);
+    setMintProgress("preparing");
     setError(null);
 
     try {
@@ -294,6 +318,7 @@ export function CreateAgentModal({
                 recipient: account.address,
               });
 
+          setMintProgress("awaiting-signature");
           if (isEnokiSponsorEnabled()) {
             const sponsored = await sponsorCreatePassport({
               suiClient: suiClient as never,
@@ -314,13 +339,24 @@ export function CreateAgentModal({
           }
 
           if (mintDigest) {
-            const resolved = await resolvePassportFromDigest(
-              suiClient as never,
-              mintDigest,
-              packageId,
-            );
-            passportObjectId = resolved.passportObjectId;
+            // A digest means the wallet submitted the transaction. Do not keep
+            // the wizard in loading state indefinitely just because RPC object
+            // indexing is slow; Step 4 can show the digest immediately.
             mintedOnChain = true;
+            setMintProgress("confirming");
+            try {
+              const resolved = await resolvePassportFromDigest(
+                suiClient as never,
+                mintDigest,
+                packageId,
+              );
+              passportObjectId = resolved.passportObjectId;
+            } catch (resolveErr) {
+              console.warn(
+                "Transaction submitted, but Passport object was not resolved yet.",
+                resolveErr,
+              );
+            }
           }
         } catch (mintErr) {
           console.warn("On-chain mint failed; registry saved.", mintErr);
@@ -533,6 +569,20 @@ export function CreateAgentModal({
               <p className="border-2 border-error bg-red-50 px-3 py-2 font-mono text-xs text-error">
                 {error}
               </p>
+            )}
+
+            {submitting && mintProgress !== "idle" && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-3 border-2 border-electric-purple bg-electric-purple/10 px-4 py-3 font-mono text-sm font-bold text-electric-purple"
+              >
+                <span
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-electric-purple border-t-transparent"
+                  aria-hidden
+                />
+                <span>{MINT_PROGRESS_LABEL[mintProgress]}</span>
+              </div>
             )}
 
             <fieldset className="space-y-3">
@@ -769,21 +819,26 @@ export function CreateAgentModal({
                   </div>
                 </div>
 
-                <div
-                  className={`border-2 px-3 py-2 font-mono text-xs ${
-                    suinsReady
-                      ? "border-green-800 bg-green-50 text-green-900"
-                      : nameValid
-                        ? "border-pure-black bg-surface-container text-on-surface-variant"
-                        : "border-error/40 bg-red-50 text-error"
-                  }`}
-                >
-                  {checkingSuins
-                    ? "Checking SuiNS on-chain…"
-                    : name.length > 0 && !nameValid
-                      ? "Enter a valid name ending in .sui"
-                      : suinsStatusLabel(verification)}
-                </div>
+                {(checkingSuins ||
+                  (name.length > 0 && !nameValid) ||
+                  verification) && (
+                  <div
+                    className={`border-2 px-3 py-2 font-mono text-xs ${
+                      suinsReady
+                        ? "border-green-800 bg-green-50 text-green-900"
+                        : verification?.lookupError ||
+                            (name.length > 0 && !nameValid)
+                          ? "border-error/40 bg-red-50 text-error"
+                          : "border-pure-black bg-surface-container text-on-surface-variant"
+                    }`}
+                  >
+                    {checkingSuins
+                      ? "Checking SuiNS on-chain…"
+                      : name.length > 0 && !nameValid
+                        ? "Enter a valid name ending in .sui"
+                        : suinsStatusLabel(verification)}
+                  </div>
+                )}
 
                 <fieldset className="space-y-2">
                   <legend className="font-mono text-sm font-bold uppercase">
@@ -883,7 +938,9 @@ export function CreateAgentModal({
                   }
                   className="border-2 border-pure-black bg-electric-purple px-6 py-3 font-mono text-sm font-bold text-off-white neo-shadow transition-all active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 >
-                  {submitting ? "Signing…" : "Mint Passport"}
+                  {submitting
+                    ? MINT_PROGRESS_LABEL[mintProgress === "idle" ? "preparing" : mintProgress]
+                    : "Mint Passport"}
                 </button>
               ) : (
                 <button

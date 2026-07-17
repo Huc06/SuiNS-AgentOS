@@ -65,6 +65,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (skill.walrusManifestBlob.startsWith("walrus://")) {
+    return NextResponse.json(
+      { error: "skill manifest has not been uploaded to Walrus — publish the skill first" },
+      { status: 422 },
+    );
+  }
+
   const walrus = new WalrusClient({ aggregatorUrl: DEFAULT_WALRUS_AGGREGATOR });
 
   // Download the existing manifest bytes.

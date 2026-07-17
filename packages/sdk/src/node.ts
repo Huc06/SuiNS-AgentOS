@@ -22,7 +22,30 @@ export * from "./registry/index.js";
 export * from "./storage/index.js";
 export * as contracts from "./contracts/index.js";
 export { HarborClient } from "./harbor.js";
-export type { HarborClientOptions, HarborUploadResult } from "./harbor.js";
+export type {
+  HarborClientOptions,
+  HarborFileUploadOptions,
+  HarborUploadResult,
+} from "./harbor.js";
+export {
+  fetchRemoteImage,
+  imageFilename,
+  isPublicIpAddress,
+  resolvePublicHostname,
+  selectLookupAddresses,
+  validateImageBytes,
+  validateImageResponseHeaders,
+  validateRemoteImageUrl,
+  readRemoteImageBody,
+  MAX_REMOTE_IMAGE_BYTES,
+} from "./remote-image.js";
+export type {
+  FetchRemoteImageOptions,
+  HostnameResolver,
+  RemoteImage,
+  RemoteImageContentType,
+  ResolvedAddress,
+} from "./remote-image.js";
 export {
   DEFAULT_WALRUS_AGGREGATOR,
   DEFAULT_WALRUS_EPOCHS,
@@ -71,7 +94,12 @@ export type { SuiperpowerBuildResult } from "./suiperpower.js";
 // Real Mysten Seal encryption (write path only). Node-only — pulls @mysten/seal
 // + a read-only SuiClient; deliberately NOT in the browser entry or the
 // signer-agnostic workflow engine (the engine reaches it via injected ctx.seal).
-export { sealEncryptReal, isRealSeal, SEAL_REAL_MAGIC } from "./seal-real.js";
+export {
+  sealEncryptHarbor,
+  sealEncryptReal,
+  isRealSeal,
+  SEAL_REAL_MAGIC,
+} from "./seal-real.js";
 export type {
   SealEncryptRealOptions,
   SealEncryptRealResult,

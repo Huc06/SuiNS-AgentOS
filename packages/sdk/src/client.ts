@@ -1,4 +1,6 @@
-import type { ClientWithCoreApi } from "@mysten/sui/experimental";
+import type { ClientWithExtensions, CoreClient } from "@mysten/sui/client";
+
+type ClientWithCoreApi = ClientWithExtensions<{ core: CoreClient }>;
 import type { Signer } from "@mysten/sui/cryptography";
 import { Transaction } from "@mysten/sui/transactions";
 import type { TransactionObjectArgument } from "@mysten/sui/transactions";
@@ -263,16 +265,14 @@ export class AgentOSClient {
   }
 
   async resolveAgent(suinsName: string): Promise<AgentPassport> {
-    // Try on-chain SuiNS resolution first (works in browser without registryPath)
-    try {
-      const { resolveAgentByName } = await import("./suins-resolve.js");
-      const passport = await resolveAgentByName(this.#client, suinsName);
-      if (passport) return passport;
-    } catch {
-      // Fall through to registry
-    }
+    // On-chain SuiNS resolution returns null for a missing name. Do not catch
+    // transport/auth/RPC failures here: silently converting those into a local
+    // fallback (or "not found") hides an operational problem from the caller.
+    const { resolveAgentByName } = await import("./suins-resolve.js");
+    const passport = await resolveAgentByName(this.#client, suinsName);
+    if (passport) return passport;
 
-    // Fallback: local registry
+    // Fallback: local registry when the name genuinely is not on-chain.
     if (!this.#registry) {
       throw new Error(`Agent not found: ${suinsName}`);
     }
@@ -287,16 +287,24 @@ export class AgentOSClient {
     suinsNameOrSkillId: string,
     agentName?: string,
   ): Promise<SkillDescriptor> {
-    // First, attempt on-chain SuiNS resolution if the input looks like a SuiNS name
+    // First, attempt on-chain SuiNS resolution if the input looks like a SuiNS name.
+    // `#resolveSkillOnChain` uses this exact error only for the expected
+    // absent-name case; network/auth/invalid-object failures must surface rather
+    // than being disguised as a registry fallback.
     if (suinsNameOrSkillId.includes(".")) {
       try {
         return await this.#resolveSkillOnChain(suinsNameOrSkillId);
-      } catch {
-        // Fall through to local registry lookup
+      } catch (err) {
+        if (
+          !(err instanceof Error) ||
+          !err.message.startsWith("Skill not found:")
+        ) {
+          throw err;
+        }
       }
     }
 
-    // Fallback: local registry lookup
+    // Fallback: local registry lookup after a genuine on-chain miss.
     if (!this.#registry) {
       throw new Error(`Skill not found: ${suinsNameOrSkillId}`);
     }

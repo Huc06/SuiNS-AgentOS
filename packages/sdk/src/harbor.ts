@@ -31,6 +31,11 @@ export interface HarborFileUploadResult {
   state?: string;
 }
 
+export interface HarborFileUploadOptions {
+  /** Original plaintext MIME used by Harbor after private Seal decryption. */
+  contentType?: string;
+}
+
 /**
  * Options for constructing a {@link HarborClient}.
  */
@@ -64,10 +69,27 @@ interface HarborFileEnvelope {
  * (`GET …/files/{fileId}/status`). `state` is the job lifecycle; `completed`
  * means the Walrus blob is certified.
  */
+interface HarborUploadError {
+  code?: string;
+  message?: string;
+  http_status?: number;
+}
+
 interface HarborUploadStatus {
+  /** Legacy/root-level shape retained for backwards compatibility. */
   state?: "queued" | "active" | "completed" | "failed" | string;
   progress?: number;
-  data?: HarborFileSummary;
+  error?: HarborUploadError;
+  /**
+   * Harbor's current response envelope: `{ data: { state, progress, error } }`.
+   * `blob_id` can still be present on a completed response, so preserve the
+   * file-summary fields here as well.
+   */
+  data?: HarborFileSummary & {
+    state?: "queued" | "active" | "completed" | "failed" | string;
+    progress?: number;
+    error?: HarborUploadError;
+  };
 }
 
 /**
@@ -109,6 +131,7 @@ export class HarborClient {
     content: Uint8Array,
     filename: string,
     pollOptions: { attempts?: number; intervalMs?: number } = {},
+    uploadOptions: HarborFileUploadOptions = {},
   ): Promise<HarborFileUploadResult> {
     // Harbor keys the upload path by bucket UUID. HARBOR_BUCKET_ID must be a
     // UUID; the list-buckets endpoint is not stable, so we require UUID directly.
@@ -121,7 +144,9 @@ export class HarborClient {
     bytes.set(content);
     form.append(
       "file",
-      new Blob([bytes], { type: "application/octet-stream" }),
+      new Blob([bytes], {
+        type: uploadOptions.contentType ?? "application/octet-stream",
+      }),
       filename,
     );
 
@@ -184,14 +209,23 @@ export class HarborClient {
         throw new Error(`Harbor upload failed: ${res.status} ${body}`);
       }
       const status = (await res.json()) as HarborUploadStatus;
-      const state = status.state;
+      // Current Harbor responses wrap job fields in `data`; accept the legacy
+      // root-level form too so callers do not silently time out during rollout.
+      const nested = status.data;
+      const state = nested?.state ?? status.state;
       if (state === "completed") {
         const blobId =
-          status.data?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
+          nested?.blob_id ?? (await this.getFileBlobId(bucketId, fileId));
         return { state, ...(blobId ? { blobId } : {}) };
       }
       if (state === "failed") {
-        throw new Error(`Harbor upload failed: job ${fileId} reported failed`);
+        const error = nested?.error ?? status.error;
+        const detail = error
+          ? `: ${error.code ?? "unknown"}${error.message ? `: ${error.message}` : ""}`
+          : "";
+        throw new Error(
+          `Harbor upload failed: job ${fileId} reported failed${detail}`,
+        );
       }
       // queued / active → wait and retry.
       await new Promise((resolve) => setTimeout(resolve, intervalMs));

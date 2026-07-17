@@ -151,6 +151,20 @@ describe("diagnoseStep", () => {
     expect(d.remediation).toMatch(/staging/i);
   });
 
+  it("classifies a missing on-chain passport/package skip precisely", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "sui",
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — passport or package not found on testnet. Mint a real AgentPassport to enable on-chain recording.",
+        },
+      }),
+    );
+    expect(d.code).toBe("PASSPORT_NOT_ONCHAIN");
+    expect(d.severity).toBe("skip");
+  });
+
   it("SPONSOR_REJECTED: names the EXACT runtime sender from the error", () => {
     const d = diagnoseStep(
       mk({

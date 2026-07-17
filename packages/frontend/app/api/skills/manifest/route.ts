@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 import {
   computeManifestHash,
   HarborClient,
@@ -51,7 +53,11 @@ export async function GET(request: Request) {
 
     // Compute SHA-256
     const computedHash = computeManifestHash(content);
-    const verified = computedHash === expectedHash;
+    // `computeManifestHash()` emits bare hex while registry/on-chain writers
+    // may prefix the same digest with `0x`; compare the canonical digest form.
+    const normalizeHash = (hash: string) =>
+      hash.trim().toLowerCase().replace(/^0x/, '');
+    const verified = normalizeHash(computedHash) === normalizeHash(expectedHash);
 
     // Parse manifest
     let manifest = null;

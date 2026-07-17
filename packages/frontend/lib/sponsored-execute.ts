@@ -1,5 +1,5 @@
 import { EnokiClient } from "@mysten/enoki";
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import type { Transaction } from "@mysten/sui/transactions";
@@ -26,7 +26,7 @@ export interface SponsoredExecuteResult {
 }
 
 let cachedKeypair: Ed25519Keypair | null = null;
-let cachedSuiClient: SuiClient | null = null;
+let cachedSuiClient: SuiGrpcClient | null = null;
 
 /**
  * Extract the most useful detail from an Enoki SDK error. Enoki surfaces the
@@ -93,9 +93,13 @@ export function getEnokiClient(): EnokiClient {
   return new EnokiClient({ apiKey });
 }
 
-function getSuiClient(): SuiClient {
+function getSuiClient(): SuiGrpcClient {
   if (cachedSuiClient) return cachedSuiClient;
-  cachedSuiClient = new SuiClient({ url: getSuiRpcUrl(getSuiNetwork()) });
+  const network = getSuiNetwork();
+  cachedSuiClient = new SuiGrpcClient({
+    network,
+    baseUrl: `https://fullnode.${network}.sui.io:443`,
+  });
   return cachedSuiClient;
 }
 
@@ -169,34 +173,13 @@ export async function sponsoredExecuteServer(
     signature,
   });
 
-  // 6. Enoki only returns the digest — fetch effects + objectChanges ourselves.
+  // 6. Wait for gRPC settlement. The gRPC client exposes a normalized
+  // transaction result rather than JSON-RPC `objectChanges`/`effects`; callers
+  // always receive the committed digest and can query details separately.
   try {
-    const result = await client.waitForTransaction({
-      digest: executed.digest,
-      options: { showEffects: true, showObjectChanges: true },
-    });
-
-    const objectChanges = (result.objectChanges ?? [])
-      .map((change): SponsoredObjectChange | undefined => {
-        if ("objectId" in change && change.objectId) {
-          return {
-            type: change.type,
-            objectId: change.objectId,
-            objectType:
-              "objectType" in change ? change.objectType : undefined,
-          };
-        }
-        return undefined;
-      })
-      .filter((c): c is SponsoredObjectChange => c !== undefined);
-
-    return {
-      digest: executed.digest,
-      effects: result.effects ?? undefined,
-      objectChanges,
-    };
+    await client.waitForTransaction({ digest: executed.digest });
   } catch {
-    // Transaction was submitted; effects fetch failed (e.g. indexer lag).
-    return { digest: executed.digest };
+    // Submission succeeded even if the read side is lagging.
   }
+  return { digest: executed.digest };
 }

@@ -272,7 +272,22 @@ export interface RunContext {
     upload: (
       content: Uint8Array,
       filename: string,
+      options?: { contentType?: string },
     ) => Promise<{ blobId: string; fileId?: string; url?: string }>;
+    /** Active private bucket's Seal policy; supplies template/default policy. */
+    sealPolicyId?: string;
+  };
+  /**
+   * Optional server-side media downloader for Harbor image archives. The host
+   * validates schemes, DNS/IP ranges, redirects, MIME, magic bytes and size;
+   * the signer-agnostic engine receives only the verified original bytes.
+   */
+  media?: {
+    fetchImage: (url: string) => Promise<{
+      bytes: Uint8Array;
+      filename: string;
+      contentType: "image/jpeg" | "image/png";
+    }>;
   };
   /**
    * Optional REAL Mysten Seal encryptor, injected by the host. Given the bytes

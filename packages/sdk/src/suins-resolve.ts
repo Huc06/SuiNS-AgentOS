@@ -6,7 +6,9 @@
  * environments by using only the SuiClient RPC.
  */
 
-import type { ClientWithCoreApi } from "@mysten/sui/experimental";
+import type { ClientWithExtensions, CoreClient } from "@mysten/sui/client";
+
+type ClientWithCoreApi = ClientWithExtensions<{ core: CoreClient }>;
 import type { AgentPassport, SkillDescriptor } from "./types.js";
 
 /** A SuiClient-like interface exposing the resolution methods we need. */

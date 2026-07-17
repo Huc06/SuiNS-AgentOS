@@ -232,6 +232,26 @@ describe("delegate executor", () => {
     expect(execute).toHaveBeenCalledWith({ __tx: "delegate" });
   });
 
+  it("returns an actionable error instead of throwing for malformed integer params", async () => {
+    for (const [key, value] of [
+      ["spendLimit", "not-an-integer"],
+      ["expiryMs", "not-an-integer"],
+    ]) {
+      const build = makeBuild();
+      const execute = vi.fn(async () => ({ digest: "unexpected" }));
+      const r = await executors.delegate(
+        node("delegate", { child: CHILD_ADDR, [key]: value }),
+        makeCtx({ build, execute }),
+        [],
+      );
+
+      expect(r).toMatchObject({ status: "error" });
+      expect(r.error).toMatch(new RegExp(`delegate: ${key} must be an integer`));
+      expect(build.buildDelegateTx).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+    }
+  });
+
   it("errors when no child is provided", async () => {
     const ctx = makeCtx();
     const r = await executors.delegate(node("delegate"), ctx, []);
@@ -618,6 +638,27 @@ describe("attest executor", () => {
       recipient: CHILD_ADDR,
     });
     expect(execute).toHaveBeenCalledWith({ __tx: "attest" });
+  });
+
+  it("resolves a .sui recipient name to an address before building the attest tx", async () => {
+    const resolveAgentAddress = vi.fn(async () => CHILD_ADDR);
+    const resolve = makeResolve({ resolveAgentAddress });
+    const build = makeBuild();
+    const r = await executors.attest(
+      node("attest", {
+        subjectPassportId: SUBJECT_ID,
+        score: 90,
+        recipient: "child.sui",
+      }),
+      makeCtx({ resolve, build }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(resolveAgentAddress).toHaveBeenCalledWith("child.sui");
+    expect(build.buildAttestTx).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: CHILD_ADDR }),
+    );
   });
 
   it("uses share:true when no recipient is given", async () => {

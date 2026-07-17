@@ -83,37 +83,67 @@ function pickPayload(node: WorkflowNode, ctx: RunContext): unknown {
   );
 }
 
+/** Build NFT metadata from the canvas' individual fields when any is supplied. */
+function nftMetadataPayload(node: WorkflowNode): Record<string, string> | undefined {
+  const name = strParam(node, "nftName");
+  const description = strParam(node, "nftDescription");
+  const image = strParam(node, "nftImageUri");
+  if (!name && !description && !image) return undefined;
+  return {
+    ...(name ? { name } : {}),
+    ...(description ? { description } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
 /** Parse a `package::module::function` (or `module::function`) entry target. */
 function parseTarget(
   movePackage: string,
   entry: string,
 ): `${string}::${string}::${string}` {
   const parts = entry.split("::");
-  if (parts.length === 3) {
+  // 3-part: address::module::function — only use as-is when parts[0] is a real
+  // on-chain address (0x…). If it's a Move package NAME (e.g. "gm_overflow"),
+  // fall through to 2-part handling so movePackage isn't discarded.
+  if (parts.length === 3 && parts[0].startsWith("0x")) {
     return `${parts[0]}::${parts[1]}::${parts[2]}`;
+  }
+  if (parts.length === 3) {
+    // module-name::module::function — prepend the actual package address
+    return `${movePackage}::${parts[1]}::${parts[2]}`;
   }
   if (parts.length === 2) {
     return `${movePackage}::${parts[0]}::${parts[1]}`;
   }
   return `${movePackage}::main::${entry}`;
 }
-const RESERVED_PARAM_KEYS = new Set([
- "movePackage", "entry", "passportId", "packageId", "manifest", "blob",
- "private", "sealPolicyId", "filename", "skill", "cost", "agent", "child",
- "spendLimit", "expiryMs", "allowedSkills", "allowedCapabilities", "kind",
- "score", "share", "recipient", "namespace", "text", "query", "limit",
- "extraArgs",
+// `buildMoveArgs` is used ONLY by the generic `sui` executor. Reserve only
+// its own control fields — other workflow nodes may use names such as
+// `recipient`, `kind`, `namespace`, or `limit`, but those are perfectly valid
+// positional arguments for a user-supplied Move entry and must not disappear.
+// The frontend expands the `extraArgs` textarea into named params before a run,
+// so never encode the raw textarea itself.
+const SUI_CONTROL_PARAM_KEYS = new Set([
+  "movePackage",
+  "entry",
+  "passportId",
+  "packageId",
+  "extraArgs",
+  "message",
 ]);
+
 function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
- if (!params) return [];
- const args: ReturnType<typeof tx.pure.vector>[] = [];
- for (const [key, value] of Object.entries(params)) {
- if (RESERVED_PARAM_KEYS.has(key)) continue;
- if (value === undefined || value === null || value === "") continue;
- const str = String(value);
- args.push(tx.pure.vector("u8", Array.from(new TextEncoder().encode(str))));
- }
- return args;
+  if (!params) return [];
+  const args: ReturnType<typeof tx.pure.vector>[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (SUI_CONTROL_PARAM_KEYS.has(key)) continue;
+    if (value === undefined || value === null || value === "") continue;
+    const str = String(value);
+    args.push(
+      tx.pure.vector("u8", Array.from(new TextEncoder().encode(str))),
+    );
+  }
+  return args;
 }
 /** Trigger: a no-op start node that simply marks the chain as begun. */
 const trigger: StepExecutor = async (node, ctx) => {
@@ -168,9 +198,6 @@ async function storeEncryptedOnWalrus(
  * to the bucket UUID directly. Surfaced in the node output so a degraded run is
  * legible from the canvas without reading server logs.
  */
-const HARBOR_BUCKET_HINT =
-  "Harbor resolves a non-UUID HARBOR_BUCKET_ID via the space bucket list; if upload fails with a UUID error, set HARBOR_BUCKET_ID to the bucket UUID.";
-
 /**
  * Harbor: store the payload in the user's Walrus Harbor account whenever a real
  * Harbor uploader is configured — for PRIVATE skills the Seal-encrypted
@@ -201,12 +228,19 @@ const HARBOR_BUCKET_HINT =
 const harbor: StepExecutor = async (node, ctx) => {
   const isPrivate = Boolean(node.params?.private);
 
-  const sealPolicyId =
+  const requestedSealPolicyId =
     typeof node.params?.sealPolicyId === "string"
       ? node.params.sealPolicyId
       : typeof node.params?.private === "string"
         ? node.params.private
         : "";
+  // Templates created before a real Harbor bucket existed carry "demo-policy".
+  // A configured private Harbor bucket supplies the real policy instead, while
+  // explicit non-demo policies still win for advanced/custom workflows.
+  const sealPolicyId =
+    requestedSealPolicyId && requestedSealPolicyId !== "demo-policy"
+      ? requestedSealPolicyId
+      : (ctx.harbor?.sealPolicyId ?? requestedSealPolicyId);
   if (isPrivate && !sealPolicyId) {
     return {
       status: "error",
@@ -225,7 +259,36 @@ const harbor: StepExecutor = async (node, ctx) => {
     };
   }
 
-  const plaintext = toBytes(pickPayload(node, ctx));
+  const fileUrl = strParam(node, "fileUrl") ?? strParam(node, "imageUrl");
+  let sourceImage:
+    | { filename: string; contentType: "image/jpeg" | "image/png"; bytes: Uint8Array }
+    | undefined;
+  let plaintext: Uint8Array;
+  if (fileUrl) {
+    if (!ctx.media) {
+      return {
+        status: "error",
+        error: "harbor image URL requires a server-side media downloader",
+      };
+    }
+    try {
+      sourceImage = await ctx.media.fetchImage(fileUrl);
+      plaintext = sourceImage.bytes;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { status: "error", error: `Harbor image download failed: ${message}` };
+    }
+  } else {
+    plaintext = toBytes(nftMetadataPayload(node) ?? pickPayload(node, ctx));
+  }
+  const sourceOutput = sourceImage
+    ? {
+        sourceUrl: fileUrl,
+        sourceFilename: sourceImage.filename,
+        sourceContentType: sourceImage.contentType,
+        sourceBytes: plaintext.length,
+      }
+    : {};
 
   // PRIVATE → encrypt (real Seal, else AES envelope). PUBLIC → upload the plain
   // payload (no Seal). `payload` is the bytes we actually store.
@@ -272,9 +335,16 @@ const harbor: StepExecutor = async (node, ctx) => {
     const ext = isPrivate ? "seal" : "json";
     const filename =
       strParam(node, "filename") ??
-      `${sealPolicyId || "public"}-${Date.now()}.${ext}`;
+      (sourceImage
+        ? sourceImage.filename
+        : `${sealPolicyId || "public"}-${Date.now()}.${ext}`);
+    const uploadOptions = sourceImage
+      ? { contentType: sourceImage.contentType }
+      : undefined;
     try {
-      const r = await ctx.harbor.upload(payload, filename);
+      const r = uploadOptions
+        ? await ctx.harbor.upload(payload, filename, uploadOptions)
+        : await ctx.harbor.upload(payload, filename);
       if (r.blobId) {
         return {
           status: "done",
@@ -286,18 +356,19 @@ const harbor: StepExecutor = async (node, ctx) => {
             bytes: payload.length,
             encryption: sealMode,
             storage: "harbor",
-            note:
-              sealMode === "aes-demo"
-                ? `AES demo envelope (real Seal unavailable). ${HARBOR_BUCKET_HINT}`
-                : HARBOR_BUCKET_HINT,
+            ...sourceOutput,
+            ...(sealMode === "aes-demo"
+              ? { note: "AES demo envelope (real Seal unavailable)" }
+              : {}),
             ...(r.fileId ? { fileId: r.fileId } : {}),
             ...(r.url ? { url: r.url } : {}),
           },
         };
       }
-      // Harbor accepted the upload but returned no blob id → treat as a soft
-      // failure and fall back to Walrus rather than surface an empty blob.
-      harborError = "Harbor upload returned no blobId";
+      // Harbor accepted the upload but the Walrus certification did not complete
+      // within the poll window — fall back to Walrus. The Harbor file exists and
+      // will finish certifying asynchronously; this is not an error.
+      harborError = "Harbor cert timeout — upload accepted, blob_id not yet available";
     } catch (err) {
       harborError = err instanceof Error ? err.message : String(err);
     }
@@ -309,10 +380,11 @@ const harbor: StepExecutor = async (node, ctx) => {
     const blobId = await storeEncryptedOnWalrus(ctx, payload, sealPolicyId);
     const notes: string[] = [];
     if (harborError) {
-      notes.push("stored on Walrus (Harbor API unavailable)");
-      // The most common real Harbor failure is the bucket-id not resolving to a
-      // UUID — document the fix right on the degraded run.
-      notes.push(HARBOR_BUCKET_HINT);
+      notes.push(
+        harborError.includes("timeout")
+          ? "stored on Walrus (Harbor cert timed out — Harbor file still exists)"
+          : "stored on Walrus (Harbor API unavailable)",
+      );
     }
     if (sealMode === "aes-demo") {
       notes.push("AES demo envelope (real Seal unavailable)");
@@ -327,6 +399,7 @@ const harbor: StepExecutor = async (node, ctx) => {
         bytes: payload.length,
         encryption: sealMode,
         storage: "walrus",
+        ...sourceOutput,
         ...(notes.length > 0 ? { note: notes.join("; ") } : {}),
         ...(harborError ? { harborError } : {}),
       },
@@ -410,10 +483,18 @@ const sui: StepExecutor = async (node, ctx) => {
 
   try {
     const result = await ctx.execute(tx);
+    const message =
+      movePackage && typeof node.params?.message === "string" && node.params.message
+        ? node.params.message
+        : undefined;
     return {
       status: "done",
       txDigest: result.digest,
-      output: { digest: result.digest, objectChanges: result.objectChanges },
+      output: {
+        digest: result.digest,
+        objectChanges: result.objectChanges,
+        ...(message ? { message } : {}),
+      },
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -447,6 +528,34 @@ function strArrayParam(node: WorkflowNode, key: string): string[] | undefined {
   const v = node.params?.[key];
   if (!Array.isArray(v)) return undefined;
   return v.filter((x): x is string => typeof x === "string");
+}
+
+/**
+ * Parse an optional integer workflow field without allowing `BigInt()` to
+ * escape from the executor. Canvas parameters can be user-entered strings or
+ * values restored from old graphs, so malformed values must produce a normal
+ * actionable step error instead of crashing the entire workflow run.
+ */
+function bigintParam(
+  raw: unknown,
+  name: string,
+  fallback: bigint,
+): { value: bigint } | { error: string } {
+  if (raw === undefined || raw === null || raw === "") {
+    return { value: fallback };
+  }
+  if (typeof raw !== "string" && typeof raw !== "number") {
+    return {
+      error: `delegate: ${name} must be an integer string or number (got ${typeof raw})`,
+    };
+  }
+  try {
+    return { value: BigInt(raw) };
+  } catch {
+    return {
+      error: `delegate: ${name} must be an integer string or number (got ${String(raw)})`,
+    };
+  }
 }
 
 /**
@@ -653,28 +762,27 @@ const delegate: StepExecutor = async (node, ctx) => {
     };
   }
 
+  const spendLimit = bigintParam(node.params?.spendLimit, "spendLimit", 0n);
+  if ("error" in spendLimit) {
+    return { status: "error", error: spendLimit.error };
+  }
+  const expiryMs = bigintParam(node.params?.expiryMs, "expiryMs", 0n);
+  if ("error" in expiryMs) {
+    return { status: "error", error: expiryMs.error };
+  }
+
   const tx = ctx.build.buildDelegateTx({
     parentPassportId,
     childAgent: childAddress,
     allowedSkills: strArrayParam(node, "allowedSkills") ?? [],
     allowedCapabilities: strArrayParam(node, "allowedCapabilities") ?? [],
-    spendLimit: BigInt(
-      typeof node.params?.spendLimit === "number" ||
-        typeof node.params?.spendLimit === "string"
-        ? (node.params.spendLimit as number | string)
-        : 0,
-    ),
-    expiryMs: (() => {
-      const raw = node.params?.expiryMs;
-      const n =
-        typeof raw === "number" || typeof raw === "string" ? BigInt(raw) : 0n;
-      // A DelegationCap with expiry 0 / unset is ALREADY expired, so a later
-      // assert_valid / consume aborts E_EXPIRED (delegation abort code 4). An
-      // older/saved canvas graph can still carry expiryMs:"0" even though the
-      // template default is far-future — so default 0/unset here to a far-future
-      // expiry (2100-01-01) and the demo cap is always valid downstream.
-      return n > 0n ? n : 4102444800000n;
-    })(),
+    spendLimit: spendLimit.value,
+    // A DelegationCap with expiry 0 / unset is ALREADY expired, so a later
+    // assert_valid / consume aborts E_EXPIRED (delegation abort code 4). An
+    // older/saved canvas graph can still carry expiryMs:"0" even though the
+    // template default is far-future — so default 0/unset here to a far-future
+    // expiry (2100-01-01) and the demo cap is always valid downstream.
+    expiryMs: expiryMs.value > 0n ? expiryMs.value : 4102444800000n,
   });
 
   let result: Awaited<ReturnType<typeof ctx.execute>>;
@@ -934,12 +1042,27 @@ const attest: StepExecutor = async (node, ctx) => {
     };
   }
   const uri = strParam(node, "uri") ?? "";
-  const recipient = strParam(node, "recipient");
+  const recipientInput = strParam(node, "recipient");
   const share = Boolean(node.params?.share);
-  if (!recipient && !share) {
+  if (!recipientInput && !share) {
     return {
       status: "error",
       error: "attest: requires either a `recipient` (transfer) or `share: true`",
+    };
+  }
+
+  // Match delegate's behavior: transaction recipients must be concrete Sui
+  // addresses, so resolve a user-friendly `.sui` name before constructing the
+  // PTB instead of letting BCS/on-chain validation fail cryptically.
+  const recipient = recipientInput
+    ? await resolveToAddress(recipientInput, ctx)
+    : undefined;
+  if (recipientInput && !recipient) {
+    return {
+      status: "skipped",
+      output: {
+        note: `Attest: skipped — ${recipientInput} not resolvable on-chain (no passport/address)`,
+      },
     };
   }
 
