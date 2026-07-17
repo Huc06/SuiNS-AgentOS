@@ -210,7 +210,7 @@ export function registerAgent(
 
   const slug = slugFromSuins(suinsName);
   const passportId =
-    input.passportId?.trim() || `0x${randomBytes(20).toString("hex")}`;
+    input.passportId?.trim() || `0x${randomBytes(32).toString("hex")}`;
   const record: RegistryAgentRecord = {
     slug,
     suinsName,
@@ -297,6 +297,18 @@ export function publishSkill(
     throw new Error(`Agent not found: ${input.agentName}`);
   }
 
+  // Look up any existing record BEFORE building the new one, so its real
+  // on-chain objectId can be preserved below. Every caller that already has a
+  // real on-chain SkillDescriptor (the SDK client, MCP server, CLI) passes
+  // `input.objectId` explicitly, so this only matters for callers that don't
+  // (e.g. the frontend's registry-only publish route) — without it, every
+  // republish would silently overwrite a real on-chain objectId with a
+  // random fake one below, severing the registry's link to the actual
+  // SkillDescriptor.
+  const existing = data.skills.find(
+    (s) => s.agentSlug === resolved.agent.slug && s.skillId === input.manifest.name,
+  );
+
   const manifestJson = JSON.stringify(input.manifest);
   const manifestHash =
     input.manifestHash ??
@@ -313,11 +325,14 @@ export function publishSkill(
     skillId: input.manifest.name,
     name: input.manifest.name,
     mvrPackage,
-    version: `v${input.manifest.version}`,
+    version: input.manifest.version.startsWith("v")
+      ? input.manifest.version
+      : `v${input.manifest.version}`,
     walrusManifestBlob,
     manifestHash,
     ...(input.endEpoch !== undefined ? { endEpoch: input.endEpoch } : {}),
-    objectId: input.objectId ?? `0x${randomBytes(20).toString("hex")}`,
+    objectId:
+      input.objectId ?? existing?.objectId ?? `0x${randomBytes(32).toString("hex")}`,
     network: input.network ?? resolved.agent.network,
     status: "active",
     resolutions: "0",
@@ -331,11 +346,8 @@ export function publishSkill(
     ...(input.sealPolicyId ? { sealPolicyId: input.sealPolicyId } : {}),
   };
 
-  const dup = data.skills.find(
-    (s) => s.agentSlug === record.agentSlug && s.skillId === record.skillId,
-  );
-  if (dup) {
-    Object.assign(dup, record);
+  if (existing) {
+    Object.assign(existing, record);
   } else {
     data.skills.push(record);
   }
