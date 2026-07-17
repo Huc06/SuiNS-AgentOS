@@ -430,7 +430,7 @@ describe("sui executor", () => {
     );
 
     expect(r.status).toBe("done");
-    const tx = execute.mock.calls[0]?.[0] as {
+    const tx = (execute.mock.calls as unknown as Array<[unknown]>)[0][0] as {
       getData(): { inputs: Array<{ $kind: string }> };
     };
     // `recipient` used to be filtered because the shared reserved-key set also
@@ -667,5 +667,32 @@ describe("memory-recall executor", () => {
     });
     await executors["memory-recall"](node("memory-recall"), ctx, []);
     expect(recall).toHaveBeenCalledWith("alpha.sui", "from ctx params", undefined);
+  });
+});
+
+
+describe("Harbor configured Seal policy", () => {
+  it("replaces a legacy demo-policy with the active bucket policy", async () => {
+    const upload = vi.fn(async () => ({ blobId: "HARBOR_SEALED" }));
+    const seal = vi.fn(async () => new Uint8Array([1, 2, 3]));
+    const bucketPolicy =
+      "0xf598e89f9584d70797a54f653a59cb2b62b4b332fc52910ac3d8b93220020f22";
+
+    const result = await executors.harbor(
+      node("harbor", {
+        private: true,
+        sealPolicyId: "demo-policy",
+        manifest: { file: "png" },
+      }),
+      makeCtx({ harbor: { upload, sealPolicyId: bucketPolicy }, seal }),
+      [],
+    );
+
+    expect(result.status).toBe("done");
+    expect(seal).toHaveBeenCalledWith(expect.any(Uint8Array), bucketPolicy);
+    expect(upload).toHaveBeenCalledWith(
+      new Uint8Array([1, 2, 3]),
+      expect.stringMatching(/\.seal$/),
+    );
   });
 });

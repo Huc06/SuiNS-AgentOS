@@ -186,11 +186,14 @@ export function nodeOutputSummary(
     case "sui": {
       if (isRecord(output) && str(output.note)) return "no-op";
       const digest = isRecord(output) ? str(output.digest) : undefined;
+      const message = isRecord(output) ? str(output.message) : undefined;
       const changes = countObjectChanges(output);
       if (digest) {
-        return changes && changes.created > 0
-          ? `tx ${shortId(digest)} · ${changes.created} obj`
-          : `tx ${shortId(digest)}`;
+        const txPart =
+          changes && changes.created > 0
+            ? `tx ${shortId(digest)} · ${changes.created} obj`
+            : `tx ${shortId(digest)}`;
+        return message ? `${txPart} · ${message}` : txPart;
       }
       return "executed";
     }
@@ -355,6 +358,8 @@ export function nodeOutputDetail(
         break;
       }
       pushDigest();
+      const suiMessage = str(rec?.message);
+      if (suiMessage) fields.push({ label: "message", value: suiMessage });
       detail.objectChanges = countObjectChanges(output);
       if (detail.objectChanges)
         fields.push({

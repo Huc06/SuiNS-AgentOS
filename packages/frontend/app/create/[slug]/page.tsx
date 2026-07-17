@@ -19,11 +19,13 @@ import {
 import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -325,6 +327,66 @@ function detailFieldHref(field: DetailField): string | undefined {
   }
 }
 
+// ===== Anchored-popover positioning =====
+// React Flow (v12) positions each node via a CSS `transform` on
+// `.react-flow__node`, which creates a new stacking context. Any popover
+// rendered as a normal child of the node is trapped inside that context, so
+// its `z-index` only wins against OTHER node-local layers — it can never
+// paint above sibling overlays like the Tools panel or the bottom metrics
+// panel (both live outside the node's stacking context with their own
+// z-index). That's why, e.g., the Sui "Execute PTB" node's config popover
+// used to render underneath the Tools panel/tab when the node sat near the
+// canvas edge.
+//
+// Fix: portal the popover straight to `document.body` and position it with
+// `fixed` + the anchor's live `getBoundingClientRect()`. This escapes every
+// ancestor stacking context so the popover always paints above the rest of
+// the UI, regardless of where the node sits on the canvas or how far the
+// user has panned/zoomed.
+function useAnchoredPopoverRect(
+  anchorRef: React.RefObject<HTMLElement | null>,
+  open: boolean,
+) {
+  const [rect, setRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setRect(null);
+      return;
+    }
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setRect({ left: r.left, top: r.top, width: r.width, height: r.height });
+    };
+    update();
+
+    // React Flow pan/zoom doesn't fire window `scroll`, so poll via rAF while
+    // the popover is open — cheap (one getBoundingClientRect/frame) and keeps
+    // the popover glued to the node during pan/zoom/drag.
+    let raf = 0;
+    const loop = () => {
+      update();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", update);
+    };
+  }, [open, anchorRef]);
+
+  return rect;
+}
+
 // ===== Per-node output detail popover =====
 // Renders the structured decode from nodeOutputDetail(): labelled fields (with
 // explorer links), an import-agent catalog table, sui objectChanges, a memory
@@ -334,11 +396,20 @@ function NodeOutputDetailPopover({
   detail,
   rawOutput,
   onClose,
+  anchorRect,
 }: {
   label: string;
   detail: ReturnType<typeof nodeOutputDetail>;
   rawOutput: unknown;
   onClose: () => void;
+  /** Live viewport rect of the node box this popover is anchored to (portal
+   * positioning — see useAnchoredPopoverRect). Renders nothing until ready. */
+  anchorRect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
 }) {
   const [copied, setCopied] = useState(false);
   const raw = (() => {
@@ -361,9 +432,22 @@ function NodeOutputDetailPopover({
     }
   };
 
-  return (
+  if (!anchorRect) return null;
+
+  // Fixed-position portal to document.body — escapes the node's transformed
+  // stacking context (see useAnchoredPopoverRect) so this always paints above
+  // the Tools panel / bottom metrics panel, regardless of node position.
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: anchorRect.left + anchorRect.width / 2,
+    top: anchorRect.top + anchorRect.height * 1.1,
+    transform: "translateX(-50%)",
+  };
+
+  return createPortal(
     <div
-      className="nodrag nowheel absolute left-1/2 top-[110%] z-40 w-72 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 text-left shadow-[3px_3px_0_0_#000]"
+      className="nodrag nowheel fixed z-[999] w-72 space-y-2 border-2 border-pure-black bg-white p-3 text-left shadow-[3px_3px_0_0_#000]"
+      style={style}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between">
@@ -504,7 +588,8 @@ function NodeOutputDetailPopover({
           {raw}
         </pre>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -655,6 +740,7 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
   const [editing, setEditing] = useState(false);
   // Expandable per-node output detail popover (toggled from the hover toolbar).
   const [showDetail, setShowDetail] = useState(false);
+  const nodeRef = useRef<HTMLDivElement>(null);
   // Known memory namespaces (registry-derived) for the namespace picker.
   const knownNamespaces = useContext(NamespacesContext);
 
@@ -742,12 +828,20 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
     isDone && wfType && showDetail
       ? nodeOutputDetail(wfType, data.output)
       : undefined;
+  const detailAnchorRect = useAnchoredPopoverRect(
+    nodeRef,
+    Boolean(outputDetail),
+  );
+  const configAnchorRect = useAnchoredPopoverRect(
+    nodeRef,
+    editing && paramFields.length > 0,
+  );
   const boxClass = hasStatus
     ? `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 bg-white text-black transition-all ${statusRing(data.status)}`
     : `relative flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-pure-black/30 bg-white text-black transition-all ${nodeColor}`;
 
   return (
-    <div className="group relative flex flex-col items-center">
+    <div ref={nodeRef} className="group relative flex flex-col items-center">
       <Handle
         type="target"
         position={Position.Left}
@@ -1003,6 +1097,7 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
           detail={outputDetail}
           rawOutput={data.output}
           onClose={() => setShowDetail(false)}
+          anchorRect={detailAnchorRect}
         />
       )}
 
@@ -1048,56 +1143,67 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
         </p>
       )}
 
-      {/* Inline per-node config — edits flow into the run POST body */}
-      {editing && paramFields.length > 0 && (
-        <div
-          className="nodrag nowheel absolute left-1/2 top-[110%] z-30 w-64 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 shadow-[3px_3px_0_0_#000]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-[10px] font-bold uppercase text-black/50">
-              {data.label} config
-            </p>
+      {/* Inline per-node config — edits flow into the run POST body. Portaled
+          to document.body (see useAnchoredPopoverRect) so it always renders
+          above the Tools panel / bottom metrics panel, e.g. for the Sui
+          "Execute PTB" node which commonly sits near the canvas edges. */}
+      {editing &&
+        paramFields.length > 0 &&
+        configAnchorRect &&
+        createPortal(
+          <div
+            className="nodrag nowheel fixed z-[999] w-64 -translate-x-1/2 space-y-2 border-2 border-pure-black bg-white p-3 shadow-[3px_3px_0_0_#000]"
+            style={{
+              left: configAnchorRect.left + configAnchorRect.width / 2,
+              top: configAnchorRect.top + configAnchorRect.height * 1.1,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[10px] font-bold uppercase text-black/50">
+                {data.label} config
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="font-mono text-xs font-bold text-black/40 hover:text-black"
+                title="Close"
+              >
+                &times;
+              </button>
+            </div>
+            {formNote && (
+              <p className="border-l-2 border-electric-purple bg-surface-container px-2 py-1 font-mono text-[9px] leading-relaxed text-black/60">
+                {formNote}
+              </p>
+            )}
+            {paramFields.map((f) => (
+              <NodeConfigField
+                key={f.key}
+                field={f}
+                nodeId={id}
+                value={
+                  f.key === LABEL_FIELD_KEY
+                    ? (data.subtitle ?? "")
+                    : (data.params?.[f.key] ?? "")
+                }
+                error={fieldErrors[f.key]}
+                knownNamespaces={knownNamespaces}
+                onChange={(v) =>
+                  f.key === LABEL_FIELD_KEY ? setCaption(v) : setParam(f.key, v)
+                }
+              />
+            ))}
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="font-mono text-xs font-bold text-black/40 hover:text-black"
-              title="Close"
+              className="w-full border-2 border-pure-black bg-electric-purple px-2 py-1 font-mono text-[10px] font-bold text-white shadow-[2px_2px_0_0_#000]"
             >
-              &times;
+              Done
             </button>
-          </div>
-          {formNote && (
-            <p className="border-l-2 border-electric-purple bg-surface-container px-2 py-1 font-mono text-[9px] leading-relaxed text-black/60">
-              {formNote}
-            </p>
-          )}
-          {paramFields.map((f) => (
-            <NodeConfigField
-              key={f.key}
-              field={f}
-              nodeId={id}
-              value={
-                f.key === LABEL_FIELD_KEY
-                  ? (data.subtitle ?? "")
-                  : (data.params?.[f.key] ?? "")
-              }
-              error={fieldErrors[f.key]}
-              knownNamespaces={knownNamespaces}
-              onChange={(v) =>
-                f.key === LABEL_FIELD_KEY ? setCaption(v) : setParam(f.key, v)
-              }
-            />
-          ))}
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="w-full border-2 border-pure-black bg-electric-purple px-2 py-1 font-mono text-[10px] font-bold text-white shadow-[2px_2px_0_0_#000]"
-          >
-            Done
-          </button>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -3319,6 +3425,16 @@ export default function WorkflowEditorPage() {
                       { label: "Sui", subtitle: "Execute PTB" },
                       {
                         label: "Sui",
+                        subtitle: "GM Overflow 2026",
+                        params: {
+                          movePackage:
+                            "0x0d4f4afb1c4e1106449a0e5514daeaa42b2ce6b9a7ff48af741b77274c6dfe39",
+                          entry: "gm_overflow::gm::gm",
+                          message: "GM Sui Overflow 2026",
+                        },
+                      },
+                      {
+                        label: "Sui",
                         subtitle: "Mint NFT (nft_mint package)",
                         params: {
                           movePackage:
@@ -3329,7 +3445,7 @@ export default function WorkflowEditorPage() {
                         },
                       },
                     ],
-                    count: 2,
+                    count: 3,
                   },
                   {
                     category: "coordination",

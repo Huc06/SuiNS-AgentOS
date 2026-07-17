@@ -89,8 +89,15 @@ function parseTarget(
   entry: string,
 ): `${string}::${string}::${string}` {
   const parts = entry.split("::");
-  if (parts.length === 3) {
+  // 3-part: address::module::function — only use as-is when parts[0] is a real
+  // on-chain address (0x…). If it's a Move package NAME (e.g. "gm_overflow"),
+  // fall through to 2-part handling so movePackage isn't discarded.
+  if (parts.length === 3 && parts[0].startsWith("0x")) {
     return `${parts[0]}::${parts[1]}::${parts[2]}`;
+  }
+  if (parts.length === 3) {
+    // module-name::module::function — prepend the actual package address
+    return `${movePackage}::${parts[1]}::${parts[2]}`;
   }
   if (parts.length === 2) {
     return `${movePackage}::${parts[0]}::${parts[1]}`;
@@ -109,6 +116,7 @@ const SUI_CONTROL_PARAM_KEYS = new Set([
   "passportId",
   "packageId",
   "extraArgs",
+  "message",
 ]);
 
 function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
@@ -207,12 +215,19 @@ async function storeEncryptedOnWalrus(
 const harbor: StepExecutor = async (node, ctx) => {
   const isPrivate = Boolean(node.params?.private);
 
-  const sealPolicyId =
+  const requestedSealPolicyId =
     typeof node.params?.sealPolicyId === "string"
       ? node.params.sealPolicyId
       : typeof node.params?.private === "string"
         ? node.params.private
         : "";
+  // Templates created before a real Harbor bucket existed carry "demo-policy".
+  // A configured private Harbor bucket supplies the real policy instead, while
+  // explicit non-demo policies still win for advanced/custom workflows.
+  const sealPolicyId =
+    requestedSealPolicyId && requestedSealPolicyId !== "demo-policy"
+      ? requestedSealPolicyId
+      : (ctx.harbor?.sealPolicyId ?? requestedSealPolicyId);
   if (isPrivate && !sealPolicyId) {
     return {
       status: "error",
@@ -417,10 +432,18 @@ const sui: StepExecutor = async (node, ctx) => {
 
   try {
     const result = await ctx.execute(tx);
+    const message =
+      movePackage && typeof node.params?.message === "string" && node.params.message
+        ? node.params.message
+        : undefined;
     return {
       status: "done",
       txDigest: result.digest,
-      output: { digest: result.digest, objectChanges: result.objectChanges },
+      output: {
+        digest: result.digest,
+        objectChanges: result.objectChanges,
+        ...(message ? { message } : {}),
+      },
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
