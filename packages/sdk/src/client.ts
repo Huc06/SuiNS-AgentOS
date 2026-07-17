@@ -612,13 +612,17 @@ export class AgentOSClient {
       endEpoch = uploadResult.endEpoch;
     }
 
-    // 3. Determine whether this is a create or update
+    // 3. Determine whether this is a create or update. Resolve the agent the
+    // SAME way registry-logic.ts's publishSkill does internally (resolveAgent,
+    // which falls back from suinsName to slug) — NOT just findAgentBySuins,
+    // which has no slug fallback and would silently miss an existing record
+    // whenever `agentName` doesn't normalize to a suinsName match, causing this
+    // dedup check to create a brand-new on-chain SkillDescriptor instead of
+    // updating the existing one (leaving the old descriptor orphaned).
     const existingRecord = this.#registry
-      ? this.#registry.snapshot.skills.find(
-          (s) =>
-            s.skillId === manifest.name &&
-            s.agentSlug === this.#registry!.findAgentBySuins(agentName)?.slug,
-        )
+      ? this.#registry
+          .resolveAgent(agentName)
+          ?.skills.find((s) => s.skillId === manifest.name)
       : null;
 
     // 4. Build PTB
@@ -857,25 +861,35 @@ export class AgentOSClient {
           err instanceof Error &&
           err.message.includes("integrity check failed")
         ) {
+          // Return verified:false instead of throwing, so callers can decide
+          // how to surface a tampered/mismatched manifest (e.g. show a warning
+          // in the UI) rather than always crashing. Previously this branch set
+          // `verified = false` and then unconditionally re-threw right after,
+          // so the flag could never actually be observed by a caller — dead
+          // state. `manifest` stays null here (never successfully downloaded).
           verified = false;
+        } else {
           throw err;
         }
-        throw err;
       }
 
-      // 3. Resolve dependencies (if any)
-      if (manifest.dependencies && manifest.dependencies.length > 0) {
+      // 3. Resolve dependencies (if any) — only when the manifest actually
+      // downloaded (verified path). A tampered/mismatched manifest (verified
+      // === false) leaves `manifest` null, so there is nothing to resolve.
+      if (manifest && manifest.dependencies && manifest.dependencies.length > 0) {
         const depResolver = new DependencyResolver(this);
         await depResolver.resolve(manifest);
       }
 
-      // 4. Verify agent has required capabilities
-      const requiredPolicies = manifest.sui.policyRequired ?? [];
-      if (requiredPolicies.length > 0) {
-        const capabilities = agentCapabilities ?? [];
-        for (const required of requiredPolicies) {
-          if (!capabilities.includes(required)) {
-            throw new Error(`Missing required capability: ${required}`);
+      // 4. Verify agent has required capabilities (same guard as above).
+      if (manifest) {
+        const requiredPolicies = manifest.sui.policyRequired ?? [];
+        if (requiredPolicies.length > 0) {
+          const capabilities = agentCapabilities ?? [];
+          for (const required of requiredPolicies) {
+            if (!capabilities.includes(required)) {
+              throw new Error(`Missing required capability: ${required}`);
+            }
           }
         }
       }
@@ -966,12 +980,17 @@ export class AgentOSClient {
     // A placeholder skill target with no delegation cap would leave the PTB empty
     // (no commands) — there is nothing to execute. Fail loudly instead of
     // submitting an empty tx. (Delegated calls always have accounting commands.)
-    // NOTE: an unresolved skill with no cap was already re-thrown at step 1, so
-    // reaching here without a cap implies `manifest` resolved.
+    // NOTE: an unresolved skill with no cap was already re-thrown at step 1.
+    // `manifest` can still be null here for a SECOND reason: the descriptor
+    // resolved but its manifest failed the SHA-256 integrity check
+    // (verified === false) — that path no longer throws immediately (see step 2
+    // above), so it can reach this guard too.
     if (!skillEntryCallable && !cap) {
-      const targetNote = manifest
-        ? `has a placeholder move target (${manifest.sui.movePackage})`
-        : `did not resolve`;
+      const targetNote = !verified
+        ? "failed its manifest integrity check (hash mismatch)"
+        : manifest
+          ? `has a placeholder move target (${manifest.sui.movePackage})`
+          : "did not resolve";
       throw new Error(
         `buildExecuteSkillTx: skill "${suinsName}" ${targetNote} and no delegationCapId — nothing to execute. ` +
           `Provide a delegationCapId (delegated exec) or a skill with a real 0x movePackage.`,
