@@ -19,10 +19,17 @@ export interface SponsoredObjectChange {
   objectType?: string;
 }
 
+export interface SponsoredEvent {
+  eventType?: string;
+  json?: Record<string, unknown>;
+}
+
 export interface SponsoredExecuteResult {
   digest: string;
   effects?: unknown;
   objectChanges?: SponsoredObjectChange[];
+  /** Committed Move events, when gRPC returns them after settlement. */
+  events?: SponsoredEvent[];
 }
 
 let cachedKeypair: Ed25519Keypair | null = null;
@@ -173,13 +180,25 @@ export async function sponsoredExecuteServer(
     signature,
   });
 
-  // 6. Wait for gRPC settlement. The gRPC client exposes a normalized
-  // transaction result rather than JSON-RPC `objectChanges`/`effects`; callers
-  // always receive the committed digest and can query details separately.
+  // 6. Wait for gRPC settlement, then fetch committed Move events. Event
+  // retrieval is best-effort: submission remains successful if the read side
+  // is lagging, and callers still receive the committed digest.
   try {
     await client.waitForTransaction({ digest: executed.digest });
   } catch {
     // Submission succeeded even if the read side is lagging.
   }
-  return { digest: executed.digest };
+  try {
+    const transaction = (await client.getTransaction({
+      digest: executed.digest,
+      include: { events: true },
+    } as never)) as { Transaction?: { events?: SponsoredEvent[] } };
+    const events = transaction.Transaction?.events;
+    return {
+      digest: executed.digest,
+      ...(Array.isArray(events) && events.length > 0 ? { events } : {}),
+    };
+  } catch {
+    return { digest: executed.digest };
+  }
 }

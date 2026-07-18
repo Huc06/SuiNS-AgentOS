@@ -506,6 +506,24 @@ describe("sui executor", () => {
     expect(r.txDigest).toBe("0xCALL");
   });
 
+  it("surfaces a message emitted by a generic Move call", async () => {
+    const execute = vi.fn(async () => ({
+      digest: "0xGM",
+      events: [{ json: { message: "R00gU3VpIE92ZXJmbG93IDIwMjY=" } }],
+    }));
+    const r = await executors.sui(
+      node("sui", { movePackage: "0x9", entry: "gm::gm" }),
+      makeCtx({ execute }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(r.output).toMatchObject({
+      digest: "0xGM",
+      message: "GM Sui Overflow 2026",
+    });
+  });
+
   it("keeps recipient as a valid generic Move argument", async () => {
     const execute = vi.fn(async () => ({ digest: "0xRECIPIENT" }));
     const r = await executors.sui(

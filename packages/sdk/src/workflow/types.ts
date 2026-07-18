@@ -244,7 +244,12 @@ export interface RunContext {
   /** Opaque Sui client (e.g. `SuiClient`); typed `unknown` to avoid coupling. */
   client: unknown;
   /** Build->sponsor->sign->execute a transaction. Returns at least a digest. */
-  execute: (tx: unknown) => Promise<{ digest: string; objectChanges?: unknown }>;
+  execute: (tx: unknown) => Promise<{
+    digest: string;
+    objectChanges?: unknown;
+    /** Optional committed Move events fetched by the host after settlement. */
+    events?: unknown[];
+  }>;
   /**
    * Optional Memwal-style agent memory. `remember` persists a memory and
    * (synchronously) returns the Walrus blob it landed in; `recall` runs a
