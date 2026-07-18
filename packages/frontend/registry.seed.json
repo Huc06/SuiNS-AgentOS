@@ -250,41 +250,5 @@
       "suinsName": "gm-overflow.my-first-agent.sui"
     }
   ],
-  "workflows": [
-    {
-      "agentSlug": "alpha",
-      "workflowId": "firstworkflow",
-      "name": "firstworkflow",
-      "slug": "firstworkflow-alpha",
-      "suinsName": "firstworkflow.alpha.sui",
-      "version": "1.0.0",
-      "walrusManifestBlob": "TMg7HkMiIpUjp7XlI4uTYBgzMAmCTaCfbWkEAgdZstk",
-      "manifestHash": "06a2f1c8868f163337e8bfd5bbbfd12b8abc8dd9b0b6236cde27ef0be8323a51",
-      "network": "testnet",
-      "status": "active",
-      "createdAt": "2026-06-22T10:50:31.121Z",
-      "lastUpdated": "2026-07-14T08:13:36.726Z",
-      "description": "Mint NFT",
-      "dependencies": [
-        "sui-nft-mint.alpha.sui"
-      ],
-      "endEpoch": 511
-    },
-    {
-      "agentSlug": "my-first-agent",
-      "workflowId": "firstworkflow",
-      "name": "firstworkflow",
-      "slug": "firstworkflow-my-first-agent",
-      "suinsName": "firstworkflow.my-first-agent.sui",
-      "version": "1.0.0",
-      "walrusManifestBlob": "f_Q9ECZPrFAu5tA-uo7sH8299Rabxid9wO0c_otKCGQ",
-      "manifestHash": "509ae10a508c9693a0cbbe6cbb8e193a58bc54739513f7da99ec3c4de1406ab4",
-      "network": "testnet",
-      "status": "active",
-      "createdAt": "2026-07-14T08:38:13.302Z",
-      "lastUpdated": "2026-07-16T07:17:43.050Z",
-      "description": "Path B on-chain execution test",
-      "endEpoch": 513
-    }
-  ]
+  "workflows": []
 }

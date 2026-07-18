@@ -145,6 +145,34 @@ function buildMoveArgs(tx: Transaction, params?: Record<string, unknown>) {
   }
   return args;
 }
+
+/** Decode the base64 strings Sui gRPC uses for `vector<u8>` Move event fields. */
+function decodeEventMessage(value: string): string {
+  if (typeof atob !== "function") return value;
+  try {
+    const binary = atob(value);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes) || value;
+  } catch {
+    return value;
+  }
+}
+
+/** Extract user-facing `message` values from committed Move events. */
+function eventMessages(events: unknown): string[] {
+  if (!Array.isArray(events)) return [];
+  const messages = new Set<string>();
+  for (const event of events) {
+    if (typeof event !== "object" || event === null) continue;
+    const json = (event as { json?: unknown }).json;
+    if (typeof json !== "object" || json === null) continue;
+    const message = (json as { message?: unknown }).message;
+    if (typeof message === "string" && message.length > 0) {
+      messages.add(decodeEventMessage(message));
+    }
+  }
+  return [...messages];
+}
 /** Trigger: a no-op start node that simply marks the chain as begun. */
 const trigger: StepExecutor = async (node, ctx) => {
   return {
@@ -483,10 +511,14 @@ const sui: StepExecutor = async (node, ctx) => {
 
   try {
     const result = await ctx.execute(tx);
-    const message =
+    const configuredMessage =
       movePackage && typeof node.params?.message === "string" && node.params.message
         ? node.params.message
         : undefined;
+    // Prefer the committed event content over a canvas label. This means a
+    // no-argument entry such as `gm_overflow::gm::gm` can still show what it
+    // actually emitted, without requiring an artificial Move argument.
+    const message = eventMessages(result.events)[0] ?? configuredMessage;
     return {
       status: "done",
       txDigest: result.digest,
