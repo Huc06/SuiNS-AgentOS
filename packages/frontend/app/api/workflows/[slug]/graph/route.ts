@@ -37,6 +37,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
   if (!workflow.walrusManifestBlob) {
+    // Not published yet. If a draft graph has been assembled (e.g. via the
+    // CLI's `workflow add-node`/`add-edge`), surface it so the canvas can
+    // render live progress instead of a hard 404. An empty/absent draftGraph
+    // still 404s with `draft: true` (nothing to render yet).
+    if (workflow.draftGraph) {
+      return NextResponse.json({
+        graph: workflow.draftGraph,
+        workflow,
+        draft: true,
+      });
+    }
     return NextResponse.json(
       { error: "Workflow has no published graph yet", draft: true },
       { status: 404 },

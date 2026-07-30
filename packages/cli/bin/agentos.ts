@@ -4,6 +4,7 @@ import { bucketCommand } from '../src/commands/bucket.js';
 import { initCommand } from '../src/commands/init.js';
 import { mcpCommand } from '../src/commands/mcp.js';
 import { skillCommand } from '../src/commands/skill.js';
+import { workflowCommand } from '../src/commands/workflow.js';
 
 program
   .name('agentos')
@@ -13,6 +14,7 @@ program
 program.addCommand(initCommand);
 program.addCommand(agentCommand);
 program.addCommand(skillCommand);
+program.addCommand(workflowCommand);
 program.addCommand(bucketCommand);
 program.addCommand(mcpCommand);
 

@@ -313,6 +313,40 @@ function preflightGlyph(outcome?: PreflightOutcome): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Replace or append one `key=value` Move argument without touching other user input. */
+function upsertMoveArg(args: string, key: string, value: string): string {
+  const prefix = `${key}=`;
+  const lines = args.split("\n").filter((line) => line.trim().length > 0);
+  const index = lines.findIndex((line) => line.trim().startsWith(prefix));
+  const next = `${prefix}${value}`;
+  if (index >= 0) lines[index] = next;
+  else lines.push(next);
+  return lines.join("\n");
+}
+
+function isNftMintNode(data: SkillNodeData): boolean {
+  return (
+    data.label === "Sui" &&
+    data.params?.entry?.trim() === "nft::mint_and_transfer"
+  );
+}
+
+/** A browser-local public image already uploaded to Harbor, never file bytes. */
+function hasLocalHarborImage(data: SkillNodeData): boolean {
+  if (data.label !== "Harbor" || data.params?.localImageOnly !== "true") {
+    return false;
+  }
+  const output = data.output;
+  if (!output || typeof output !== "object") return false;
+  const record = output as Record<string, unknown>;
+  return (
+    record.storage === "harbor" &&
+    record.visibility === "public" &&
+    typeof record.blobId === "string" &&
+    typeof record.sourceFilename === "string"
+  );
+}
+
 // Resolve a DetailField link to a concrete explorer URL (network from module
 // NETWORK). Returns undefined when the field is not a link.
 function detailFieldHref(field: DetailField): string | undefined {
@@ -500,6 +534,29 @@ function NodeOutputDetailPopover({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {detail.previewUrl && (
+        <div className="border-t border-pure-black/10 pt-1.5">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="font-mono text-[9px] uppercase text-black/40">
+              public image preview
+            </p>
+            <a
+              href={detail.previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[9px] font-bold text-electric-purple underline"
+            >
+              open ↗
+            </a>
+          </div>
+          <img
+            src={detail.previewUrl}
+            alt="Uploaded Harbor image preview"
+            className="max-h-44 w-full border border-pure-black/20 bg-surface-container object-contain"
+          />
         </div>
       )}
 
@@ -734,6 +791,126 @@ function NodeConfigField({
 }
 
 // ===== Custom Skill Node =====
+
+interface LocalHarborUploadOutput {
+  blobId: string;
+  fileId: string;
+  filename: string;
+  sourceFilename: string;
+  sourceContentType: "image/jpeg" | "image/png";
+  sourceBytes: number;
+  bytes: number;
+  visibility: "private" | "public";
+  encryption: "none" | "real-seal";
+  storage: "harbor";
+  url: string;
+  previewUrl?: string;
+  /** Public URL to insert as `image_url` in the Sui NFT mint args. */
+  imageUrl?: string;
+}
+
+/**
+ * Holds the selected File only in the browser input until it is sent as
+ * multipart data to the server. The binary is deliberately never copied into
+ * node params, graph JSON, a workflow manifest, or run history.
+ */
+function HarborLocalImageUpload({
+  privateUpload,
+  onUploaded,
+}: {
+  privateUpload: boolean;
+  onUploaded: (output: LocalHarborUploadOutput) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [selectedName, setSelectedName] = useState("");
+  const [state, setState] = useState<"idle" | "uploading" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  const upload = async () => {
+    const file = inputRef.current?.files?.[0];
+    if (!file || state === "uploading") return;
+    setState("uploading");
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("private", privateUpload ? "true" : "false");
+      const response = await fetch("/api/harbor/upload", {
+        method: "POST",
+        body: form,
+      });
+      const payload = (await response.json().catch(() => ({}))) as
+        | LocalHarborUploadOutput
+        | { error?: string };
+      if (!response.ok || !("blobId" in payload)) {
+        throw new Error(
+          response.status >= 500
+            ? "Harbor is temporarily unavailable. Please try uploading again shortly."
+            : "error" in payload && payload.error
+              ? payload.error
+              : `Image upload failed (${response.status})`,
+        );
+      }
+      onUploaded(payload);
+      setImageUrl(payload.imageUrl ?? payload.previewUrl ?? payload.url);
+      if (inputRef.current) inputRef.current.value = "";
+      setSelectedName("");
+      setState("idle");
+    } catch (cause) {
+      setState("error");
+      setError(cause instanceof Error ? cause.message : "Image upload failed");
+    }
+  };
+
+  return (
+    <div className="space-y-1 border-t border-pure-black/10 pt-2">
+      <label className="block">
+        <span className="font-mono text-[9px] text-black/60">
+          Upload image from computer
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          onChange={(event) => {
+            setSelectedName(event.target.files?.[0]?.name ?? "");
+            setError(null);
+            setState("idle");
+          }}
+          className="mt-0.5 block w-full font-mono text-[9px] text-black file:mr-2 file:border-2 file:border-pure-black file:bg-white file:px-2 file:py-1 file:font-mono file:text-[9px] file:font-bold file:text-black hover:file:bg-surface-container"
+        />
+      </label>
+      <p className="font-mono text-[8px] text-black/40">
+        JPG/PNG up to 4 MiB. {privateUpload ? "Seal-encrypted before upload." : "Raw public image; no Seal."}
+      </p>
+      {selectedName && (
+        <p className="truncate font-mono text-[8px] text-black/60" title={selectedName}>
+          selected: {selectedName}
+        </p>
+      )}
+      {error && <p className="font-mono text-[8px] text-red-600">{error}</p>}
+      {imageUrl && (
+        <div className="border border-green-600/30 bg-green-50 p-1.5">
+          <p className="font-mono text-[8px] font-bold text-green-800">
+            Added to Sui mint args
+          </p>
+          <p className="mt-0.5 break-all font-mono text-[8px] text-green-800">
+            image_url={imageUrl}
+          </p>
+        </div>
+      )}
+      <button
+        type="button"
+        disabled={!selectedName || state === "uploading"}
+        onClick={upload}
+        className="w-full border-2 border-pure-black bg-blue-600 px-2 py-1 font-mono text-[10px] font-bold text-white shadow-[2px_2px_0_0_#000] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {state === "uploading" ? "Uploading to Harbor…" : "Upload image to Harbor"}
+      </button>
+    </div>
+  );
+}
 
 function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
   const { setNodes, setEdges } = useReactFlow();
@@ -1103,6 +1280,7 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
 
       {/* Pre-run preflight badge (shown only before a result lands) */}
       {!hasStatus &&
+        data.label !== "Harbor" &&
         data.preflight &&
         data.preflight.outcome !== "will-run" && (
           <div
@@ -1177,16 +1355,7 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
                 {formNote}
               </p>
             )}
-            {paramFields
-              .filter(
-                (f) =>
-                  !(
-                    data.label === "Harbor" &&
-                    f.key === "nftImageUri" &&
-                    data.params?.fileUrl?.trim()
-                  ),
-              )
-              .map((f) => (
+            {paramFields.map((f) => (
                 <NodeConfigField
                   key={f.key}
                   field={f}
@@ -1205,6 +1374,58 @@ function SkillNode({ id, data }: { id: string; data: SkillNodeData }) {
                   }
                 />
               ))}
+            {data.label === "Harbor" && (
+              <HarborLocalImageUpload
+                privateUpload={data.params?.private === "true"}
+                onUploaded={(output) => {
+                  setNodes((nds) =>
+                    nds.map((n) => {
+                      const previous = n.data as SkillNodeData;
+                      if (n.id === id) {
+                        return {
+                          ...n,
+                          data: {
+                            ...previous,
+                            status: "done" as NodeStatus,
+                            blobId: output.blobId,
+                            error: undefined,
+                            cause: undefined,
+                            output,
+                          },
+                        };
+                      }
+                      // Sui owns NFT name/description. A public local image
+                      // supplies only the image_url for the matching mint node.
+                      if (
+                        output.visibility === "public" &&
+                        isNftMintNode(previous)
+                      ) {
+                        const imageUrl =
+                          output.imageUrl ?? output.previewUrl ?? output.url;
+                        return {
+                          ...n,
+                          data: {
+                            ...previous,
+                            params: {
+                              ...(previous.params ?? {}),
+                              // Internal marker only; the graph stores neither
+                              // image bytes nor duplicate NFT metadata.
+                              localImageOnly: "true",
+                              extraArgs: upsertMoveArg(
+                                previous.params?.extraArgs ?? "",
+                                "image_url",
+                                imageUrl,
+                              ),
+                            },
+                          },
+                        };
+                      }
+                      return n;
+                    }),
+                  );
+                }}
+              />
+            )}
             <button
               type="button"
               onClick={() => setEditing(false)}
@@ -1490,11 +1711,16 @@ function LogsView({
         const cause = shortCause(s);
         const summary =
           s.status === "done" ? nodeOutputSummary(s.type, s.output) : undefined;
+        // Memory relayer responses may contain provider status/body details.
+        // The structured cause/remediation above is intentionally all users see,
+        // including when opening a historical run created by an older bundle.
         const raw =
-          s.error ??
-          (s.output && typeof s.output === "object"
-            ? JSON.stringify(s.output, null, 2)
-            : undefined);
+          (s.type === "memory" || s.type === "memory-recall") && s.status === "skipped"
+            ? undefined
+            : s.error ??
+              (s.output && typeof s.output === "object"
+                ? JSON.stringify(s.output, null, 2)
+                : undefined);
         return (
           <div
             key={s.nodeId}
@@ -1990,6 +2216,9 @@ export default function WorkflowEditorPage() {
       const nodeData = n.data as SkillNodeData;
       const type = LABEL_TO_TYPE[nodeData.label];
       if (!type) continue;
+      // The local browser uploader has already sent this image to Harbor.
+      // Exclude it from Exec rather than uploading an empty fallback payload.
+      if (hasLocalHarborImage(nodeData)) continue;
       const params = Object.fromEntries(
         Object.entries(nodeData.params ?? {}).filter(
           ([, v]) => typeof v === "string" && v.trim().length > 0,
@@ -2254,6 +2483,73 @@ export default function WorkflowEditorPage() {
     };
   }, [slug, setNodes, setEdges]);
 
+  // Live-draft polling: while a workflow is still a DRAFT (no published
+  // Walrus blob yet), a workflow can be assembled incrementally from the
+  // terminal (`agentos workflow add-node` / `add-edge`), which writes straight
+  // into the same `.agentos/registry.json` the dev server reads. Poll the
+  // graph endpoint every 2s so the canvas picks up those CLI edits without a
+  // manual refresh — this is a demo/dev convenience, not part of the normal
+  // canvas-editing flow, so it only runs for workflow slugs and stops as soon
+  // as the workflow is published (`draft: false`) or the node/edge count
+  // matches what's already on the canvas.
+  useEffect(() => {
+    if (!slug || !workflowMeta || workflowMeta.status !== "draft") return;
+    let cancelled = false;
+    let lastSignature = "";
+
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/workflows/${encodeURIComponent(slug)}/graph`,
+          { cache: "no-store" },
+        );
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        const g = data?.graph as
+          | {
+              nodes: WfGraphNode[];
+              edges: { source: string; target: string }[];
+            }
+          | undefined;
+        if (!g) return;
+
+        // Skip no-op re-renders: only touch the canvas when the CLI draft
+        // actually changed shape since the last poll.
+        const signature = JSON.stringify(g);
+        if (signature === lastSignature) return;
+        lastSignature = signature;
+
+        const flow = workflowGraphToFlow(g);
+        setNodes(flow.nodes);
+        setEdges(flow.edges);
+        requestAnimationFrame(() => {
+          rfInstance.current?.fitView({ padding: 0.2, duration: 300 });
+        });
+
+        // The workflow was published (by `agentos workflow publish`) between
+        // polls — refresh its meta so this effect's guard turns polling off.
+        if (data?.draft === false) {
+          const metaRes = await fetch(
+            `/api/workflows/${encodeURIComponent(slug)}`,
+            { cache: "no-store" },
+          );
+          if (!cancelled && metaRes.ok) {
+            const meta = await metaRes.json();
+            if (meta?.workflow) setWorkflowMeta(meta.workflow as WorkflowMeta);
+          }
+        }
+      } catch {
+        /* transient fetch error — try again on the next tick */
+      }
+    };
+
+    const interval = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [slug, workflowMeta, setNodes, setEdges]);
+
   // Fetch the preflight prediction on mount and whenever the graph shape changes
   // (node/edge count). Debounced so dragging a node doesn't spam the endpoint.
   // Skipped while a run is in flight (the run result drives node status then).
@@ -2296,23 +2592,29 @@ export default function WorkflowEditorPage() {
     // Optimistic: mark runnable nodes as running, clear prior results +
     // diagnosis + preflight stamps (they get re-applied from the run result).
     setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: {
-          ...(n.data as SkillNodeData),
-          status: runnableIds.has(n.id)
-            ? ("running" as NodeStatus)
-            : ("idle" as NodeStatus),
-          txDigest: undefined,
-          blobId: undefined,
-          error: undefined,
-          errorCode: undefined,
-          cause: undefined,
-          remediation: undefined,
-          output: undefined,
-          preflight: undefined,
-        },
-      })),
+      nds.map((n) => {
+        const data = n.data as SkillNodeData;
+        // Keep the completed local upload visible while Exec submits Sui. It is
+        // deliberately absent from the server graph and never re-uploaded.
+        if (hasLocalHarborImage(data)) return n;
+        return {
+          ...n,
+          data: {
+            ...data,
+            status: runnableIds.has(n.id)
+              ? ("running" as NodeStatus)
+              : ("idle" as NodeStatus),
+            txDigest: undefined,
+            blobId: undefined,
+            error: undefined,
+            errorCode: undefined,
+            cause: undefined,
+            remediation: undefined,
+            output: undefined,
+            preflight: undefined,
+          },
+        };
+      }),
     );
 
     // Only flips nodes that are STILL "running" (never overwrites a status the
@@ -2416,28 +2718,32 @@ export default function WorkflowEditorPage() {
   }, []);
 
   const loadDemoGraph = useCallback(() => {
-    const selfName = slug.includes(".") ? slug : `${slug}.sui`;
+    const ownerSlug = workflowMeta?.agentSlug ?? slug;
+    const selfName = ownerSlug.includes(".") ? ownerSlug : `${ownerSlug}.sui`;
     const { nodes: dNodes, edges: dEdges } = demoCoordinateGraph(selfName);
     setNodes(dNodes);
     setEdges(dEdges);
     setLatestRun(null);
     fitViewNextTick();
-  }, [slug, setNodes, setEdges, fitViewNextTick]);
+  }, [slug, workflowMeta?.agentSlug, setNodes, setEdges, fitViewNextTick]);
 
   // Load a ready-made template graph onto the canvas (same path as Demo Graph),
-  // seeded with the current agent's `.sui` name.
+  // seeded with the workflow OWNER's `.sui` name. A workflow subdomain is not
+  // an AgentPassport identity and must never become a Delegate child default.
   const loadTemplate = useCallback(
     (templateId: string) => {
       const tpl = TEMPLATES.find((t) => t.id === templateId);
       if (!tpl) return;
-      const { nodes: tNodes, edges: tEdges } = tpl.build(slug);
+      const { nodes: tNodes, edges: tEdges } = tpl.build(
+        workflowMeta?.agentSlug ?? slug,
+      );
       setNodes(tNodes);
       setEdges(tEdges);
       setLatestRun(null);
       setShowTemplates(false);
       fitViewNextTick();
     },
-    [slug, setNodes, setEdges, fitViewNextTick],
+    [slug, workflowMeta?.agentSlug, setNodes, setEdges, fitViewNextTick],
   );
 
   // Publish the current canvas as the workflow's graph: package it into a
