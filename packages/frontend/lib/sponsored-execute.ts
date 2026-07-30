@@ -180,23 +180,48 @@ export async function sponsoredExecuteServer(
     signature,
   });
 
-  // 6. Wait for gRPC settlement, then fetch committed Move events. Event
-  // retrieval is best-effort: submission remains successful if the read side
-  // is lagging, and callers still receive the committed digest.
+  // 6. Wait for gRPC settlement, then fetch committed effects (created object
+  // ids + their types, for callers that need to extract e.g. a DelegationCap
+  // or AgentPassport id) and any emitted Move events. Best-effort: submission
+  // remains successful even if this read-back fails or the read side is
+  // lagging — callers still receive the committed digest. `getTransaction`'s
+  // response is a discriminated union (`$kind: "Transaction" |
+  // "FailedTransaction"`) — unwrap it before reading `effects`/`objectTypes`/
+  // `events` (all of which are `undefined` unless requested via `include`).
   try {
     await client.waitForTransaction({ digest: executed.digest });
   } catch {
     // Submission succeeded even if the read side is lagging.
   }
   try {
-    const transaction = (await client.getTransaction({
+    const result = await client.getTransaction({
       digest: executed.digest,
-      include: { events: true },
-    } as never)) as { Transaction?: { events?: SponsoredEvent[] } };
-    const events = transaction.Transaction?.events;
+      include: { effects: true, events: true, objectTypes: true },
+    });
+    // Discriminated union: a committed tx is always `$kind: "Transaction"`
+    // here (Enoki already executed it) — `FailedTransaction` is Enoki's own
+    // dry-run-failure shape, not expected post-execution, but guard anyway.
+    const transaction =
+      result.$kind === "Transaction" ? result.Transaction : undefined;
+    const objectTypes = transaction?.objectTypes ?? {};
+    const objectChanges: SponsoredObjectChange[] =
+      transaction?.effects?.changedObjects
+        ?.filter((c) => c.idOperation === "Created")
+        .map((c) => ({
+          type: "created",
+          objectId: c.objectId,
+          objectType: objectTypes[c.objectId],
+        })) ?? [];
+    const events = transaction?.events?.map((e) => ({
+      eventType: e.eventType,
+      json: e.json ?? undefined,
+    }));
     return {
       digest: executed.digest,
-      ...(Array.isArray(events) && events.length > 0 ? { events } : {}),
+      ...(objectChanges.length > 0 ? { objectChanges } : {}),
+      ...(events && events.length > 0
+        ? { events }
+        : {}),
     };
   } catch {
     return { digest: executed.digest };

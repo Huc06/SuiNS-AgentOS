@@ -8,6 +8,7 @@ import type {
   RegistryAgentRecord,
   RegistryFile,
   RegistrySkillRecord,
+  RegistryWorkflowRecord,
   ResolveAgentResponse,
 } from "./types.js";
 
@@ -179,6 +180,28 @@ export class LocalRegistry {
     const { value } = logic.publishSkill(this.#data, input);
     this.save();
     return value;
+  }
+
+  /** Create or upsert a workflow under an agent (draft or active, keyed by name). */
+  publishWorkflow(input: logic.PublishWorkflowInput): RegistryWorkflowRecord {
+    const { value } = logic.publishWorkflow(this.#data, input);
+    this.save();
+    return value;
+  }
+
+  /** List workflows belonging to one agent (by SuiNS name or slug). */
+  listWorkflows(agentName: string): RegistryWorkflowRecord[] {
+    return logic.listWorkflows(this.#data, agentName);
+  }
+
+  /** List all workflows across every agent. */
+  getWorkflows(): RegistryWorkflowRecord[] {
+    return logic.getWorkflows(this.#data);
+  }
+
+  /** Look up a single workflow by its canvas slug. */
+  findWorkflowBySlug(slug: string): RegistryWorkflowRecord | undefined {
+    return logic.findWorkflowBySlug(this.#data, slug);
   }
 }
 

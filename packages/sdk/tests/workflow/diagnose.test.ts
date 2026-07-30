@@ -151,6 +151,49 @@ describe("diagnoseStep", () => {
     expect(d.remediation).toMatch(/staging/i);
   });
 
+  it("sanitizes historical raw maintenance notes into generic guidance", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "memory",
+        status: "skipped",
+        output: {
+          note: 'Memory: skipped — the relayer returned a transient 503 (Memwal /api/remember failed: 503 {"error":"upgrades"}).',
+        },
+      }),
+    );
+    expect(d.code).toBe("MEMWAL_SKIP");
+    expect(d.cause).toBe("The memory service is temporarily unavailable.");
+    expect(d.remediation).toMatch(/Retry the workflow shortly/i);
+  });
+
+  it("explains missing NFT metadata before an on-chain mint", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "sui",
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — NFT mint requires image_url. Enter name/description and upload a public JPG/PNG in Harbor before Exec.",
+        },
+      }),
+    );
+    expect(d.code).toBe("NFT_METADATA_MISSING");
+    expect(d.remediation).toMatch(/image_url/);
+  });
+
+  it("explains an absent custom NFT package without prescribing a passport", () => {
+    const d = diagnoseStep(
+      mk({
+        type: "sui",
+        status: "skipped",
+        output: {
+          note: "Sui: skipped — custom Move package or required NFT object was not found on the configured network. Confirm the package and object IDs are deployed there.",
+        },
+      }),
+    );
+    expect(d.code).toBe("MOVE_TARGET_NOT_ONCHAIN");
+    expect(d.remediation).toMatch(/does not need an AgentPassport/i);
+  });
+
   it("classifies a missing on-chain passport/package skip precisely", () => {
     const d = diagnoseStep(
       mk({

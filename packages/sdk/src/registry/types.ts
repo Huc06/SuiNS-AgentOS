@@ -1,3 +1,5 @@
+import type { WorkflowGraph } from "../workflow/types.js";
+
 export interface RegistryAgentRecord {
   slug: string;
   suinsName: string;
@@ -103,6 +105,15 @@ export interface RegistryWorkflowRecord {
   description?: string;
   /** SuiNS subnames of skills/sub-agents this workflow composes. */
   dependencies?: string[];
+  /**
+   * In-progress graph (nodes/edges) for a workflow still in `draft` status,
+   * assembled incrementally (e.g. via the CLI's `workflow add-node`/`add-edge`)
+   * before it has a published Walrus blob. Purely a local/demo convenience so
+   * the web canvas can render live progress while composing from the
+   * terminal — cleared once `walrusManifestBlob` is set on publish (the
+   * published manifest on Walrus becomes the source of truth from then on).
+   */
+  draftGraph?: WorkflowGraph;
   createdAt: string;
   lastUpdated: string;
 }

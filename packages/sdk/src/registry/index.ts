@@ -9,6 +9,7 @@ export {
   shortObjectId,
 } from "./normalize.js";
 export { SEED_REGISTRY } from "./seed.js";
+export type { PublishWorkflowInput } from "./registry-logic.js";
 export type {
   RegistryAgentRecord,
   RegistryFile,

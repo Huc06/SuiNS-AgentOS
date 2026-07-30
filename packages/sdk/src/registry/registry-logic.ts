@@ -15,6 +15,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import type { SkillManifest } from "../types.js";
+import type { WorkflowGraph } from "../workflow/types.js";
 import { normalizeSuinsName, slugFromSuins } from "./normalize.js";
 import type {
   RegistryAgentRecord,
@@ -79,6 +80,12 @@ export interface PublishWorkflowInput {
   dependencies?: string[];
   network?: "mainnet" | "testnet";
   status?: "draft" | "active" | "archived";
+  /**
+   * In-progress graph for a draft workflow (see {@link RegistryWorkflowRecord.draftGraph}).
+   * Pass `null` to explicitly clear it (e.g. on publish, once the graph has a
+   * real Walrus blob). Omitted means "leave the existing draftGraph as-is".
+   */
+  draftGraph?: WorkflowGraph | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +410,25 @@ export function publishWorkflow(
       : {}),
   };
 
+  // draftGraph handling: explicit `null` clears it; a provided graph sets it;
+  // omitted preserves whatever the existing record already had. Publishing a
+  // real Walrus blob always clears it (the blob is the source of truth once
+  // the workflow is no longer a draft).
+  if (input.walrusManifestBlob) {
+    // no draftGraph on the new record — cleared on publish.
+  } else if (input.draftGraph === null) {
+    // explicitly cleared — no draftGraph on the new record.
+  } else if (input.draftGraph) {
+    record.draftGraph = input.draftGraph;
+  } else if (existing?.draftGraph) {
+    record.draftGraph = existing.draftGraph;
+  }
+
   if (existing) {
+    // Object.assign onto the existing record would leave a stale draftGraph
+    // key behind when the new record omits it (e.g. on publish); delete first
+    // so a cleared draftGraph actually disappears from the persisted record.
+    delete existing.draftGraph;
     Object.assign(existing, record);
     return { value: existing, changed: true };
   }

@@ -69,6 +69,25 @@ describe("MemwalClient — legacy bearer scheme", () => {
         /Memwal \/remember failed: 500 boom/,
       );
     });
+
+    it("polls GET /remember/:job_id with a Bearer token until done", async () => {
+      mockFetch
+        .mockResolvedValueOnce(okJson({ job_id: "job_b1", status: "running" }))
+        .mockResolvedValueOnce(
+          okJson({ job_id: "job_b1", status: "done", blob_id: "blob_b1" }),
+        );
+
+      const out = await client.remember("ns", "t", { intervalMs: 0 });
+
+      expect(out).toMatchObject({ status: "done", blob_id: "blob_b1" });
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        "https://relayer.memwal.test/remember/job_b1",
+      );
+      expect(mockFetch.mock.calls[1][1].method).toBe("GET");
+      expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe(
+        "Bearer memwal_key_123",
+      );
+    });
   });
 
   describe("recall", () => {
@@ -248,6 +267,107 @@ describe("MemwalClient — signed delegate-key scheme", () => {
     await expect(c.remember("ns", "x")).rejects.toThrow(
       /must be a 32-byte hex Ed25519 seed/,
     );
+  });
+
+  describe("remember — async job polling (current relayer API)", () => {
+    it("returns immediately when the relayer replies synchronously with a blob_id", async () => {
+      mockFetch.mockResolvedValue(
+        okJson({ id: "mem_1", blob_id: "blob_sync" }),
+      );
+
+      const out = await client.remember("ns", "t");
+
+      expect(out).toEqual({ id: "mem_1", blob_id: "blob_sync" });
+      // No polling GET should have been made — only the initial POST.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("polls GET /api/remember/:job_id until status is done, returning the blob_id", async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          okJson({ job_id: "job_1", status: "running" }),
+        )
+        .mockResolvedValueOnce(
+          okJson({ job_id: "job_1", status: "running" }),
+        )
+        .mockResolvedValueOnce(
+          okJson({
+            job_id: "job_1",
+            status: "done",
+            owner: "0xowner",
+            namespace: "ns",
+            blob_id: "blob_final",
+          }),
+        );
+
+      const out = await client.remember("ns", "t", { intervalMs: 0 });
+
+      expect(out).toMatchObject({ status: "done", blob_id: "blob_final" });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // First call is the POST submit; the rest are signed GETs on the job.
+      expect(mockFetch.mock.calls[0][1].method).toBe("POST");
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        "https://relayer.memwal.test/api/remember/job_1",
+      );
+      expect(mockFetch.mock.calls[1][1].method).toBe("GET");
+      // The GET carries the same signed-header scheme as the POST.
+      const getHeaders = mockFetch.mock.calls[1][1].headers as Record<
+        string,
+        string
+      >;
+      expect(getHeaders["x-public-key"]).toMatch(/^[0-9a-f]{64}$/);
+      expect(getHeaders["x-signature"]).toMatch(/^[0-9a-f]{128}$/);
+      expect(getHeaders["x-account-id"]).toBe(ACCOUNT_ID);
+    });
+
+    it("throws when the remember job reports failed", async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          okJson({ job_id: "job_2", status: "running" }),
+        )
+        .mockResolvedValueOnce(
+          okJson({
+            job_id: "job_2",
+            status: "failed",
+            error: { code: "EMBEDDING_ERROR" },
+          }),
+        );
+
+      await expect(
+        client.remember("ns", "t", { intervalMs: 0 }),
+      ).rejects.toThrow(/Memwal remember job job_2 failed/);
+    });
+
+    it("gives up after the configured attempts and returns a running state instead of hanging", async () => {
+      mockFetch.mockResolvedValue(
+        okJson({ job_id: "job_3", status: "running" }),
+      );
+
+      const out = await client.remember("ns", "t", {
+        attempts: 2,
+        intervalMs: 0,
+      });
+
+      expect(out).toEqual({ job_id: "job_3", status: "running" });
+      // 1 POST + 2 polling GETs.
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("surfaces a descriptive error when polling itself returns a non-2xx status", async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          okJson({ job_id: "job_4", status: "running" }),
+        )
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => "poll boom",
+        });
+
+      await expect(
+        client.remember("ns", "t", { intervalMs: 0 }),
+      ).rejects.toThrow(/Memwal \/api\/remember\/job_4 failed: 500 poll boom/);
+    });
   });
 });
 

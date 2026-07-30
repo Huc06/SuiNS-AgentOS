@@ -7,6 +7,11 @@ export async function executeTransaction(options: {
   suiClient: SuiGrpcClient;
   signer: Signer;
 }): Promise<{ digest: string }> {
+  // The CLI signs+submits directly (no gas-sponsorship layer to set this for
+  // us), so ensure the transaction has a sender before building — otherwise
+  // `build()` throws "Missing transaction sender". `setSenderIfNotSet` is a
+  // no-op if a caller already set a different sender on purpose.
+  options.transaction.setSenderIfNotSet(options.signer.toSuiAddress());
   const bytes = await options.transaction.build({ client: options.suiClient });
   const { signature } = await options.signer.signTransaction(bytes);
   const result = await options.suiClient.executeTransaction({

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import {
   AgentOSClient,
@@ -47,6 +47,28 @@ loadRootEnv();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * MEMWAL_MOCK=true in-process store: namespace -> remembered texts. Lets a
+ * mocked `recall` return the mocked `remember`s from the SAME run/session
+ * instead of always reporting empty results. Cleared on server restart —
+ * this is a demo aid, not persistent storage (nothing lands on Walrus).
+ */
+const mockMemoryStore = new Map<string, string[]>();
+
+/**
+ * Generate a blob id shaped exactly like a REAL Walrus blob id: the base64url
+ * (no padding) encoding of a 32-byte digest, e.g.
+ * `LK2Z0TwyWvN_nK0s9ychfQSpCGulrxBQm3RMYEkjad0` (see registry.seed.json for
+ * genuine examples). Used only by MEMWAL_MOCK=true so a mocked run's blob ids
+ * are visually indistinguishable from real ones in the canvas/run log — the
+ * `mock: true` flag + `note` in the step's own output (not the id string
+ * itself) is what marks it as fake, so it never gets pasted into a report as
+ * a real Walruscan-traceable id without also carrying that context.
+ */
+function mockWalrusBlobId(): string {
+  return randomBytes(32).toString("base64url");
+}
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -145,20 +167,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const registry = getRegistryStore();
-  let resolved = await registry.resolveAgent(key);
-  // The canvas slug may be a WORKFLOW slug (e.g. `rebalance-pipeline-alpha-fund`)
-  // rather than an agent slug. A workflow runs under its parent agent's
-  // passport, so fall back to resolving the owning agent from the workflow
-  // record when the key isn't an agent itself.
-  if (!resolved) {
-    const workflow = await registry.findWorkflowBySlug(key);
-    if (workflow) {
-      resolved = await registry.resolveAgent(workflow.agentSlug);
-    }
-  }
+  // A workflow SuiNS subdomain is owned by an agent; it is not an independent
+  // AgentPassport identity. Check it FIRST so a registry record with the same
+  // slug can never make a run use the subdomain's synthetic/missing passport.
+  const workflow = await registry.findWorkflowBySlug(key);
+  const resolved = workflow
+    ? await registry.resolveAgent(workflow.agentSlug)
+    : await registry.resolveAgent(key);
   if (!resolved) {
     return NextResponse.json(
-      { error: `Agent not found: ${key}` },
+      {
+        error: workflow
+          ? `Workflow owner not found: ${workflow.agentSlug}`
+          : `Agent not found: ${key}`,
+      },
       { status: 404 },
     );
   }
@@ -196,22 +218,79 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // local registry — memwal has no list-namespaces endpoint, so this registry
   // ledger is the only way the canvas can later offer known namespaces. `recall`
   // passes straight through.
-  const memwal = memwalFromEnv();
-  const memory = memwal
-    ? {
-        remember: async (ns: string, text: string) => {
-          const result = await memwal.remember(ns, text);
-          try {
-            await getRegistryStore().recordMemoryNamespace(agent.suinsName, ns);
-          } catch {
-            // Namespace bookkeeping is best-effort; never fail the run for it.
+  //
+  // MEMWAL_MOCK=true short-circuits both calls with a deterministic, clearly-
+  // labelled fake result instead of hitting the real relayer. TEMPORARY: for
+  // demos/local dev while the public relayer is down (503 "security upgrade")
+  // or a delegate key isn't registered on the target network (401) — nothing
+  // here is written to Walrus. Remove MEMWAL_MOCK once the real relayer/creds
+  // work again.
+  const memwalMock = process.env.MEMWAL_MOCK?.trim().toLowerCase() === "true";
+  const memwal = memwalMock ? null : memwalFromEnv();
+  const memory =
+    memwalMock
+      ? {
+          remember: async (ns: string, text: string) => {
+            const blobId = mockWalrusBlobId();
+            mockMemoryStore.set(ns, [...(mockMemoryStore.get(ns) ?? []), text]);
+            try {
+              await getRegistryStore().recordMemoryNamespace(agent.suinsName, ns);
+            } catch {
+              // Namespace bookkeeping is best-effort; never fail the run for it.
+            }
+            return {
+              job_id: `mock-job-${randomUUID()}`,
+              status: "done",
+              namespace: ns,
+              blob_id: blobId,
+              mock: true,
+              note: "MEMWAL_MOCK=true — not written to Walrus; unset MEMWAL_MOCK to use the real relayer.",
+            };
+          },
+          recall: async (ns: string, query: string, limit?: number) => {
+            // No real embeddings in mock mode: rank by a simple substring/word
+            // match against this run's own remembered texts, so a workflow that
+            // remembers then recalls in the same session sees its own data
+            // instead of always getting an empty result.
+            const stored = mockMemoryStore.get(ns) ?? [];
+            const needle = query.trim().toLowerCase();
+            const words = needle.split(/\s+/).filter(Boolean);
+            const scored = stored
+              .map((text) => {
+                const hay = text.toLowerCase();
+                const hits = words.filter((w) => hay.includes(w)).length;
+                const score = hay.includes(needle) ? 1 : words.length > 0 ? hits / words.length : 0;
+                return { text, score };
+              })
+              .filter((r) => r.score > 0)
+              .sort((a, b) => b.score - a.score)
+              .slice(0, limit ?? 10);
+            return {
+              results: scored,
+              total: scored.length,
+              namespace: ns,
+              query,
+              ...(limit !== undefined ? { limit } : {}),
+              mock: true,
+              note: "MEMWAL_MOCK=true — matched against this session's mocked memories, not real Walrus Memory; unset MEMWAL_MOCK to use the real relayer.",
+            };
+          },
+        }
+      : memwal
+        ? {
+            remember: async (ns: string, text: string) => {
+              const result = await memwal.remember(ns, text);
+              try {
+                await getRegistryStore().recordMemoryNamespace(agent.suinsName, ns);
+              } catch {
+                // Namespace bookkeeping is best-effort; never fail the run for it.
+              }
+              return result;
+            },
+            recall: (ns: string, query: string, limit?: number) =>
+              memwal.recall(ns, query, limit),
           }
-          return result;
-        },
-        recall: (ns: string, query: string, limit?: number) =>
-          memwal.recall(ns, query, limit),
-      }
-    : null;
+        : null;
 
   // Real Harbor uploader (the user's Walrus Harbor account). Built from
   // HARBOR_API_KEY + HARBOR_SPACE_ID + HARBOR_BUCKET_ID. `null` when any is
@@ -367,10 +446,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const build: RunBuildBundle = {
     buildCallSubAgentTx: async (options) => {
-      // A bare agent name (e.g. "alpha.sui") is NOT a skill; map it to that
-      // agent's real seeded skill so the delegated call resolves a real skill
-      // (skillResolved:true) instead of degrading to "did not resolve". Names
-      // that already carry a skill prefix ("web-search.alpha.sui") pass through.
+      // A bare agent alias (e.g. "alpha" / "alpha.sui") is NOT a skill;
+      // map only known aliases to their seeded skill. A bare skill id such as
+      // "web-search" is valid globally and MUST pass through unchanged —
+      // turning it into "web-search.web-search.sui" makes resolution fail.
       const normalizeSkill = (name: string): string => {
         const slug = (name ?? "").replace(/\.sui$/i, "");
         if (!slug || slug.includes(".")) return name;
@@ -379,7 +458,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
           "beta-agent": "sandbox-tool",
           "walrus-bot": "walrus-read",
         };
-        return `${seeded[slug] ?? "web-search"}.${slug}.sui`;
+        const skillId = seeded[slug];
+        return skillId ? `${skillId}.${slug}.sui` : name;
       };
       const built = await agentClient.buildExecuteSkillTx({
         ...options,

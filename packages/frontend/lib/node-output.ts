@@ -54,6 +54,15 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+function isHttpsUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function num(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
@@ -180,6 +189,9 @@ export function nodeOutputSummary(
         if (str(output.storage) === "walrus") {
           return blobId ? `sealed · Walrus ${shortId(blobId)}` : "sealed · Walrus";
         }
+        if (str(output.visibility) === "public") {
+          return blobId ? `public ${shortId(blobId)}` : "public";
+        }
         if (str(output.note)) return "public (skipped)";
         return blobId ? `sealed ${shortId(blobId)}` : "sealed";
       }
@@ -291,6 +303,8 @@ export interface NodeOutputDetail {
   catalog?: CatalogRow[];
   objectChanges?: { total: number; created: number };
   recall?: RecallRow[];
+  /** Public HTTPS image URL rendered by the browser-safe output popover. */
+  previewUrl?: string;
 }
 
 export function nodeOutputDetail(
@@ -347,7 +361,11 @@ export function nodeOutputDetail(
         fields.push({ label: "seal", value: "public — skipped" });
         break;
       }
-      fields.push({ label: "seal", value: "encrypted" });
+      const visibility = str(rec?.visibility);
+      fields.push({
+        label: "seal",
+        value: visibility === "public" ? "public (raw image)" : "encrypted",
+      });
       const policy = str(rec?.sealPolicyId);
       if (policy)
         fields.push({ label: "policy", value: policy, mono: true });
@@ -370,6 +388,8 @@ export function nodeOutputDetail(
         fields.push({ label: "storage", value: "harbor" });
         const url = str(rec?.url);
         if (url) fields.push({ label: "url", value: url });
+        const previewUrl = str(rec?.previewUrl) ?? (visibility === "public" ? url : undefined);
+        if (isHttpsUrl(previewUrl)) detail.previewUrl = previewUrl;
       }
       pushBlob();
       break;
