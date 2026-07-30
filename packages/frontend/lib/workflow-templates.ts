@@ -38,7 +38,8 @@ export type TemplateCategory =
   | "Core"
   | "DeFi"
   | "Token & NFT"
-  | "DAO & Multi-agent";
+  | "DAO & Multi-agent"
+  | "Agent Memory";
 
 /** Stable display order for the categorized Templates dropdown. */
 export const CATEGORY_ORDER: TemplateCategory[] = [
@@ -46,6 +47,7 @@ export const CATEGORY_ORDER: TemplateCategory[] = [
   "DeFi",
   "Token & NFT",
   "DAO & Multi-agent",
+  "Agent Memory",
 ];
 
 export type WorkflowTemplate = {
@@ -202,6 +204,29 @@ const DAO_PACKAGE_PLACEHOLDER = "0xYOUR_DAO"; // real: your governance pkg
 const DAO_VOTE_ENTRY = "governance::vote";
 const MARKETPLACE_PACKAGE_PLACEHOLDER = "0xYOUR_MARKETPLACE"; // real: pay/escrow pkg
 const MARKETPLACE_BUY_ENTRY = "marketplace::buy";
+
+/**
+ * Resolve an Import Agent `agent` target for a given agent: prefers a REAL
+ * seeded agent OTHER than the caller (import-agent reads someone else's skill
+ * catalog — pointing it at yourself either throws "Agent not found" when you
+ * are not registered, or is a pointless self-import when you are). Falls back
+ * to `alpha.sui`, the most fully-seeded demo agent.
+ */
+const SEEDED_OTHER_AGENT: Record<string, string> = {
+  alpha: "defi-rebalancer.sui",
+  "beta-agent": "alpha.sui",
+  "walrus-bot": "alpha.sui",
+};
+
+function defaultImportTargetFor(agentName: string): string {
+  const slug = agentName?.trim().replace(/\.sui$/, "").toLowerCase();
+  return SEEDED_OTHER_AGENT[slug] ?? "alpha.sui";
+}
+
+/** A seeded agent's own passport id (see `packages/frontend/registry.seed.json`),
+ * used as a demo default so the Sui `record_execution` node lands a REAL
+ * on-chain call even for a caller with no minted passport yet. */
+const DEMO_PASSPORT_ID = "0xa1d1a4ec19f817fda256b66dcee38d0c819ac709bc50aa2ae5dadc479c449133"; // alpha.sui
 
 // ===== templates =====
 
@@ -428,14 +453,14 @@ export const TEMPLATES: WorkflowTemplate[] = [
     },
   },
 
-  // 7) NFT -> Harbor -> Memory — mint an NFT, archive its metadata, remember it.
+  // 7) Harbor image -> Mint NFT -> Memory.
   {
     id: "nft-harbor-memory",
-    name: "NFT -> Harbor -> Memory",
+    name: "Harbor image -> Mint NFT -> Memory",
     description:
-      "Mint an NFT (fill in your NFT package), then privately archive its image URL or metadata in Harbor.",
+      "Upload a local image to Harbor, mint with its public URL, then save the result to Memory.",
     demonstrates:
-      "Trigger -> Sui (mint NFT move-call — seed your published NFT package::function) -> Harbor (store the NFT metadata blob; real Harbor upload when configured) -> Memory (save a short fact like 'minted NFT X'). Sui skips cleanly until you paste a real 0x package; Harbor falls back to Walrus and Memory skips when env is unset — the whole chain stays runnable.",
+      "Trigger -> Harbor (choose and upload a JPG/PNG) -> Sui (mint with name, description, image_url) -> Memory. Harbor is completed before Exec and never uploads a sample payload.",
     build: (agentName) => {
       const self = selfName(agentName);
       const nodes: Node[] = [
@@ -443,79 +468,65 @@ export const TEMPLATES: WorkflowTemplate[] = [
           label: "Trigger",
           subtitle: "Manual start",
         }),
-        mkNode("tpl-mint", 240, 240, {
+        mkNode("tpl-harbor", 260, 240, {
+          label: "Harbor",
+          subtitle: "Upload image before mint",
+          params: { localImageOnly: "true" },
+        }),
+        mkNode("tpl-mint", 480, 240, {
           label: "Sui",
-          // Hint lives in the subtitle so the chain reads as a mint at a glance.
-          subtitle: "Mint NFT — set your package",
+          subtitle: "Mint NFT — package + metadata",
           params: {
             movePackage: NFT_MINT_PACKAGE_PLACEHOLDER,
             entry: NFT_MINT_ENTRY_PLACEHOLDER,
           },
         }),
-        mkNode("tpl-harbor", 460, 240, {
-          label: "Harbor",
-          subtitle: "Archive NFT image / metadata",
-          params: {
-            private: "true",
-            sealPolicyId: "demo-policy",
-            nftName: `${self} NFT`,
-            nftDescription: "NFT archived by an AgentOS workflow.",
-            nftImageUri: "walrus://<image-blob-id>",
-          },
-        }),
         mkNode("tpl-memory", 700, 240, {
           label: "Memory",
-          subtitle: "Save to agent memory",
+          subtitle: "Save mint result",
           params: { text: `Minted NFT for ${self} and archived its metadata.` },
         }),
       ];
       const edges: Edge[] = [
-        mkEdge("te1", "tpl-trigger", "tpl-mint", ORANGE, "MINT"),
-        mkEdge("te2", "tpl-mint", "tpl-harbor", PURPLE, "ARCHIVE"),
-        mkEdge("te3", "tpl-harbor", "tpl-memory", PURPLE, "REMEMBER"),
+        mkEdge("te1", "tpl-trigger", "tpl-harbor", PURPLE, "UPLOAD IMAGE"),
+        mkEdge("te2", "tpl-harbor", "tpl-mint", ORANGE, "MINT"),
+        mkEdge("te3", "tpl-mint", "tpl-memory", PURPLE, "REMEMBER"),
       ];
       return { nodes, edges };
     },
   },
 
-  // 8) Mint + archive NFT — mint then archive the metadata to Harbor.
+  // 8) Local Harbor image -> mint NFT.
   {
     id: "mint-archive-nft",
-    name: "Mint + archive NFT",
+    name: "Upload image + mint NFT",
     description:
-      "Mint an NFT on-chain (fill in your NFT package), then privately archive its image URL or metadata in Harbor.",
+      "Upload a local image to Harbor first, then mint an NFT with its public image URL.",
     demonstrates:
-      "Trigger -> Sui (mint NFT move-call — paste your published NFT package::function) -> Harbor (store the NFT metadata file; real Harbor upload when HARBOR_API_KEY/SPACE/BUCKET are set, else a Walrus fallback). The minimal mint-then-archive path; the Sui node skips cleanly until a real 0x package is supplied.",
-    build: (agentName) => {
-      const self = selfName(agentName);
+      "Trigger -> Harbor (choose and upload a JPG/PNG) -> Sui (mint with name, description, image_url). Exec submits only the mint transaction and never creates a placeholder upload.",
+    build: () => {
       const nodes: Node[] = [
         mkNode("tpl-trigger", 60, 240, {
           label: "Trigger",
           subtitle: "Manual start",
         }),
-        mkNode("tpl-mint", 300, 240, {
+        mkNode("tpl-harbor", 300, 240, {
+          label: "Harbor",
+          subtitle: "Upload image before mint",
+          params: { localImageOnly: "true" },
+        }),
+        mkNode("tpl-mint", 540, 240, {
           label: "Sui",
-          subtitle: "Mint NFT — set your package",
+          subtitle: "Mint NFT — package + metadata",
           params: {
             movePackage: NFT_MINT_PACKAGE_PLACEHOLDER,
             entry: NFT_MINT_ENTRY_PLACEHOLDER,
           },
         }),
-        mkNode("tpl-harbor", 540, 240, {
-          label: "Harbor",
-          subtitle: "Archive NFT image / metadata",
-          params: {
-            private: "true",
-            sealPolicyId: "demo-policy",
-            nftName: `${self} NFT`,
-            nftDescription: "NFT archived by an AgentOS workflow.",
-            nftImageUri: "walrus://<image-blob-id>",
-          },
-        }),
       ];
       const edges: Edge[] = [
-        mkEdge("te1", "tpl-trigger", "tpl-mint", ORANGE, "MINT"),
-        mkEdge("te2", "tpl-mint", "tpl-harbor", PURPLE, "ARCHIVE"),
+        mkEdge("te1", "tpl-trigger", "tpl-harbor", PURPLE, "UPLOAD IMAGE"),
+        mkEdge("te2", "tpl-harbor", "tpl-mint", ORANGE, "MINT"),
       ];
       return { nodes, edges };
     },
@@ -870,6 +881,234 @@ export const TEMPLATES: WorkflowTemplate[] = [
         mkEdge("te2", "tpl-import", "tpl-pay", ORANGE, "PAY"),
         mkEdge("te3", "tpl-pay", "tpl-call", PINK, "INVOKE"),
         mkEdge("te4", "tpl-call", "tpl-attest", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // ========================================================================
+  // Agent Memory
+  // ========================================================================
+
+  // 17) Daily portfolio rebalance — recall -> Sui rebalance -> remember + Harbor.
+  {
+    id: "memory-daily-rebalance",
+    name: "Daily portfolio rebalance",
+    category: "Agent Memory",
+    description:
+      "Recall yesterday's notes, rebalance the portfolio on-chain, remember today's result, and lock the report in Harbor.",
+    demonstrates:
+      "Trigger (run daily via an external cron hitting the run API) -> Memory Recall (semantic-search yesterday's notes INTO the graph) -> Sui (record_execution against a real seeded AgentPassport — a genuine on-chain call out of the box) -> { Memory (remember today's result, real Walrus blobId), Harbor (Seal-encrypt the report, locked to the owner agent's bucket policy) } running in PARALLEL off the Sui step. Five blocks; Memory Recall/Memory land real Walrus blob ids on Walruscan, Sui lands a real tx digest on Suiscan, and Harbor never blocks on a Memwal outage because it does not sit downstream of Memory — swap the Sui node's `passportId` for your own minted passport (or movePackage/entry for a real vault contract) once you have one.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const namespace = `portfolio.${self}`;
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 20, 240, {
+          label: "Trigger",
+          subtitle: "Daily 9AM (external cron)",
+        }),
+        mkNode("tpl-recall", 220, 240, {
+          label: "Memory Recall",
+          subtitle: "Recall yesterday's notes",
+          params: {
+            namespace,
+            query: "yesterday's rebalance result",
+            limit: "3",
+          },
+        }),
+        mkNode("tpl-sui", 440, 240, {
+          label: "Sui",
+          // Uses a REAL seeded passport id (alpha.sui) as a runnable demo
+          // default — record_execution needs an AgentPassport object that
+          // actually exists on testnet. Swap `passportId` for your own minted
+          // passport (or add movePackage/entry) once you have one.
+          subtitle: "Record execution — demo passport",
+          params: { passportId: DEMO_PASSPORT_ID },
+        }),
+        mkNode("tpl-memory", 680, 120, {
+          label: "Memory",
+          subtitle: "Remember today's result",
+          params: {
+            namespace,
+            template: "Rebalanced on {{tpl-sui.digest}}: target allocation 60/40",
+          },
+        }),
+        mkNode("tpl-harbor", 680, 360, {
+          label: "Harbor",
+          subtitle: "Lock report to owner",
+          params: {
+            private: "true",
+            sealPolicyId: "demo-policy",
+            manifest: JSON.stringify({
+              report: "daily-rebalance",
+              agent: self,
+            }),
+          },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-recall", PURPLE, "RECALL"),
+        mkEdge("te2", "tpl-recall", "tpl-sui", ORANGE, "REBALANCE"),
+        // Memory and Harbor branch in PARALLEL off Sui — Harbor is never
+        // downstream of Memory, so a Memwal outage (memory errors) cannot
+        // BLOCKED_UPSTREAM the Harbor node.
+        mkEdge("te3", "tpl-sui", "tpl-memory", PURPLE, "REMEMBER"),
+        mkEdge("te4", "tpl-sui", "tpl-harbor", PURPLE, "LOCK"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 18) Cross-agent skill composition — Sui skill + Walrus Memory skill under one cap.
+  {
+    id: "memory-cross-agent-composition",
+    name: "Cross-agent skill composition",
+    category: "Agent Memory",
+    description:
+      "Delegate once, then call a Sui on-chain skill AND a Walrus-Memory skill from two different agents under the SAME DelegationCap, merge results into memory, and attest both.",
+    demonstrates:
+      "Trigger -> Import Agent (read a DeFi agent's catalog) -> Delegate (grant one DelegationCap) -> Call Sub-Agent (SKILL 1: the DeFi agent's on-chain vault skill, delegated) -> Import Agent (read a memory-bot agent's catalog) -> Call Sub-Agent (SKILL 2: the memory-bot's Walrus-Memory skill, SAME delegated cap threaded automatically) -> Memory (merge both results into the orchestrator's own namespace) -> Attest x2 (rate both collaborators). Two heterogeneous skills — one Sui Move package, one Walrus-Memory-backed — composed atomically under a single on-chain grant; every Call Sub-Agent step is a real assert_valid -> entry -> consume -> record_subagent_execution PTB traceable on Suiscan.",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 0, 260, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-import-defi", 200, 120, {
+          label: "Import Agent",
+          subtitle: "Read DeFi agent catalog",
+          params: { agent: defaultImportTargetFor(agentName) },
+        }),
+        mkNode("tpl-delegate", 420, 260, {
+          label: "Delegate",
+          subtitle: "Grant one cap for both calls",
+          params: {
+            child: self,
+            spendLimit: "0",
+            expiryMs: DEMO_EXPIRY_MS,
+          },
+        }),
+        mkNode("tpl-call-sui-skill", 660, 120, {
+          label: "Call Sub-Agent",
+          subtitle: "SKILL 1: Sui vault skill (delegated)",
+          params: { skill: defaultSkillFor(agentName), cost: "0" },
+        }),
+        mkNode("tpl-import-memory", 660, 400, {
+          label: "Import Agent",
+          subtitle: "Read memory-bot catalog",
+          params: { agent: defaultImportTargetFor(agentName) },
+        }),
+        mkNode("tpl-call-memory-skill", 900, 400, {
+          label: "Call Sub-Agent",
+          subtitle: "SKILL 2: Walrus-Memory skill (same cap)",
+          params: { skill: defaultSkillFor(agentName), cost: "0" },
+        }),
+        mkNode("tpl-memory-merge", 1140, 260, {
+          label: "Memory",
+          subtitle: "Merge both results",
+          params: {
+            namespace: self,
+            template:
+              "Sui skill tx {{tpl-call-sui-skill.digest}}; Memory skill tx {{tpl-call-memory-skill.digest}}",
+          },
+        }),
+        mkNode("tpl-attest-defi", 1380, 120, {
+          label: "Attest",
+          subtitle: "Rate the DeFi agent",
+          params: { kind: "completion", score: "95", share: "true" },
+        }),
+        mkNode("tpl-attest-memory", 1380, 400, {
+          label: "Attest",
+          subtitle: "Rate the memory-bot agent",
+          params: { kind: "completion", score: "95", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-import-defi", PINK),
+        mkEdge("te2", "tpl-trigger", "tpl-delegate", PINK, "GRANT"),
+        mkEdge("te3", "tpl-import-defi", "tpl-call-sui-skill", PINK, "DELEGATED"),
+        mkEdge("te4", "tpl-delegate", "tpl-call-sui-skill", PINK),
+        mkEdge("te5", "tpl-delegate", "tpl-call-memory-skill", PINK, "SAME CAP"),
+        mkEdge("te6", "tpl-trigger", "tpl-import-memory", PINK),
+        mkEdge(
+          "te7",
+          "tpl-import-memory",
+          "tpl-call-memory-skill",
+          PINK,
+          "DELEGATED",
+        ),
+        mkEdge("te8", "tpl-call-sui-skill", "tpl-memory-merge", PURPLE, "MERGE"),
+        mkEdge(
+          "te9",
+          "tpl-call-memory-skill",
+          "tpl-memory-merge",
+          PURPLE,
+          "MERGE",
+        ),
+        mkEdge("te10", "tpl-memory-merge", "tpl-attest-defi", PINK, "ATTEST"),
+        mkEdge("te11", "tpl-memory-merge", "tpl-attest-memory", PINK, "ATTEST"),
+      ];
+      return { nodes, edges };
+    },
+  },
+
+  // 19) Sui subagent showcase — 3 parallel branches, all REAL on-chain/off-chain
+  // work, converging on one Attest. No delegation chain, no Memwal write, no
+  // Harbor download — every node here is independently runnable the moment an
+  // agent has a minted AgentPassport, which sidesteps the coordinate-loop's
+  // delegation-cap dependency chain while still proving 3 different real
+  // capabilities side by side.
+  {
+    id: "sui-subagent-showcase",
+    name: "Sui subagent showcase",
+    category: "DAO & Multi-agent",
+    description:
+      "Three independent branches run in PARALLEL off one Trigger — a real Sui move-call, a real cross-agent skill-catalog import, and a real private Harbor upload — then converge on a single Attest. Every step lands a genuine tx/blob; nothing here depends on Walrus Memory or a Harbor download.",
+    demonstrates:
+      "Trigger -> { Sui (record_execution on this agent's own minted AgentPassport — a REAL move-call against the published 0x6cc3… AgentOS package), Import Agent (read another agent's REAL published skill catalog, hash-verified), Harbor (Seal-encrypt + upload a report — upload-only, no download in the loop) } running in PARALLEL -> Attest (close the loop with a REAL on-chain reputation record referencing the Sui branch's passport). Built to showcase 3 independently-verifiable on-chain/off-chain capabilities as one big workflow without requiring a DelegationCap chain (which needs a passport BEFORE it can run) or a working Walrus Memory relayer — every node here either lands a real Suiscan-traceable tx or a real Harbor/Walrus blob out of the box, once the agent has a minted passport (Create Agent mints one automatically).",
+    build: (agentName) => {
+      const self = selfName(agentName);
+      const importTarget = defaultImportTargetFor(agentName);
+      const nodes: Node[] = [
+        mkNode("tpl-trigger", 40, 260, {
+          label: "Trigger",
+          subtitle: "Manual start",
+        }),
+        mkNode("tpl-sui-record", 300, 60, {
+          label: "Sui",
+          subtitle: "Record execution (own passport)",
+        }),
+        mkNode("tpl-import", 300, 260, {
+          label: "Import Agent",
+          subtitle: "Read another agent's catalog",
+          params: { agent: importTarget },
+        }),
+        mkNode("tpl-harbor-upload", 300, 460, {
+          label: "Harbor",
+          subtitle: "Upload report (private)",
+          params: {
+            private: "true",
+            sealPolicyId: "demo-policy",
+            manifest: JSON.stringify({
+              report: "sui-subagent-showcase",
+              agent: self,
+            }),
+          },
+        }),
+        mkNode("tpl-attest", 620, 260, {
+          label: "Attest",
+          subtitle: "Close the loop",
+          params: { kind: "review", score: "100", share: "true" },
+        }),
+      ];
+      const edges: Edge[] = [
+        mkEdge("te1", "tpl-trigger", "tpl-sui-record", ORANGE, "RECORD"),
+        mkEdge("te2", "tpl-trigger", "tpl-import", PINK, "IMPORT"),
+        mkEdge("te3", "tpl-trigger", "tpl-harbor-upload", PURPLE, "UPLOAD"),
+        mkEdge("te4", "tpl-sui-record", "tpl-attest", PINK, "ATTEST"),
+        mkEdge("te5", "tpl-import", "tpl-attest", PINK, "ATTEST"),
+        mkEdge("te6", "tpl-harbor-upload", "tpl-attest", PINK, "ATTEST"),
       ];
       return { nodes, edges };
     },

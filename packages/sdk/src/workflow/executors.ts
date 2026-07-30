@@ -16,7 +16,11 @@ import {
 } from "../contracts/package-id.js";
 import { sealEncrypt } from "../seal.js";
 import { isValidSuiNSName } from "../suins-resolve.js";
-import { DEFAULT_WALRUS_EPOCHS, WalrusClient } from "../walrus.js";
+import {
+  DEFAULT_WALRUS_AGGREGATOR,
+  DEFAULT_WALRUS_EPOCHS,
+  WalrusClient,
+} from "../walrus.js";
 import type {
   RunContext,
   StepResult,
@@ -254,6 +258,18 @@ async function storeEncryptedOnWalrus(
  * node error.
  */
 const harbor: StepExecutor = async (node, ctx) => {
+  // NFT templates use the browser-only local uploader. It posts the selected
+  // file directly to Harbor, then writes only its public `image_url` into the
+  // Sui node. Never serialize a missing file as `{}` (two bytes) on Exec.
+  if (node.params?.localImageOnly === "true") {
+    return {
+      status: "skipped",
+      output: {
+        note: "Harbor: choose a JPG/PNG in this node and upload it before running the NFT mint. No sample payload was uploaded.",
+      },
+    };
+  }
+
   const isPrivate = Boolean(node.params?.private);
 
   const requestedSealPolicyId =
@@ -374,6 +390,13 @@ const harbor: StepExecutor = async (node, ctx) => {
         ? await ctx.harbor.upload(payload, filename, uploadOptions)
         : await ctx.harbor.upload(payload, filename);
       if (r.blobId) {
+        // Harbor's API download route always requires a Bearer key, even when
+        // the stored payload is plaintext. A public Harbor upload instead
+        // exposes the certified raw blob through Walrus's public aggregator;
+        // private Seal uploads retain Harbor's authenticated file URL.
+        const url = isPrivate
+          ? r.url
+          : `${DEFAULT_WALRUS_AGGREGATOR}/v1/blobs/${encodeURIComponent(r.blobId)}`;
         return {
           status: "done",
           blobId: r.blobId,
@@ -389,7 +412,7 @@ const harbor: StepExecutor = async (node, ctx) => {
               ? { note: "AES demo envelope (real Seal unavailable)" }
               : {}),
             ...(r.fileId ? { fileId: r.fileId } : {}),
-            ...(r.url ? { url: r.url } : {}),
+            ...(url ? { url } : {}),
           },
         };
       }
@@ -480,6 +503,18 @@ const sui: StepExecutor = async (node, ctx) => {
         },
       };
     }
+    if (entry.trim() === "nft::mint_and_transfer") {
+      const required = ["name", "description", "image_url"];
+      const missing = required.filter((key) => !strParam(node, key));
+      if (missing.length > 0) {
+        return {
+          status: "skipped",
+          output: {
+            note: `Sui: skipped — NFT mint requires ${missing.join(", ")}. Enter name/description and upload a public JPG/PNG in Harbor before Exec.`,
+          },
+        };
+      }
+    }
     tx.moveCall({ target: parseTarget(movePackage, entry), arguments: buildMoveArgs(tx, node.params) });
   } else if (passportId) {
     // record_execution targets the AgentOS package. With no published package
@@ -541,7 +576,9 @@ const sui: StepExecutor = async (node, ctx) => {
       return {
         status: "skipped",
         output: {
-          note: "Sui: skipped — passport or package not found on testnet. Mint a real AgentPassport to enable on-chain recording.",
+          note: movePackage && entry
+            ? "Sui: skipped — custom Move package or required NFT object was not found on the configured network. Confirm the package and object IDs are deployed there."
+            : "Sui: skipped — passport or package not found on testnet. Mint a real AgentPassport to enable on-chain recording.",
         },
       };
     }
@@ -1251,12 +1288,26 @@ const memory: StepExecutor = async (node, ctx, prevOutputs) => {
     result = await ctx.memory.remember(namespace, text);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Auth failure (401/403) or relayer unavailable — skip gracefully rather
-    // than failing the whole run. Memory is best-effort.
-    if (msg.includes("401") || msg.includes("403") || msg.includes("unavailable")) {
+    // Auth failure (401/403), relayer unavailable, or a transient 503 — e.g.
+    // the relayer's rate limiter fails CLOSED when its Redis is unreachable, or
+    // it hit a transient Walrus package version mismatch (EWrongVersion) while
+    // refreshing its cached @mysten/walrus client — skip gracefully rather than
+    // failing the whole run. Memory is best-effort, and a transient 503 is not
+    // a config problem the user can fix; the relayer's own /health endpoint
+    // reporting "ok" during this confirms it is not a full outage.
+    if (
+      msg.includes("401") ||
+      msg.includes("403") ||
+      msg.includes("503") ||
+      /unavailable|paused|maintenance/i.test(msg)
+    ) {
       return {
         status: "skipped",
-        output: { note: `Memory: skipped — relayer auth failed (${msg.slice(0, 80)}). Check MEMWAL_ACCOUNT_ID and MEMWAL_DELEGATE_KEY.` },
+        output: {
+          note: msg.includes("503") || /paused|maintenance/i.test(msg)
+            ? "Memory: skipped — the memory service is temporarily unavailable. Please try again shortly."
+            : "Memory: skipped — memory authentication was rejected. Check MEMWAL_ACCOUNT_ID and MEMWAL_DELEGATE_KEY.",
+        },
       };
     }
     return { status: "error", error: msg };
@@ -1301,11 +1352,36 @@ const memoryRecall: StepExecutor = async (node, ctx, _prevOutputs) => {
         ? Number(limitRaw)
         : undefined;
 
-  const raw = await ctx.memory.recall(
-    namespace,
-    query,
-    Number.isFinite(limit) ? (limit as number) : undefined,
-  );
+  let raw: unknown;
+  try {
+    raw = await ctx.memory.recall(
+      namespace,
+      query,
+      Number.isFinite(limit) ? (limit as number) : undefined,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Same tolerance as `memory`: auth failure, relayer unavailable, or a
+    // transient 503 (rate-limiter fail-closed / momentary Walrus package
+    // version mismatch) are not config problems — skip gracefully rather than
+    // failing the whole run.
+    if (
+      msg.includes("401") ||
+      msg.includes("403") ||
+      msg.includes("503") ||
+      /unavailable|paused|maintenance/i.test(msg)
+    ) {
+      return {
+        status: "skipped",
+        output: {
+          note: msg.includes("503") || /paused|maintenance/i.test(msg)
+            ? "Memory Recall: skipped — the memory service is temporarily unavailable. Please try again shortly."
+            : "Memory Recall: skipped — memory authentication was rejected. Check MEMWAL_ACCOUNT_ID and MEMWAL_DELEGATE_KEY.",
+        },
+      };
+    }
+    return { status: "error", error: msg };
+  }
   const results = normalizeRecall(raw);
   return {
     status: "done",

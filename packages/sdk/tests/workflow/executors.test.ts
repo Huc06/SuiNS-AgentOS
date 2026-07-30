@@ -75,6 +75,19 @@ describe("harbor executor", () => {
     );
   });
 
+  it("does not upload a placeholder payload for a browser-local NFT image", async () => {
+    const upload = vi.fn(async () => ({ blobId: "MUST_NOT_UPLOAD" }));
+    const r = await executors.harbor(
+      node("harbor", { localImageOnly: "true" }),
+      makeCtx({ harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/No sample payload/i);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
   it("uploads a PUBLIC skill's PLAIN payload to real Harbor when configured", async () => {
     // With a real Harbor account wired, even a public skill is stored (plaintext,
     // no Seal) so the user sees real data in their Harbor bucket.
@@ -239,6 +252,42 @@ describe("harbor executor", () => {
       new Uint8Array(arg.encrypted.slice(0, 7)),
     );
     expect(magic).toBe("AOSEAL1");
+  });
+
+  it("returns a public Walrus URL for a plaintext Harbor PNG upload", async () => {
+    const sourceBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const fetchImage = vi.fn(async () => ({
+      bytes: sourceBytes,
+      filename: "public-art.png",
+      contentType: "image/png" as const,
+    }));
+    const upload = vi.fn(async () => ({
+      blobId: "PUBLIC_PNG_BLOB",
+      fileId: "PUBLIC_PNG_FILE",
+      url: "https://api.testnet.harbor.walrus.xyz/api/v1/buckets/private/files/PUBLIC_PNG_FILE/download",
+    }));
+
+    const r = await executors.harbor(
+      node("harbor", {
+        private: false,
+        fileUrl: "https://images.example/public-art.png",
+      }),
+      makeCtx({ media: { fetchImage }, harbor: { upload } }),
+      [],
+    );
+
+    expect(r.status).toBe("done");
+    expect(upload).toHaveBeenCalledWith(
+      sourceBytes,
+      "public-art.png",
+      { contentType: "image/png" },
+    );
+    expect(r.output).toMatchObject({
+      visibility: "public",
+      encryption: "none",
+      storage: "harbor",
+      url: "https://aggregator.walrus-testnet.walrus.space/v1/blobs/PUBLIC_PNG_BLOB",
+    });
   });
 
   it("uploads the ciphertext to REAL Harbor via the injected ctx.harbor uploader", async () => {
@@ -506,6 +555,45 @@ describe("sui executor", () => {
     expect(r.txDigest).toBe("0xCALL");
   });
 
+  it("skips NFT minting until name, description, and image_url are present", async () => {
+    const execute = vi.fn(async () => ({ digest: "MUST_NOT_EXECUTE" }));
+    const r = await executors.sui(
+      node("sui", {
+        movePackage: "0x9",
+        entry: "nft::mint_and_transfer",
+        name: "Harbor NFT",
+        description: "A local upload",
+      }),
+      makeCtx({ execute }),
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/image_url/);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("explains a missing custom NFT Move target without requiring an AgentPassport", async () => {
+    const execute = vi.fn(async () => {
+      throw new Error("404 object not found");
+    });
+    const r = await executors.sui(
+      node("sui", {
+        movePackage: "0x9",
+        entry: "nft::mint_and_transfer",
+        name: "Harbor NFT",
+        description: "A local upload",
+        image_url: "https://aggregator.walrus-testnet.walrus.space/v1/blobs/image",
+      }),
+      makeCtx({ execute }),
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/custom Move package/i);
+    expect((r.output as { note: string }).note).not.toMatch(/AgentPassport/);
+  });
+
   it("surfaces a message emitted by a generic Move call", async () => {
     const execute = vi.fn(async () => ({
       digest: "0xGM",
@@ -643,6 +731,22 @@ describe("memory executor (remember)", () => {
     // The synchronous Walrus blob id is surfaced (chip + Link).
     expect(r.blobId).toBe("0xMEMBLOB");
     expect(r.output).toMatchObject({ namespace: "ns://alpha", blobId: "0xMEMBLOB" });
+  });
+
+  it("hides raw maintenance responses from a skipped memory write", async () => {
+    const remember = vi.fn(async () => {
+      throw new Error('Memwal /api/remember failed: 503 {"error":"upgrades"}');
+    });
+    const r = await executors.memory(
+      node("memory"),
+      makeCtx({ memory: { remember, recall: vi.fn() } }),
+      [],
+    );
+
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toBe(
+      "Memory: skipped — the memory service is temporarily unavailable. Please try again shortly.",
+    );
   });
 
   it("remembers an explicit params.text verbatim", async () => {

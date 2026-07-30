@@ -25,6 +25,8 @@ export type StepErrorCode =
   | "ENV_MISSING"
   | "NO_PACKAGE_ID"
   | "PASSPORT_NOT_ONCHAIN"
+  | "MOVE_TARGET_NOT_ONCHAIN"
+  | "NFT_METADATA_MISSING"
   | "MEMWAL_UNSET"
   | "WALRUS_UPLOAD"
   | "MOVE_ABORT"
@@ -519,6 +521,34 @@ export function diagnoseStep(step: StepResult): StepDiagnosis {
 
   if (step.status === "skipped") {
     const note = outputNote(step.output) ?? "";
+    if (
+      /memory service is temporarily unavailable|transient 503|relayer is temporarily paused|maintenance window/i.test(
+        note,
+      )
+    ) {
+      return {
+        code: "MEMWAL_SKIP",
+        cause: "The memory service is temporarily unavailable.",
+        remediation: "Retry the workflow shortly; no configuration change is needed.",
+        severity: "skip",
+      };
+    }
+    if (/nft mint requires/i.test(note)) {
+      return {
+        code: "NFT_METADATA_MISSING",
+        cause: "The NFT mint is missing required metadata.",
+        remediation: "Enter name and description in Sui, then upload a public JPG/PNG in Harbor to fill image_url before Exec.",
+        severity: "skip",
+      };
+    }
+    if (/custom Move package or required NFT object was not found/i.test(note)) {
+      return {
+        code: "MOVE_TARGET_NOT_ONCHAIN",
+        cause: "The custom NFT Move package or one of its required objects is absent from the configured network.",
+        remediation: "Use the package and object IDs deployed on this network. A custom mint does not need an AgentPassport unless its Move function explicitly requires one.",
+        severity: "skip",
+      };
+    }
     if (/memwal not configured/i.test(note)) {
       return {
         code: "MEMWAL_SKIP",

@@ -216,16 +216,88 @@ export class MemwalClient {
   }
 
   /**
-   * Persist `text` into the agent's memory `namespace`.
+   * Persist `text` into the agent's memory `namespace`, waiting for the
+   * background job to certify a Walrus blob.
    *
-   * @throws if the relayer responds with a non-2xx status.
+   * The real relayer's `POST /api/remember` is **async**: it returns
+   * `202 Accepted` with `{ job_id, status: "running" }` immediately —
+   * embedding, Seal encryption, Walrus upload, and vector indexing continue in
+   * the background. We poll `GET /api/remember/{job_id}` until it reports
+   * `status: "done"` (carrying the certified `blob_id`) or `status: "failed"`.
+   *
+   * @throws if the relayer responds with a non-2xx status, the job fails, or
+   *   the job does not complete within `pollOptions`.
    */
-  async remember(namespace: string, text: string): Promise<unknown> {
-    return this.request("remember", { namespace, text });
+  async remember(
+    namespace: string,
+    text: string,
+    pollOptions: { attempts?: number; intervalMs?: number } = {},
+  ): Promise<unknown> {
+    const submitted = (await this.request("remember", {
+      namespace,
+      text,
+    })) as { job_id?: string; status?: string; blob_id?: string };
+
+    // A synchronous/legacy relayer response already carries a blob_id — return
+    // it as-is without polling.
+    if (submitted?.blob_id) return submitted;
+
+    const jobId = submitted?.job_id;
+    if (!jobId) {
+      // No job id and no blob id: surface the raw response rather than hang.
+      return submitted;
+    }
+    return this.waitForRememberJob(jobId, pollOptions);
+  }
+
+  /**
+   * Poll `GET /api/remember/{job_id}` until the background remember job
+   * reaches a terminal state (`done` or `failed`).
+   *
+   * @throws "Memwal remember job … failed" if the job reports `failed`, or a
+   *   non-2xx status is returned while polling.
+   */
+  private async waitForRememberJob(
+    jobId: string,
+    options: { attempts?: number; intervalMs?: number } = {},
+  ): Promise<unknown> {
+    const attempts = options.attempts ?? 30;
+    const intervalMs = options.intervalMs ?? 1000;
+    // Mirror `request`'s prefix choice: the signed scheme namespaces protected
+    // routes under /api, the legacy bearer scheme does not.
+    const path = this.delegateOptions
+      ? `/api/remember/${jobId}`
+      : `/remember/${jobId}`;
+
+    for (let i = 0; i < attempts; i += 1) {
+      const result = (await this.get(path)) as {
+        job_id?: string;
+        status?: string;
+        blob_id?: string;
+        owner?: string;
+        namespace?: string;
+        error?: unknown;
+      };
+      if (result?.status === "done") return result;
+      if (result?.status === "failed") {
+        throw new Error(
+          `Memwal remember job ${jobId} failed${
+            result.error ? `: ${JSON.stringify(result.error)}` : ""
+          }`,
+        );
+      }
+      // pending / running → wait and retry.
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    // Timed out waiting; the job may still complete server-side. Surface the
+    // last-known pending state rather than silently returning nothing.
+    return { job_id: jobId, status: "running" };
   }
 
   /**
    * Semantic-recall up to `limit` memories matching `query` from `namespace`.
+   * Unlike `remember`, `POST /api/recall` is synchronous and returns
+   * `{ results, total }` directly.
    *
    * @throws if the relayer responds with a non-2xx status.
    */
@@ -251,6 +323,14 @@ export class MemwalClient {
       return this.signedPost(`/api/${op}`, body);
     }
     return this.bearerPost(`/${op}`, body);
+  }
+
+  /** Dispatch a signed or bearer-token GET (used to poll a remember job). */
+  private async get(path: string): Promise<unknown> {
+    if (this.delegateOptions) {
+      return this.signedGet(path);
+    }
+    return this.bearerGet(path);
   }
 
   /** Derive (once) the Ed25519 signing material from the delegate key. */
@@ -316,6 +396,44 @@ export class MemwalClient {
         "x-account-id": accountId,
       },
       body: bodyStr,
+    });
+
+    return this.handle(path, response);
+  }
+
+  /**
+   * Signed-header GET (used to poll a remember job). Per the signature format,
+   * `body_sha256` for a body-less GET is the SHA-256 of an empty byte string.
+   */
+  private async signedGet(path: string): Promise<unknown> {
+    const { privateKey, publicKeyHex, accountId } = await this.getDelegate();
+
+    const method = "GET";
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonce = randomUUID();
+    const bodySha256 = createHash("sha256").update("").digest("hex");
+    const message = `${timestamp}.${method}.${path}.${bodySha256}.${nonce}.${accountId}`;
+    const signatureHex = lowerHex(sign(null, Buffer.from(message), privateKey));
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers: {
+        "x-public-key": publicKeyHex,
+        "x-signature": signatureHex,
+        "x-timestamp": timestamp,
+        "x-nonce": nonce,
+        "x-account-id": accountId,
+      },
+    });
+
+    return this.handle(path, response);
+  }
+
+  /** Legacy bearer-token GET (used to poll a remember job). */
+  private async bearerGet(path: string): Promise<unknown> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
     });
 
     return this.handle(path, response);

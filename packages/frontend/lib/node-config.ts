@@ -155,41 +155,6 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       kind: "boolean",
       hint: "Keep ON to Seal-encrypt before uploading to Harbor.",
     },
-    {
-      key: "fileUrl",
-      label: "Image URL (JPG/PNG)",
-      placeholder: "https://cdn.example.com/nft.png",
-      hint: "Public HTTPS image, max 10 MiB. Overrides metadata below.",
-      validate: (value) => {
-        const v = value.trim();
-        if (!v) return undefined;
-        try {
-          const url = new URL(v);
-          return url.protocol === "https:" && !url.username && !url.password
-            ? undefined
-            : "must be a credential-free HTTPS URL";
-        } catch {
-          return "must be a valid HTTPS URL";
-        }
-      },
-    },
-    {
-      key: "nftName",
-      label: "NFT name",
-      placeholder: "My NFT",
-    },
-    {
-      key: "nftDescription",
-      label: "NFT description",
-      placeholder: "Short description",
-      kind: "textarea",
-    },
-    {
-      key: "nftImageUri",
-      label: "NFT image URI",
-      placeholder: "walrus://<image-blob-id>",
-      hint: "Used in metadata when Image URL is blank.",
-    },
   ],
 
   sui: [
@@ -211,7 +176,7 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
       label: "Move-call arguments (one key=value per line, optional)",
       placeholder: "name=My NFT\ndescription=...",
       kind: "textarea",
-      hint: "Positional args for the entry function above. Leave blank if the function takes no parameters.",
+      hint: "For NFT minting, enter name and description here. A public Harbor image upload fills image_url automatically.",
     },
   ],
 
@@ -375,7 +340,7 @@ export const NODE_PARAM_FIELDS: Record<WfType, NodeParamField[]> = {
  * threshold Seal yet. Keyed by node label (empty when a type has no note).
  */
 export const NODE_FORM_NOTES: Partial<Record<string, string>> = {
-  Harbor: "Private Harbor upload. Paste an image URL or leave it blank for metadata/text.",
+  Harbor: "Choose a JPG/PNG from your computer and upload it to Harbor. Public uploads receive a preview URL automatically.",
 };
 
 /** Look up the form-level note for a canvas node label (undefined when none). */
