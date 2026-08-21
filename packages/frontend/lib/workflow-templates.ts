@@ -542,10 +542,11 @@ export const TEMPLATES: WorkflowTemplate[] = [
     name: "Stake SUI",
     category: "DeFi",
     description:
-      "Delegate-stake SUI to a validator (0x3::sui_system::request_add_stake), then attest the action. Skips until you set a real 0x3 package + validator.",
+      "Delegate-stake SUI to a validator (0x3::sui_system::request_add_stake), then remember the action. Skips until you set a real 0x3 package + validator.",
     demonstrates:
-      "Trigger -> Sui (the STANDARD staking call 0x3::sui_system::request_add_stake — validator address + amount seeded as params) -> Attest (record the stake in reputation). The Sui node skips cleanly until the placeholder package is swapped for the real 0x3 system package (the executor binds no args yet, so seed a no-arg entry or wire args to truly submit); Attest skips until an AGENTOS package id is set — the whole graph stays a clean run.",
-    build: () => {
+      "Trigger -> Sui (the STANDARD staking call 0x3::sui_system::request_add_stake — validator address + amount seeded as params) -> Memory (save a recallable note like 'staked X to validator Y'). The Sui node skips cleanly until the placeholder package is swapped for the real 0x3 system package (the executor binds no args yet, so seed a no-arg entry or wire args to truly submit); Memory skips when MEMWAL is unset — the whole graph stays a clean run.",
+    build: (agentName) => {
+      const self = selfName(agentName);
       const nodes: Node[] = [
         mkNode("tpl-trigger", 60, 240, {
           label: "Trigger",
@@ -562,15 +563,15 @@ export const TEMPLATES: WorkflowTemplate[] = [
             amountMist: "1000000000",
           },
         }),
-        mkNode("tpl-attest", 540, 240, {
-          label: "Attest",
-          subtitle: "Reputation",
-          params: { kind: "stake", score: "100", share: "true" },
+        mkNode("tpl-memory", 540, 240, {
+          label: "Memory",
+          subtitle: "Save to agent memory",
+          params: { text: `${self} staked SUI to a validator.` },
         }),
       ];
       const edges: Edge[] = [
         mkEdge("te1", "tpl-trigger", "tpl-sui", ORANGE, "STAKE"),
-        mkEdge("te2", "tpl-sui", "tpl-attest", PINK, "ATTEST"),
+        mkEdge("te2", "tpl-sui", "tpl-memory", PURPLE, "REMEMBER"),
       ];
       return { nodes, edges };
     },

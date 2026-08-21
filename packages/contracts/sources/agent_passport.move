@@ -19,6 +19,14 @@ public struct AgentPassport has key, store {
     memory_namespace: vector<u8>,
     is_active: bool,
     exec_count: u64,
+    /// Total number of attestations received (see `attestation::attest`).
+    attestation_count: u64,
+    /// Running sum of every received attestation's `score` (0..=100 each).
+    /// Divide by `attestation_count` for the mean — kept as a sum on-chain so
+    /// no indexer is needed for a fast, tamper-evident average; off-chain
+    /// callers may still index the `Attested` event stream (which carries
+    /// `kind`) for weighted/per-kind breakdowns.
+    reputation_score_sum: u64,
 }
 
 // ===== Events =====
@@ -38,6 +46,12 @@ public struct AgentRevoked has copy, drop {
 public struct ExecutionRecorded has copy, drop {
     passport: ID,
     exec_count: u64,
+}
+
+public struct AttestationRecorded has copy, drop {
+    passport: ID,
+    attestation_count: u64,
+    reputation_score_sum: u64,
 }
 
 // ===== Public Functions =====
@@ -60,6 +74,8 @@ public fun create(
         memory_namespace: suins_name,
         is_active: true,
         exec_count: 0,
+        attestation_count: 0,
+        reputation_score_sum: 0,
     };
 
     event::emit(AgentCreated {
@@ -93,6 +109,23 @@ public(package) fun record_execution_internal(passport: &mut AgentPassport) {
     event::emit(ExecutionRecorded {
         passport: object::id(passport),
         exec_count: passport.exec_count,
+    });
+}
+
+/// Add one received attestation's `score` (0..=100) to the passport's running
+/// tally and bump its count. `public(package)` so only `attestation::attest`
+/// (a sibling module in `agentos`) may call this — mirrors
+/// `record_execution_internal`'s access pattern. The caller (`attest`) is
+/// responsible for every authorization/validity check (attester identity,
+/// score range, self-attest, active status); this function only aggregates.
+public(package) fun record_attestation_internal(passport: &mut AgentPassport, score: u8) {
+    passport.attestation_count = passport.attestation_count + 1;
+    passport.reputation_score_sum = passport.reputation_score_sum + (score as u64);
+
+    event::emit(AttestationRecorded {
+        passport: object::id(passport),
+        attestation_count: passport.attestation_count,
+        reputation_score_sum: passport.reputation_score_sum,
     });
 }
 
@@ -142,4 +175,12 @@ public fun is_active(passport: &AgentPassport): bool {
 
 public fun exec_count(passport: &AgentPassport): u64 {
     passport.exec_count
+}
+
+public fun attestation_count(passport: &AgentPassport): u64 {
+    passport.attestation_count
+}
+
+public fun reputation_score_sum(passport: &AgentPassport): u64 {
+    passport.reputation_score_sum
 }

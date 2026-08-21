@@ -10,17 +10,25 @@ export const SUI_CLOCK_OBJECT_ID =
 /**
  * Build an `agentos::attestation::attest` move call.
  *
- * `attest(subject, kind, score, uri, clock, ctx) -> Attestation` returns an
- * owned `Attestation`. A PTB will fail to build/execute if a returned value is
- * left dangling, so this builder always consumes it: it `transferObjects` the
- * attestation to `recipient`, or — when `share` is set (and no recipient) —
- * makes it a shared object via `0x2::transfer::public_share_object`.
+ * `attest(subject, attester_passport, kind, score, uri, clock, ctx) ->
+ * Attestation` returns an owned `Attestation`. The transaction sender must be
+ * the OWNER or RUNTIME_WALLET of `attesterPassport` (their own passport,
+ * proving they are a registered agent) — an arbitrary address cannot attest.
+ * The attester's passport must be active, and it must not be the same object
+ * as `subjectPassport` (self-attestation is rejected on-chain).
+ *
+ * A PTB will fail to build/execute if a returned value is left dangling, so
+ * this builder always consumes it: it `transferObjects` the attestation to
+ * `recipient`, or — when `share` is set (and no recipient) — makes it a
+ * shared object via `0x2::transfer::public_share_object`.
  *
  * Pass either `clockId` (defaults to `0x6`) by reference.
  */
 export function attest(options: {
   /** The subject AgentPassport object being attested. */
   subjectPassport: TransactionObjectArgument;
+  /** The attester's OWN AgentPassport (proves they're a registered agent). */
+  attesterPassport: TransactionObjectArgument;
   /** Attestation category, e.g. "review" / "audit" (stored as bytes). */
   kind: string;
   /** Reputation score, 0..=100 (enforced on-chain). */
@@ -56,6 +64,7 @@ export function attest(options: {
       target: moveTarget(options.packageId, "attestation", "attest"),
       arguments: [
         options.subjectPassport,
+        options.attesterPassport,
         tx.pure.vector("u8", encode(options.kind)),
         tx.pure.u8(options.score),
         tx.pure.vector("u8", encode(options.uri)),

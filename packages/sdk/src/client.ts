@@ -1707,9 +1707,11 @@ export class AgentOSClient {
   };
 
   /**
-   * Get reputation data for an agent (exec_count, computed score, active status).
-   * Resolves by name or passport ID. Gracefully falls back to registry data
-   * when the on-chain passport doesn't have the reputation fields (pre-upgrade).
+   * Get reputation data for an agent (exec_count, on-chain attestation
+   * average, active status). Resolves by name or passport ID. Gracefully
+   * falls back to registry data when the on-chain passport doesn't have the
+   * reputation fields (pre-upgrade objects minted before `attestation_count`/
+   * `reputation_score_sum` were added to `AgentPassport`).
    */
   async getAgentReputation(nameOrPassportId: string): Promise<{
     execCount: number;
@@ -1748,26 +1750,33 @@ export class AgentOSClient {
         });
         const fields = obj?.data?.content?.fields;
         if (fields) {
-          const execCount =
-            typeof fields.exec_count === "number"
-              ? fields.exec_count
-              : typeof fields.exec_count === "string"
-                ? parseInt(fields.exec_count, 10)
+          const toNumber = (v: unknown): number =>
+            typeof v === "number"
+              ? v
+              : typeof v === "string"
+                ? parseInt(v, 10) || 0
                 : 0;
-          const isActive = Boolean(fields.is_active);
 
-          // v0 heuristic score: based on exec_count + active status
-          // TODO: Replace with on-chain AgentPassport reputation field once
-          // the contracts attestation module (issue #55) is deployed and indexed.
-          const score = Math.min(
-            100,
-            Math.floor(execCount * 5 + (isActive ? 20 : 0)),
-          );
+          const execCount = toNumber(fields.exec_count);
+          const isActive = Boolean(fields.is_active);
+          const attestationCount = toNumber(fields.attestation_count);
+          const reputationScoreSum = toNumber(fields.reputation_score_sum);
+
+          // `attestation_count`/`reputation_score_sum` are on-chain aggregates
+          // maintained by `attestation::attest` (see agent_passport.move). A
+          // pre-upgrade passport minted before these fields existed reads them
+          // as `undefined` → toNumber returns 0, so attestationCount is 0 and
+          // we fall back to the old exec_count/active heuristic rather than
+          // reporting a real (but empty) average as the score.
+          const score =
+            attestationCount > 0
+              ? Math.round(reputationScoreSum / attestationCount)
+              : Math.min(100, Math.floor(execCount * 5 + (isActive ? 20 : 0)));
 
           return {
             execCount,
             score,
-            attestations: 0, // Will be populated when attestation indexer is available
+            attestations: attestationCount,
             isActive,
           };
         }

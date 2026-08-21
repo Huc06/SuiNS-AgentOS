@@ -632,6 +632,7 @@ describe("attest executor", () => {
     expect(r.txDigest).toBe("0xATTEST");
     expect(build.buildAttestTx).toHaveBeenCalledWith({
       subjectPassportId: SUBJECT_ID,
+      attesterPassportId: PASSPORT_ID,
       kind: "audit",
       score: 90,
       uri: "walrus://blob",
@@ -741,5 +742,79 @@ describe("attest executor", () => {
     expect((r.output as { note: string }).note).toMatch(/no packageId/);
     expect(build.buildAttestTx).not.toHaveBeenCalled();
     expect(ctx.execute).not.toHaveBeenCalled();
+  });
+
+  it("skips gracefully when the run's own passport is missing (no attester identity)", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build, passport: undefined });
+    const r = await executors.attest(
+      node("attest", {
+        subjectPassportId: SUBJECT_ID,
+        score: 90,
+        recipient: CHILD_ADDR,
+      }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/no passport to attest as/);
+    expect(build.buildAttestTx).not.toHaveBeenCalled();
+    expect(ctx.execute).not.toHaveBeenCalled();
+  });
+
+  it("errors when no subjectPassportId is provided", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const r = await executors.attest(
+      node("attest", { score: 90, recipient: CHILD_ADDR }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("error");
+    expect(r.error).toMatch(/no subjectPassportId provided/);
+    expect(build.buildAttestTx).not.toHaveBeenCalled();
+  });
+
+  it("skips gracefully when subjectPassportId is the run's own passport (self-attestation)", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const r = await executors.attest(
+      node("attest", {
+        subjectPassportId: PASSPORT_ID, // same as ctx.passport.id
+        score: 90,
+        recipient: CHILD_ADDR,
+      }),
+      ctx,
+      [],
+    );
+    expect(r.status).toBe("skipped");
+    expect((r.output as { note: string }).note).toMatch(/self-attestation/);
+    expect(build.buildAttestTx).not.toHaveBeenCalled();
+    expect(ctx.execute).not.toHaveBeenCalled();
+  });
+
+  it("threads subjectPassportId from an upstream import-agent step's output.passportId when no subject param is given", async () => {
+    const build = makeBuild();
+    const ctx = makeCtx({ build });
+    const prevOutputs = [
+      {
+        nodeId: "tpl-import",
+        type: "import-agent" as const,
+        status: "done" as const,
+        output: { passportId: SUBJECT_ID, agent: "child.sui" },
+      },
+    ];
+    const r = await executors.attest(
+      node("attest", { score: 90, recipient: CHILD_ADDR }),
+      ctx,
+      prevOutputs,
+    );
+    expect(r.status).toBe("done");
+    expect(build.buildAttestTx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectPassportId: SUBJECT_ID,
+        attesterPassportId: PASSPORT_ID,
+      }),
+    );
   });
 });

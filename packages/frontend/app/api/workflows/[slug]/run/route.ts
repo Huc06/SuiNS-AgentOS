@@ -512,6 +512,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       tx.add(
         contracts.attestation.attest({
           subjectPassport: tx.object(options.subjectPassportId),
+          attesterPassport: tx.object(options.attesterPassportId),
           kind: options.kind,
           score: options.score,
           uri: options.uri,

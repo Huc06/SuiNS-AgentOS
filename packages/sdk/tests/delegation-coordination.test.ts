@@ -27,6 +27,8 @@ const CAP_ID =
   "0x0000000000000000000000000000000000000000000000000000000000000c0a";
 const PASSPORT_ID =
   "0x0000000000000000000000000000000000000000000000000000000000000d0e";
+const ATTESTER_PASSPORT_ID =
+  "0x0000000000000000000000000000000000000000000000000000000000000d0f";
 
 function validManifest(overrides?: Partial<SkillManifest>): SkillManifest {
   return {
@@ -632,6 +634,7 @@ describe("attestation builder", () => {
     tx.add(
       contracts.attestation.attest({
         subjectPassport: tx.object(PASSPORT_ID),
+        attesterPassport: tx.object(ATTESTER_PASSPORT_ID),
         kind: "review",
         score: 90,
         uri: "walrus://blob",
@@ -666,6 +669,7 @@ describe("attestation builder", () => {
     tx.add(
       contracts.attestation.attest({
         subjectPassport: tx.object(PASSPORT_ID),
+        attesterPassport: tx.object(ATTESTER_PASSPORT_ID),
         kind: "audit",
         score: 100,
         uri: "",
@@ -690,6 +694,7 @@ describe("attestation builder", () => {
       tx.add(
         contracts.attestation.attest({
           subjectPassport: tx.object(PASSPORT_ID),
+          attesterPassport: tx.object(ATTESTER_PASSPORT_ID),
           kind: "review",
           score: 101,
           uri: "",
@@ -706,6 +711,7 @@ describe("attestation builder", () => {
       tx.add(
         contracts.attestation.attest({
           subjectPassport: tx.object(PASSPORT_ID),
+          attesterPassport: tx.object(ATTESTER_PASSPORT_ID),
           kind: "review",
           score: 50,
           uri: "",

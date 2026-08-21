@@ -1065,13 +1065,42 @@ const callSubAgent: StepExecutor = async (node, ctx, prevOutputs) => {
 };
 
 /**
+ * Find the passport id of the most recent UPSTREAM `import-agent` step. The
+ * `import-agent` executor records `output.passportId` for the resolved target.
+ * Threading it into a downstream `attest` step is what lets the
+ * Import → Attest / Import → Delegate → Call → Attest templates run without
+ * the caller wiring the subject id by hand — mirrors `upstreamDelegation`'s
+ * threading of a `delegate` step's `capId` into `call-sub-agent`. Scans
+ * newest-first so the most recently imported agent wins.
+ */
+function upstreamImportedAgent(prevOutputs: StepResult[]): string | undefined {
+  for (let i = prevOutputs.length - 1; i >= 0; i -= 1) {
+    const step = prevOutputs[i];
+    if (
+      step?.type !== "import-agent" ||
+      step.status !== "done" ||
+      typeof step.output !== "object" ||
+      step.output === null
+    ) {
+      continue;
+    }
+    const out = step.output as Record<string, unknown>;
+    const passportId = typeof out.passportId === "string" ? out.passportId : undefined;
+    if (passportId) return passportId;
+  }
+  return undefined;
+}
+
+/**
  * attest: write a reputation attestation about a subject agent. Builds the
  * attest PTB (which always transfers or shares the produced Attestation so the
  * PTB never dangles) via the injected builder, then commits via `ctx.execute`.
  *
  * Params: `{ subjectPassportId, kind, score, uri?, recipient? | share? }`.
+ * `subjectPassportId` falls back to an upstream `import-agent` step's
+ * `output.passportId` when omitted (see `upstreamImportedAgent`).
  */
-const attest: StepExecutor = async (node, ctx) => {
+const attest: StepExecutor = async (node, ctx, prevOutputs) => {
   if (!ctx.build) {
     return {
       status: "error",
@@ -1091,17 +1120,38 @@ const attest: StepExecutor = async (node, ctx) => {
     };
   }
 
-  // The subject defaults to the run's own passport (the agent attests about the
-  // coordination it just performed) so a coordinate-template Attest node with no
-  // explicit subject still completes instead of erroring MISSING_CONFIG.
+  // The attester is always the run's OWN passport — the on-chain contract now
+  // requires the attester to prove they're a registered agent (owner or
+  // runtime_wallet of `attesterPassport`), which can only be the identity this
+  // workflow is running as. The subject must be a DIFFERENT agent: explicitly
+  // provided via params, or threaded from an upstream `import-agent` step —
+  // the contract rejects self-attestation (subject == attester), so there is
+  // no sensible default of "the run's own passport" anymore.
+  const attesterPassportId = ctx.passport?.id;
+  if (!attesterPassportId) {
+    return {
+      status: "skipped",
+      output: {
+        note: "Attest: skipped — this agent has no passport to attest as (mint an AgentPassport first).",
+      },
+    };
+  }
   const subjectPassportId =
     strParam(node, "subjectPassportId") ??
     strParam(node, "subject") ??
-    ctx.passport?.id;
+    upstreamImportedAgent(prevOutputs);
   if (!subjectPassportId) {
     return {
       status: "error",
-      error: "attest: no subjectPassportId provided",
+      error: "attest: no subjectPassportId provided (must be a different agent's passport — self-attestation is rejected on-chain)",
+    };
+  }
+  if (subjectPassportId === attesterPassportId) {
+    return {
+      status: "skipped",
+      output: {
+        note: "Attest: skipped — subjectPassportId is this agent's own passport; self-attestation is rejected on-chain.",
+      },
     };
   }
   const kind = strParam(node, "kind") ?? "review";
@@ -1145,6 +1195,7 @@ const attest: StepExecutor = async (node, ctx) => {
 
   const tx = ctx.build.buildAttestTx({
     subjectPassportId,
+    attesterPassportId,
     kind,
     score,
     uri,
