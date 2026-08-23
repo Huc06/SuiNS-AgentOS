@@ -192,6 +192,14 @@ const walrus: StepExecutor = async (node, ctx) => {
     const { blobId } = await ctx.uploadManifest(payload);
     return { status: "done", blobId, output: { blobId } };
   }
+  // Fallback when the host didn't inject `ctx.uploadManifest`: the plain HTTP
+  // publisher, which only has a public, unauthenticated endpoint on testnet.
+  // This engine is deliberately signer/network-agnostic (see module docstring)
+  // — it has no way to route this fallback through the mainnet Upload Relay,
+  // which needs a signer. Hosts that run on mainnet MUST inject
+  // `ctx.uploadManifest` (see the frontend run route / CLI's `workflow run`
+  // for the reference wiring via `getWalrusUploader`); this fallback exists
+  // only so a testnet run never crashes when a host forgets to.
   const client = new WalrusClient();
   const { blobId } = await client.uploadBlob(toBytes(payload), { epochs: DEFAULT_WALRUS_EPOCHS });
   return { status: "done", blobId, output: { blobId } };

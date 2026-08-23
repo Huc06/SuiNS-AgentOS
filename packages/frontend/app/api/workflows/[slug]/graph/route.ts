@@ -1,5 +1,5 @@
 import {
-  WalrusClient,
+  getWalrusUploader,
   computeWorkflowManifestHash,
   validateWorkflowManifest,
   type WorkflowManifest,
@@ -7,6 +7,7 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 
 import { getRegistryStore } from "../../../../../lib/registry-server";
+import { getSuiNetwork } from "../../../../../lib/enoki-config";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const walrus = new WalrusClient();
+    const walrus = getWalrusUploader({ network: getSuiNetwork() });
     const bytes = await walrus.downloadBlob(workflow.walrusManifestBlob);
 
     // Verify integrity against the stored hash (when present).

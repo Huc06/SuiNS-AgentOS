@@ -1,10 +1,9 @@
-import {
-  DEFAULT_WALRUS_AGGREGATOR,
-  WalrusClient,
-} from "@agentos-sui/sdk/node";
+import { getWalrusUploader } from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getRegistryStore } from "../../../../../lib/registry-server";
+import { getSuiNetwork } from "../../../../../lib/enoki-config";
+import { getRuntimeKeypair } from "../../../../../lib/sponsored-execute";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +64,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const walrus = new WalrusClient({ aggregatorUrl: DEFAULT_WALRUS_AGGREGATOR });
+  const network = getSuiNetwork();
+  const walrus = getWalrusUploader({
+    network,
+    ...(network === "mainnet" ? { signer: getRuntimeKeypair() } : {}),
+  });
 
   // Download existing manifest bytes.
   let bytes: Uint8Array;

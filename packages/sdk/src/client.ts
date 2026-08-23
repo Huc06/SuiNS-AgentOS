@@ -55,11 +55,35 @@ export interface AgentOSClientOptions {
   walrusPublisherUrl?: string;
   /** Walrus aggregator base URL (read). Defaults to the testnet aggregator. */
   walrusAggregatorUrl?: string;
+  /**
+   * Sui network this client targets. Defaults to `"testnet"`. On `"mainnet"`,
+   * Walrus manifest uploads (`uploadManifest`, `publishSkill`) route through
+   * the official `@mysten/walrus` client + Mysten's public Upload Relay
+   * instead of the plain HTTP publisher used on testnet — there is no public,
+   * unauthenticated Walrus publisher on mainnet. Requires `walrusSigner` (or
+   * a `signer` passed to `publishSkill`) to be set; downloads work on mainnet
+   * without a signer either way.
+   */
+  network?: "mainnet" | "testnet" | "devnet";
+  /**
+   * Signer used to pay for mainnet Walrus uploads (gas + the Upload Relay's
+   * tip). Only consulted when `network: "mainnet"`. `publishSkill` callers
+   * don't need to set this separately — it reuses the `signer` already
+   * passed to `publishSkill` when this is omitted.
+   */
+  walrusSigner?: Signer;
 }
 
 export interface UploadManifestOptions {
   /** Seal policy ID for encrypting the manifest before upload (private skills). */
   sealPolicyId?: string;
+  /**
+   * Signer to pay for the upload on mainnet (routes through the Upload
+   * Relay there — see `AgentOSClientOptions.network`). Ignored on
+   * testnet/devnet. Falls back to `walrusSigner` from the client's
+   * constructor options when omitted.
+   */
+  signer?: Signer;
 }
 
 export interface DownloadManifestOptions {
@@ -232,6 +256,8 @@ export class AgentOSClient {
   #storageBackend: "walrus" | "harbor";
   #walrusPublisherUrl?: string;
   #walrusAggregatorUrl?: string;
+  #network: "mainnet" | "testnet" | "devnet";
+  #walrusSigner?: Signer;
 
   constructor({
     client,
@@ -242,6 +268,8 @@ export class AgentOSClient {
     storageBackend,
     walrusPublisherUrl,
     walrusAggregatorUrl,
+    network,
+    walrusSigner,
   }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
@@ -254,10 +282,50 @@ export class AgentOSClient {
       storageBackend ?? (harborApiKey ? "harbor" : "walrus");
     this.#walrusPublisherUrl = walrusPublisherUrl;
     this.#walrusAggregatorUrl = walrusAggregatorUrl;
+    this.#network = network ?? "testnet";
+    this.#walrusSigner = walrusSigner;
   }
 
   get registry(): LocalRegistry | null {
     return this.#registry;
+  }
+
+  /**
+   * Resolve the right Walrus uploader for `#network`: the plain HTTP
+   * publisher/aggregator on testnet/devnet (no signer needed), or the
+   * mainnet Upload Relay path on mainnet (a signer is only required if the
+   * returned uploader's `uploadBlob` is actually called — `downloadBlob`
+   * works without one).
+   *
+   * Dynamically imports `./walrus-mainnet.js` — a Node-only module (pulls
+   * `@mysten/walrus`'s WASM encoder) — ONLY when `#network === "mainnet"`, so
+   * this class stays safe to bundle for the browser (`index.ts`) on every
+   * other network, matching how `sealEncrypt` is dynamically imported above.
+   *
+   * @param signer Overrides `#walrusSigner` for this call (e.g. the signer a
+   *   caller passed to `publishSkill`, reused for the upload without the
+   *   caller having to also set `walrusSigner` on the client).
+   */
+  async #getWalrusUploader(signer?: Signer): Promise<{
+    uploadBlob(
+      content: Uint8Array,
+      options?: { epochs?: number; permanent?: boolean },
+    ): Promise<{ blobId: string; endEpoch?: number }>;
+    downloadBlob(blobId: string): Promise<Uint8Array>;
+  }> {
+    if (this.#network === "mainnet") {
+      const { createMainnetWalrusUploader } = await import(
+        "./walrus-mainnet.js"
+      );
+      const effectiveSigner = signer ?? this.#walrusSigner;
+      return createMainnetWalrusUploader(
+        effectiveSigner ? { signer: effectiveSigner } : {},
+      );
+    }
+    return new WalrusClient({
+      publisherUrl: this.#walrusPublisherUrl,
+      aggregatorUrl: this.#walrusAggregatorUrl,
+    });
   }
 
   get client(): ClientWithCoreApi {
@@ -459,10 +527,7 @@ export class AgentOSClient {
       const harbor = new HarborClient({ apiKey });
       content = await harbor.downloadBlob(blobId);
     } else {
-      const walrus = new WalrusClient({
-        publisherUrl: this.#walrusPublisherUrl,
-        aggregatorUrl: this.#walrusAggregatorUrl,
-      });
+      const walrus = await this.#getWalrusUploader();
       content = await walrus.downloadBlob(blobId);
     }
 
@@ -614,6 +679,7 @@ export class AgentOSClient {
     } else {
       const uploadResult = await this.uploadManifest(bucketId, manifest, {
         sealPolicyId,
+        signer,
       });
       blobId = uploadResult.blobId;
       manifestHash = uploadResult.manifestHash;
@@ -1443,11 +1509,10 @@ export class AgentOSClient {
       );
       blobId = uploaded.blobId;
     } else {
-      // Walrus public publisher (default) — no API key / bucket / Seal needed.
-      const walrus = new WalrusClient({
-        publisherUrl: this.#walrusPublisherUrl,
-        aggregatorUrl: this.#walrusAggregatorUrl,
-      });
+      // Walrus (default): the plain HTTP publisher on testnet/devnet, or the
+      // mainnet Upload Relay path (requires a signer) on mainnet — see
+      // `#getWalrusUploader`.
+      const walrus = await this.#getWalrusUploader(options?.signer);
       const uploaded = await walrus.uploadBlob(content, { epochs: DEFAULT_WALRUS_EPOCHS });
       blobId = uploaded.blobId;
       endEpoch = uploaded.endEpoch;

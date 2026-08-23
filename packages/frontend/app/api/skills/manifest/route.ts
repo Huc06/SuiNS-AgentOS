@@ -6,8 +6,10 @@ import {
   computeManifestHash,
   HarborClient,
   validateManifest,
-  WalrusClient,
+  getWalrusUploader,
 } from '@agentos-sui/sdk/node';
+
+import { getSuiNetwork } from '../../../../lib/enoki-config';
 
 /**
  * GET /api/skills/manifest?blobId=...&expectedHash=...
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
       const harbor = new HarborClient({ apiKey: harborKey });
       content = await harbor.downloadBlob(blobId);
     } else {
-      const walrus = new WalrusClient({});
+      const walrus = getWalrusUploader({ network: getSuiNetwork() });
       content = await walrus.downloadBlob(blobId);
     }
 

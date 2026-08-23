@@ -16,6 +16,7 @@ import {
   LocalRegistry,
   resolveRegistryPath,
   scanSkillsDirectory,
+  getWalrusUploader,
 } from "@agentos-sui/sdk/node";
 import {
   AgentOSClient,
@@ -74,6 +75,7 @@ function createAgentOSClient(registryPath: string): AgentOSClient | null {
       registryPath,
       spaceId,
       storageBackend,
+      network,
     });
   } catch {
     return null;
@@ -423,10 +425,16 @@ async function handlePublishSkill(
   // publisher (no key needed) so the blobId is real, not a placeholder.
   // This is the root cause fix: placeholder blobs cause RESOLVE_FAILED /
   // blob-parse errors when the workflow engine tries to download the manifest.
+  //
+  // On mainnet there is no public, unauthenticated publisher — uploads there
+  // route through the Upload Relay, which needs a signer to pay gas + its
+  // tip. Since this branch only runs when no signer is available, mainnet
+  // uploads are skipped here (not attempted) rather than failing opaquely;
+  // the caller falls through to the placeholder-blobId path below.
   const suinsName = formatSkillSubname(manifest.name, input.agentName);
   let walrusBlobId = input.walrusBlob;
   let manifestHash: string | undefined;
-  if (!walrusBlobId) {
+  if (!walrusBlobId && (loadConfig().network ?? "testnet") !== "mainnet") {
     try {
       const bytes = serializeManifest(manifest as import("@agentos-sui/sdk").SkillManifest);
       manifestHash = computeManifestHash(bytes);
@@ -729,17 +737,27 @@ async function handleImportSkill(
     }
   }
 
-  // Local-only publish — still upload to Walrus public publisher so blobId is real.
+  // Local-only publish (no Harbor key, or no signer) — still upload to Walrus
+  // so blobId is real. On mainnet this needs a signer (routes through the
+  // Upload Relay — no public unauthenticated publisher there); reuse `signer`
+  // if we have one, otherwise skip cleanly on mainnet rather than failing
+  // opaquely (testnet needs no signer at all, so it always attempts this).
   let importBlobId: string | undefined;
   let importHash: string | undefined;
-  try {
-    const bytes = serializeManifest(manifest);
-    importHash = computeManifestHash(bytes);
-    const walrus = new WalrusClient();
-    const { blobId } = await walrus.uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
-    importBlobId = blobId;
-  } catch {
-    // Walrus unavailable — placeholder will be used.
+  const network = loadConfig().network ?? "testnet";
+  if (network !== "mainnet" || signer) {
+    try {
+      const bytes = serializeManifest(manifest);
+      importHash = computeManifestHash(bytes);
+      const walrus = getWalrusUploader({
+        network,
+        ...(signer ? { signer: signer as never } : {}),
+      });
+      const { blobId } = await walrus.uploadBlob(bytes, { epochs: DEFAULT_WALRUS_EPOCHS });
+      importBlobId = blobId;
+    } catch {
+      // Walrus unavailable — placeholder will be used.
+    }
   }
   try {
     const record = registry.publishSkill({

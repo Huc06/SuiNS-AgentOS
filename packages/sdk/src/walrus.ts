@@ -124,7 +124,7 @@ export class WalrusClient {
   }
 
   /**
-   * Read a blob's raw bytes from Walrus via the aggregator.
+ * Read a blob's raw bytes from Walrus via the aggregator.
    *
    * @throws "Manifest blob not found: {blobId}" on 404, or a descriptive error
    *   for other non-2xx responses.
@@ -144,5 +144,105 @@ export class WalrusClient {
 
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
+  }
+}
+
+/** Public Upload Relay Mysten Labs operates for mainnet (charges a small tip
+ * per upload — see https://upload-relay.mainnet.walrus.space/v1/tip-config).
+ * There is no equivalent public relay needed on testnet: the plain HTTP
+ * publisher/aggregator ({@link WalrusClient}) already works there for free. */
+export const DEFAULT_MAINNET_UPLOAD_RELAY =
+  "https://upload-relay.mainnet.walrus.space";
+
+/** Minimal Sui client shape the mainnet Walrus path needs (a `$extend`-able
+ * client, e.g. `SuiGrpcClient`). Kept structural to avoid a hard `@mysten/sui`
+ * client-type coupling at this layer. */
+export interface WalrusExtendableSuiClient {
+  $extend: (
+    ext: unknown,
+  ) => { walrus: WalrusMainnetOperations } & Record<string, unknown>;
+}
+
+/** The subset of `@mysten/walrus`'s `WalrusClient` this module calls. Kept
+ * structural (not imported directly) so `walrus.ts` — used by the
+ * signer-agnostic parts of the SDK — has no hard `@mysten/walrus` import;
+ * only {@link createMainnetWalrusUploader} (Node-only, see `node.ts`) does. */
+export interface WalrusMainnetOperations {
+  writeBlob(options: {
+    blob: Uint8Array;
+    deletable: boolean;
+    epochs: number;
+    signer: unknown;
+  }): Promise<{ blobId: string; blobObject?: { storage?: { end_epoch?: number } } }>;
+  readBlob(options: { blobId: string }): Promise<Uint8Array>;
+}
+
+export interface WalrusUploaderOptions {
+  epochs?: number;
+  permanent?: boolean;
+}
+
+/** Uniform upload/download surface both Walrus clients implement, so callers
+ * can use whichever one {@link createWalrusUploader} selects without a
+ * network-specific branch of their own. */
+export interface WalrusUploader {
+  uploadBlob(
+    content: Uint8Array,
+    options?: WalrusUploaderOptions,
+  ): Promise<{ blobId: string; endEpoch?: number }>;
+  downloadBlob(blobId: string): Promise<Uint8Array>;
+}
+
+/**
+ * Mainnet-capable Walrus uploader backed by the official `@mysten/walrus`
+ * client and Mysten's public mainnet Upload Relay — NOT the raw HTTP
+ * publisher/aggregator {@link WalrusClient} uses (which has no public,
+ * unauthenticated endpoint on mainnet; see the module docstring above).
+ *
+ * Unlike {@link WalrusClient}, uploading REQUIRES a signer: the relay pays no
+ * gas/storage cost on the caller's behalf, so the underlying
+ * `WalrusClient.writeBlob` call signs+submits the register/certify
+ * transactions itself (and, per the relay's tip-config, sends it a small
+ * per-upload tip).
+ *
+ * Constructed via {@link createMainnetWalrusUploader} (Node-only — pulls
+ * `@mysten/walrus`'s WASM encoder), never instantiated directly from this
+ * (signer-agnostic) module.
+ */
+export class WalrusUploadRelayClient implements WalrusUploader {
+  #walrus: WalrusMainnetOperations;
+  #signer?: unknown;
+
+  constructor(walrus: WalrusMainnetOperations, signer?: unknown) {
+    this.#walrus = walrus;
+    this.#signer = signer;
+  }
+
+  async uploadBlob(
+    content: Uint8Array,
+    options: WalrusUploaderOptions = {},
+  ): Promise<{ blobId: string; endEpoch?: number }> {
+    if (!this.#signer) {
+      throw new Error(
+        "WalrusUploadRelayClient: a signer is required to upload on " +
+          "mainnet (the Upload Relay needs one to pay gas and its tip) — " +
+          "none was provided when this client was constructed.",
+      );
+    }
+    const result = await this.#walrus.writeBlob({
+      blob: content,
+      // `permanent: true` (skill/workflow manifests that should outlive any
+      // fixed epoch count) maps to `deletable: false`; otherwise deletable so
+      // the object owner can reclaim storage rent later.
+      deletable: !options.permanent,
+      epochs: options.epochs ?? DEFAULT_WALRUS_EPOCHS,
+      signer: this.#signer,
+    });
+    const endEpoch = result.blobObject?.storage?.end_epoch;
+    return { blobId: result.blobId, ...(endEpoch !== undefined ? { endEpoch } : {}) };
+  }
+
+  async downloadBlob(blobId: string): Promise<Uint8Array> {
+    return this.#walrus.readBlob({ blobId });
   }
 }

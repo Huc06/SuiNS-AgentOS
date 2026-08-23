@@ -56,7 +56,7 @@
   "dependencies": {
     "@agentos-sui/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.6.0",
-    "@mysten/sui": "2.22.0",
+    "@mysten/sui": "2.22.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {

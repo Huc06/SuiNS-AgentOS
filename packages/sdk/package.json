@@ -57,7 +57,8 @@
   "peerDependencies": {
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/seal": "1.3.3",
-    "@mysten/sui": "2.22.0",
+    "@mysten/sui": "2.22.1",
+    "@mysten/walrus": "1.2.9",
     "@tanstack/react-query": "^5.0.0",
     "react": "^18.0.0 || ^19.0.0"
   },
@@ -66,6 +67,9 @@
       "optional": true
     },
     "@mysten/seal": {
+      "optional": true
+    },
+    "@mysten/walrus": {
       "optional": true
     },
     "@tanstack/react-query": {
@@ -78,7 +82,8 @@
   "devDependencies": {
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/seal": "1.3.3",
-    "@mysten/sui": "2.22.0",
+    "@mysten/sui": "2.22.1",
+    "@mysten/walrus": "1.2.9",
     "@tanstack/react-query": "^5.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",

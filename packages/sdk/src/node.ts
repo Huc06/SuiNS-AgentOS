@@ -50,9 +50,21 @@ export {
   DEFAULT_WALRUS_AGGREGATOR,
   DEFAULT_WALRUS_EPOCHS,
   DEFAULT_WALRUS_PUBLISHER,
+  DEFAULT_MAINNET_UPLOAD_RELAY,
   WalrusClient,
+  WalrusUploadRelayClient,
 } from "./walrus.js";
-export type { WalrusClientOptions, WalrusUploadOptions } from "./walrus.js";
+export type {
+  WalrusClientOptions,
+  WalrusUploadOptions,
+  WalrusUploader,
+  WalrusUploaderOptions,
+} from "./walrus.js";
+export { createMainnetWalrusUploader, getWalrusUploader } from "./walrus-mainnet.js";
+export type {
+  CreateMainnetWalrusUploaderOptions,
+  GetWalrusUploaderOptions,
+} from "./walrus-mainnet.js";
 export {
   MemwalClient,
   memwalFromEnv,
