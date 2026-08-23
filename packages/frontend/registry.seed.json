@@ -4,131 +4,56 @@
     {
       "slug": "alpha",
       "suinsName": "alpha.sui",
-      "passportId": "0xa1d1a4ec19f817fda256b66dcee38d0c819ac709bc50aa2ae5dadc479c449133",
+      "passportId": "0xbb900501321fc902a2fa9ef2b80d08f9924fe4799090e44f911cb0af7dc69b23",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v1.2.4",
       "status": "active",
-      "createdAt": "2026-06-21T10:54:29.226Z",
-      "description": "Primary research agent",
-      "delegations": [
-        {
-          "childAgent": "0xe9f4b8c61faab60560f0a73f2f358f0d8a08771f5887341a3f1345ef15c52365",
-          "childName": "beta-agent.sui",
-          "allowedSkills": [
-            "web-search.alpha.sui"
-          ],
-          "allowedCapabilities": [
-            "read",
-            "exec"
-          ],
-          "spendLimit": "1000000000",
-          "spent": "120000000",
-          "expiryMs": "1798761599000",
-          "revoked": false,
-          "capId": "0x717cc08f1cb214cb7df92d19ea63ad179d8aa0ebddd8d82c66f700c137514ab5",
-          "createdAt": "2026-06-17T09:12:00.000Z"
-        },
-        {
-          "childAgent": "0x0130f164fdeb617c3e841ccb848f84bbfd8e4f3ce5452b6be0ffac15e9f8b480",
-          "childName": "walrus-bot.sui",
-          "allowedSkills": [
-            "delegate-policy.alpha.sui"
-          ],
-          "allowedCapabilities": [
-            "read"
-          ],
-          "spendLimit": "500000000",
-          "spent": "0",
-          "expiryMs": "1813536000000",
-          "revoked": false,
-          "capId": "0x439093f29e370f3492fcaa67539dd2f458c1fcd21af93f8c28258642666656a3",
-          "createdAt": "2026-06-18T14:03:00.000Z"
-        }
-      ],
-      "memoryNamespaces": [
-        "alpha.sui"
-      ]
+      "createdAt": "2026-08-23T15:09:40.327Z",
+      "description": "Primary research agent"
     },
     {
       "slug": "beta-agent",
       "suinsName": "beta-agent.sui",
-      "passportId": "0xe9f4b8c61faab60560f0a73f2f358f0d8a08771f5887341a3f1345ef15c52365",
+      "passportId": "0x22858ae5dd893c5deb8e931893bfacac191fd5f481b38dafe3805eca0a947291",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v0.9.1-beta",
       "status": "active",
-      "createdAt": "2026-06-21T10:54:31.162Z",
-      "description": "Testing & QA agent",
-      "delegations": [
-        {
-          "childAgent": "0x5040ead4767d3ffb23f2c23b7142031519cebf745abb1dcdb63a8a9a6bb01620",
-          "childName": "sui-indexer.sui",
-          "allowedSkills": [
-            "sandbox-tool.beta-agent.sui"
-          ],
-          "allowedCapabilities": [
-            "exec"
-          ],
-          "spendLimit": "300000000",
-          "spent": "300000000",
-          "expiryMs": "1786780800000",
-          "revoked": true,
-          "capId": "0x1abc26041168f9e8e5f523e2a5946bd49c657e1dde521895a09e6d6cf3e2e1fb",
-          "createdAt": "2026-06-16T08:00:00.000Z"
-        }
-      ]
+      "createdAt": "2026-08-23T15:09:42.634Z",
+      "description": "Testing & QA agent"
     },
     {
       "slug": "walrus-bot",
       "suinsName": "walrus-bot.sui",
-      "passportId": "0x0130f164fdeb617c3e841ccb848f84bbfd8e4f3ce5452b6be0ffac15e9f8b480",
+      "passportId": "0x3d48a4227dfcdcb16b1d49f3bad5bd56ffaaf6c98a92aae5886da66859cfd023",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v2.1.0",
       "status": "active",
-      "createdAt": "2026-06-21T10:54:32.704Z",
-      "description": "Storage management agent",
-      "delegations": [
-        {
-          "childAgent": "0x77e064c470eec2cccf2ed93bd3c60d6254ed1941b1b9391581290f3575f7ddbc",
-          "childName": "defi-rebalancer.sui",
-          "allowedSkills": [
-            "walrus-read.walrus-bot.sui"
-          ],
-          "allowedCapabilities": [
-            "read",
-            "write"
-          ],
-          "spendLimit": "2000000000",
-          "spent": "340000000",
-          "expiryMs": "1789819200000",
-          "revoked": false,
-          "capId": "0xb2c05e1968a6c1ad30293976b8861419861c1d2b57981a254952f86a3b0a45e9",
-          "createdAt": "2026-06-19T11:40:00.000Z"
-        }
-      ]
+      "createdAt": "2026-08-23T15:09:45.306Z",
+      "description": "Storage management agent"
     },
     {
       "slug": "defi-rebalancer",
       "suinsName": "defi-rebalancer.sui",
-      "passportId": "0x77e064c470eec2cccf2ed93bd3c60d6254ed1941b1b9391581290f3575f7ddbc",
+      "passportId": "0xb109f574222ba25bb6459b08ccdd685b4b4e3dda49d9811c3b81b8aa9341a4fb",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
       "status": "active",
-      "createdAt": "2026-06-21T10:54:34.108Z",
+      "createdAt": "2026-08-23T15:09:48.141Z",
       "description": "DeFi portfolio rebalancer"
     },
     {
       "slug": "sui-indexer",
       "suinsName": "sui-indexer.sui",
-      "passportId": "0x5040ead4767d3ffb23f2c23b7142031519cebf745abb1dcdb63a8a9a6bb01620",
+      "passportId": "0xcadcee0a75e59e3a6738bc78f5dcf3c546782fc0753504dc521601d7b07d4e37",
       "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
       "network": "testnet",
       "passportVersion": "Passport v1.0.0",
       "status": "active",
-      "createdAt": "2026-06-21T10:54:35.738Z",
+      "createdAt": "2026-08-23T15:09:50.639Z",
       "description": "On-chain data indexer agent"
     },
     {
@@ -144,6 +69,16 @@
       "memoryNamespaces": [
         "my-first-agent.sui"
       ]
+    },
+    {
+      "slug": "agentos",
+      "suinsName": "agentos.sui",
+      "passportId": "0xdc8cae077f8f5859ea7151710855da399d8941b04fb2402964edee302247931f",
+      "runtimeWallet": "0xfa5bbfd706c1bb4ec7f0624933bf9b3faba9f056e588bbb4acbd702759f1d83f",
+      "network": "testnet",
+      "passportVersion": "Passport v1.0.0",
+      "status": "active",
+      "createdAt": "2026-07-18T10:35:30.430Z"
     }
   ],
   "skills": [
@@ -153,13 +88,14 @@
       "name": "web-search",
       "mvrPackage": "@alpha/web-search",
       "version": "v1.0.0",
-      "walrusManifestBlob": "LK2Z0TwyWvN_nK0s9ychfQSpCGulrxBQm3RMYEkjad0",
-      "manifestHash": "0x30c99c1b18d5b8e7c944bc119d879648082e500cdfba437459a7ac912dc6f854",
-      "objectId": "0x994b627d12c9967c624aff1a0b8d35044eac0c6cfa3abbab6bfbb156cdc379ac",
+      "walrusManifestBlob": "FSGXtsjpGRYl2Rt9Imf8MivfrvrXWfWsnkX_xhbFFig",
+      "manifestHash": "0xa80cb3b41d6204c08ff3686caf3d767301eb6b7cc2ab4823ddd19344425c8db7",
+      "endEpoch": 551,
+      "objectId": "0xb9a838f981bee5ccc1c9249d10640f134e231cd59a67930e06c65da910a4c0ed",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-07-14T10:05:22.327Z",
+      "lastUpdated": "2026-08-23T15:10:06.139Z",
       "icon": "token",
       "source": "custom",
       "suinsName": "web-search.alpha.sui"
@@ -170,13 +106,14 @@
       "name": "delegate-policy",
       "mvrPackage": "@alpha/delegate-policy",
       "version": "v1.0.0",
-      "walrusManifestBlob": "8lQiOR01nJnfRS5GzjISs_nDJxThW6cn9R783trPNDI",
-      "manifestHash": "0x8893b18d1ff2747d82de7703fe39eb91e3e3e030b0421d6110aa30e2180c3e23",
-      "objectId": "0x5e02dbbab9a1b2e0accfc5cbb876396d05ce7dbd10b5e755947023d928291762",
+      "walrusManifestBlob": "S-Hai_qjelMBOWv60OEm_1SYnheXt1W9vx4SYuZmrow",
+      "manifestHash": "0x9d82b160639315f878bb698dee7857e88462cf668d70ba2e595dee24f07d0078",
+      "endEpoch": 551,
+      "objectId": "0xbef18d62c0dd4cabcd5785c5ceea3cda42aad18977afe3fe1e0524d209e70943",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-07-14T10:05:34.336Z",
+      "lastUpdated": "2026-08-23T15:10:20.315Z",
       "icon": "token",
       "source": "custom",
       "suinsName": "delegate-policy.alpha.sui"
@@ -187,13 +124,14 @@
       "name": "sandbox-tool",
       "mvrPackage": "@beta-agent/sandbox-tool",
       "version": "v0.9.0",
-      "walrusManifestBlob": "ONCe_S_UlstaM-FDd1fgdzYK1qMXP6aYWA7rR682s-c",
-      "manifestHash": "0x1bd91d2f3dcf398a91ead96e6e0d8c6b84e4f74852a92697a48a66a554b218bf",
-      "objectId": "0xce56c40ba5f1e53cdabcd21c19e8ab74686a115b2ec6e1af65283271615b9dae",
+      "walrusManifestBlob": "4QFRlf-3pt40h6mSj4XPVvuO7CcobM-Oj4elMsCFgNg",
+      "manifestHash": "0xa34559d6b21e549ea646f6853f31233692dd2ff5f2d5920c5136bd981d2d8c56",
+      "endEpoch": 551,
+      "objectId": "0x7a90d17dd1ecb4849778fb44f6f5f31d71f5cf53f421318fcbaae3752b44648c",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-07-14T10:05:47.503Z",
+      "lastUpdated": "2026-08-23T15:10:35.136Z",
       "icon": "token",
       "source": "custom",
       "suinsName": "sandbox-tool.beta-agent.sui"
@@ -204,13 +142,14 @@
       "name": "walrus-read",
       "mvrPackage": "@walrus-bot/walrus-read",
       "version": "v2.0.0",
-      "walrusManifestBlob": "v3dChBEhd9Zs0haFVutcfxDeT22Oo86wCyqocFUXWgs",
-      "manifestHash": "0x79976ddc2576ddd52bc3832c97bdfa94627812c0dfce286927ab776c90eec7bd",
-      "objectId": "0x8e58028a8b55e0aad614bd38eb45f9d25368c872d1ddcc8aef7719f1a5e7a000",
+      "walrusManifestBlob": "KwSYz6qfz3wP2ZFSF_dWaI4h8XmB0hSX2nCJi0Oc15I",
+      "manifestHash": "0x60a425af2f9556242cde6c4b9aa511fc909d00dd61459191e2522d301df9d024",
+      "endEpoch": 551,
+      "objectId": "0x6022743edbd0f56a5a7673fe5d1d09339a5d6b6e31ca568d4c4791a154080a4a",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
-      "lastUpdated": "2026-07-14T10:05:59.119Z",
+      "lastUpdated": "2026-08-23T15:10:49.147Z",
       "icon": "token",
       "source": "custom",
       "suinsName": "walrus-read.walrus-bot.sui"
@@ -219,18 +158,19 @@
       "agentSlug": "alpha",
       "skillId": "sui-nft-mint",
       "name": "sui-nft-mint",
-      "mvrPackage": "@alpha/sui-nft-mint",
+      "mvrPackage": "@alpha",
       "version": "v1.0.0",
-      "walrusManifestBlob": "hAb4FD6c43sDrFsYUfr_R0-vhfOtBKsyp6qtSTTgB60",
-      "manifestHash": "6ac83778162be923631dda987954c1a49493b387aeb77fd92364103d0959f2c6",
-      "objectId": "0xd90b03c8083140d3b0e1811bc2f58b8aee81f9b4",
+      "walrusManifestBlob": "jm6voSS2Ea66GjeBMEdMafAoPach05N8-Ynw4IJqtM4",
+      "manifestHash": "0x44fe815c8317a3ef94b399c97e6bef2ef0dafc3faca3475486dc3fdd71597ad8",
+      "objectId": "0x977ee38b2402f4f1fd57a242582bee6d82954894",
       "network": "testnet",
       "status": "active",
       "resolutions": "0",
       "lastUpdated": "just now",
       "icon": "token",
       "source": "custom",
-      "suinsName": "sui-nft-mint.alpha.sui"
+      "suinsName": "sui-nft-mint.alpha.sui",
+      "endEpoch": 511
     },
     {
       "agentSlug": "my-first-agent",
@@ -250,5 +190,40 @@
       "suinsName": "gm-overflow.my-first-agent.sui"
     }
   ],
-  "workflows": []
+  "workflows": [
+    {
+      "agentSlug": "agentos",
+      "workflowId": "rebalance-demo",
+      "name": "rebalance-demo",
+      "slug": "rebalance-demo-agentos",
+      "suinsName": "rebalance-demo.agentos.sui",
+      "version": "1.0.0",
+      "walrusManifestBlob": "",
+      "manifestHash": "",
+      "network": "testnet",
+      "status": "draft",
+      "createdAt": "2026-07-18T11:01:17.017Z",
+      "lastUpdated": "2026-07-18T11:02:29.875Z",
+      "draftGraph": {
+        "nodes": [
+          {
+            "id": "check-drift",
+            "type": "trigger",
+            "label": "Check portfolio drift"
+          },
+          {
+            "id": "swap",
+            "type": "sui",
+            "label": "Execute rebalance swap"
+          }
+        ],
+        "edges": [
+          {
+            "source": "check-drift",
+            "target": "swap"
+          }
+        ]
+      }
+    }
+  ]
 }
