@@ -123,15 +123,37 @@ function getSuiClient(): SuiGrpcClient {
  * (see {@link deriveSponsorAllowlist}) so no Enoki *portal* allowlist is needed.
  * Throws a descriptive error when `SUI_PRIVATE_KEY` or `ENOKI_SECRET_KEY` are
  * missing (callers may catch this and fall back to a non-chain code path).
+ *
+ * MAINNET: Enoki gas sponsorship is NOT supported on mainnet by this deployment
+ * — there is no mainnet Enoki billing/sponsor budget configured (see
+ * docs/setup-env-auth-deploy.md, "Not needed yet"). Rather than silently
+ * attempting the sponsor flow and surfacing whatever opaque error Enoki's API
+ * happens to return (rejected billing, quota, or a testnet-only API key), this
+ * fails immediately with a clear, actionable message. An operator who HAS set
+ * up real mainnet Enoki billing can opt back in by setting
+ * `ENOKI_ALLOW_MAINNET=true`.
  */
 export async function sponsoredExecuteServer(
   tx: Transaction,
 ): Promise<SponsoredExecuteResult> {
+  const network = getSuiNetwork();
+  if (
+    network === "mainnet" &&
+    process.env.ENOKI_ALLOW_MAINNET?.trim().toLowerCase() !== "true"
+  ) {
+    throw new Error(
+      "Enoki gas sponsorship is not supported on mainnet by this deployment " +
+        "(no mainnet Enoki billing/sponsor budget is configured). Set " +
+        "NEXT_PUBLIC_SUI_NETWORK back to testnet, or — if you have set up " +
+        "real mainnet Enoki billing yourself — set ENOKI_ALLOW_MAINNET=true " +
+        "to opt in.",
+    );
+  }
+
   const keypair = getRuntimeKeypair();
   const sender = keypair.toSuiAddress();
   const enoki = getEnokiClient();
   const client = getSuiClient();
-  const network = getSuiNetwork();
 
   // 1. Derive the precise sponsor allowlist from THIS PTB before building it:
   //    every Move-call target it invokes (incl. a skill's arbitrary movePackage

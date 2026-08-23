@@ -8,12 +8,18 @@ export const dynamic = "force-dynamic";
  * Checks the public Walrus aggregator first (no API key needed).
  * Falls back to Harbor gateway if HARBOR_API_KEY is configured.
  *
+ * Both endpoints default to their testnet URLs (Walrus has no public
+ * unauthenticated aggregator on mainnet; Harbor is testnet-only — see
+ * packages/sdk/src/walrus.ts and docs/setup-env-auth-deploy.md). Set
+ * WALRUS_AGGREGATOR_URL / HARBOR_BASE_URL to override for a self-hosted or
+ * mainnet endpoint.
+ *
  * Usage: GET /api/skills/blob-status?blobId=...
  * Returns: { available: boolean }
  */
 
-const WALRUS_AGGREGATOR = "https://aggregator.walrus-testnet.walrus.space";
-const HARBOR_BASE_URL = "https://api.testnet.harbor.walrus.xyz";
+const DEFAULT_WALRUS_AGGREGATOR = "https://aggregator.walrus-testnet.walrus.space";
+const DEFAULT_HARBOR_BASE_URL = "https://api.testnet.harbor.walrus.xyz";
 
 export async function GET(request: NextRequest) {
   const blobId = request.nextUrl.searchParams.get("blobId")?.trim();
@@ -24,9 +30,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 1. Try public Walrus aggregator (no auth needed)
+  const walrusAggregator =
+    process.env.WALRUS_AGGREGATOR_URL?.trim() || DEFAULT_WALRUS_AGGREGATOR;
+
+  // 1. Try the (possibly overridden) Walrus aggregator (no auth needed)
   try {
-    const walrusUrl = `${WALRUS_AGGREGATOR}/v1/blobs/${encodeURIComponent(blobId)}`;
+    const walrusUrl = `${walrusAggregator}/v1/blobs/${encodeURIComponent(blobId)}`;
     const res = await fetch(walrusUrl, { method: "HEAD" });
     if (res.ok) {
       return NextResponse.json({ available: true });
@@ -46,7 +55,7 @@ export async function GET(request: NextRequest) {
   const harborKey = process.env.HARBOR_API_KEY?.trim();
   if (harborKey) {
     try {
-      const harborUrl = `${process.env.HARBOR_BASE_URL?.trim() || HARBOR_BASE_URL}/api/v1/blobs/${encodeURIComponent(blobId)}`;
+      const harborUrl = `${process.env.HARBOR_BASE_URL?.trim() || DEFAULT_HARBOR_BASE_URL}/api/v1/blobs/${encodeURIComponent(blobId)}`;
       const res = await fetch(harborUrl, {
         method: "HEAD",
         headers: { Authorization: `Bearer ${harborKey}` },
