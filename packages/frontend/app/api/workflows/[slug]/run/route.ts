@@ -15,7 +15,6 @@ import {
   sealEncryptReal,
   serializeManifest,
   validateManifest,
-  WalrusClient,
   type RunBuildBundle,
   type RunResolveBundle,
   type SkillManifest,
@@ -38,7 +37,7 @@ import {
   getRegistryPath,
 } from "../../../../../lib/registry-server";
 import { appendRun } from "../../../../../lib/runs-store";
-import { sponsoredExecuteServer } from "../../../../../lib/sponsored-execute";
+import { sponsoredExecuteServer, getRuntimeKeypair } from "../../../../../lib/sponsored-execute";
 
 // Belt-and-suspenders: ensure repo-root .env secrets (SUI_PRIVATE_KEY /
 // ENOKI_SECRET_KEY / MEMWAL_*) are loaded even if the next.config.ts load was
@@ -195,11 +194,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
   });
 
   // Walrus-backed uploader (the SDK's storage client). Serializes a real
-  // manifest, otherwise uploads JSON/bytes verbatim.
+  // manifest, otherwise uploads JSON/bytes verbatim. Mainnet routes through
+  // the Upload Relay (needs the server's runtime keypair to pay gas + the
+  // relay's tip); testnet uses the plain HTTP publisher (no signer needed).
   const uploadManifest = async (
     payload?: unknown,
   ): Promise<{ blobId: string }> => {
-    const walrus = new WalrusClient();
+    const network = getSuiNetwork();
+    const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
+    const walrus = getWalrusUploader({
+      network,
+      ...(network === "mainnet" ? { signer: getRuntimeKeypair() } : {}),
+    });
     let bytes: Uint8Array;
     if (isManifest(payload)) {
       validateManifest(payload);
@@ -375,6 +381,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     client: suiClient as never,
     registryPath: getRegistryPath(),
     ...(packageId ? { packageId } : {}),
+    network: getSuiNetwork(),
+    ...(getSuiNetwork() === "mainnet"
+      ? {
+          walrusSigner: getRuntimeKeypair(),
+          walrusMainnetUploaderFactory: () =>
+            import("@agentos-sui/sdk/walrus-mainnet").then(
+              (m) => m.createMainnetWalrusUploader,
+            ),
+        }
+      : {}),
   });
 
   const resolve: RunResolveBundle = {

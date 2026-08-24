@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   WalrusClient,
+  WalrusUploadRelayClient,
   DEFAULT_WALRUS_PUBLISHER,
   DEFAULT_WALRUS_AGGREGATOR,
+  DEFAULT_WALRUS_EPOCHS,
+  type WalrusMainnetOperations,
 } from "../src/walrus.js";
 
 const mockFetch = vi.fn();
@@ -151,6 +154,97 @@ describe("WalrusClient", () => {
       expect(mockFetch.mock.calls[0][0]).toBe(
         "https://pub.example.com/v1/blobs",
       );
+    });
+  });
+});
+
+describe("WalrusUploadRelayClient", () => {
+  function makeMainnetOps(
+    overrides: Partial<WalrusMainnetOperations> = {},
+  ): WalrusMainnetOperations {
+    return {
+      writeBlob:
+        overrides.writeBlob ??
+        vi.fn(async () => ({
+          blobId: "MAINNET_BLOB",
+          blobObject: { storage: { end_epoch: 42 } },
+        })),
+      readBlob: overrides.readBlob ?? vi.fn(async () => new Uint8Array([9, 9])),
+    };
+  }
+
+  describe("uploadBlob", () => {
+    it("throws when constructed without a signer", async () => {
+      const ops = makeMainnetOps();
+      const client = new WalrusUploadRelayClient(ops);
+
+      await expect(
+        client.uploadBlob(new Uint8Array([1])),
+      ).rejects.toThrow(/signer is required/);
+      expect(ops.writeBlob).not.toHaveBeenCalled();
+    });
+
+    it("calls writeBlob with the signer, epochs, and deletable:true by default", async () => {
+      const ops = makeMainnetOps();
+      const signer = { fake: "signer" };
+      const client = new WalrusUploadRelayClient(ops, signer);
+
+      const result = await client.uploadBlob(new Uint8Array([1, 2, 3]), {
+        epochs: 10,
+      });
+
+      expect(result.blobId).toBe("MAINNET_BLOB");
+      expect(result.endEpoch).toBe(42);
+      expect(ops.writeBlob).toHaveBeenCalledWith({
+        blob: new Uint8Array([1, 2, 3]),
+        deletable: true,
+        epochs: 10,
+        signer,
+      });
+    });
+
+    it("maps permanent:true to deletable:false", async () => {
+      const ops = makeMainnetOps();
+      const client = new WalrusUploadRelayClient(ops, { fake: "signer" });
+
+      await client.uploadBlob(new Uint8Array([1]), { permanent: true });
+
+      expect(ops.writeBlob).toHaveBeenCalledWith(
+        expect.objectContaining({ deletable: false }),
+      );
+    });
+
+    it("defaults epochs to DEFAULT_WALRUS_EPOCHS when omitted", async () => {
+      const ops = makeMainnetOps();
+      const client = new WalrusUploadRelayClient(ops, { fake: "signer" });
+
+      await client.uploadBlob(new Uint8Array([1]));
+
+      expect(ops.writeBlob).toHaveBeenCalledWith(
+        expect.objectContaining({ epochs: DEFAULT_WALRUS_EPOCHS }),
+      );
+    });
+
+    it("omits endEpoch when writeBlob's result has none", async () => {
+      const ops = makeMainnetOps({
+        writeBlob: vi.fn(async () => ({ blobId: "B", blobObject: undefined })),
+      });
+      const client = new WalrusUploadRelayClient(ops, { fake: "signer" });
+
+      const result = await client.uploadBlob(new Uint8Array([1]));
+      expect(result).toEqual({ blobId: "B" });
+    });
+  });
+
+  describe("downloadBlob", () => {
+    it("delegates to readBlob and needs no signer", async () => {
+      const ops = makeMainnetOps();
+      const client = new WalrusUploadRelayClient(ops);
+
+      const bytes = await client.downloadBlob("SOME_BLOB");
+
+      expect(bytes).toEqual(new Uint8Array([9, 9]));
+      expect(ops.readBlob).toHaveBeenCalledWith({ blobId: "SOME_BLOB" });
     });
   });
 });

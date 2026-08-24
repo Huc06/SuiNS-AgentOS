@@ -55,11 +55,58 @@ export interface AgentOSClientOptions {
   walrusPublisherUrl?: string;
   /** Walrus aggregator base URL (read). Defaults to the testnet aggregator. */
   walrusAggregatorUrl?: string;
+  /**
+   * Sui network this client targets. Defaults to `"testnet"`. On `"mainnet"`,
+   * Walrus manifest uploads (`uploadManifest`, `publishSkill`) route through
+   * the official `@mysten/walrus` client + Mysten's public Upload Relay
+   * instead of the plain HTTP publisher used on testnet — there is no public,
+   * unauthenticated Walrus publisher on mainnet. Requires `walrusSigner` (or
+   * a `signer` passed to `publishSkill`) to be set; downloads work on mainnet
+   * without a signer either way.
+   */
+  network?: "mainnet" | "testnet" | "devnet";
+  /**
+   * Signer used to pay for mainnet Walrus uploads (gas + the Upload Relay's
+   * tip). Only consulted when `network: "mainnet"`. `publishSkill` callers
+   * don't need to set this separately — it reuses the `signer` already
+   * passed to `publishSkill` when this is omitted.
+   */
+  walrusSigner?: Signer;
+  /**
+   * Required when `network: "mainnet"` and any Walrus upload
+   * (`uploadManifest`, `publishSkill`) is used. A loader that resolves to the
+   * `createMainnetWalrusUploader` function — pass
+   * `() => import("@agentos-sui/sdk/walrus-mainnet").then(m => m.createMainnetWalrusUploader)`.
+   *
+   * This is a caller-supplied loader (rather than this class importing
+   * `@agentos-sui/sdk/walrus-mainnet` itself) so that bundlers never see a
+   * static reference to `@mysten/walrus` (which ships a WASM binary) from
+   * this module — `AgentOSClient` is reachable from both the browser entry
+   * (`index.ts`, where `@mysten/walrus` has no place at all) and the Node
+   * entry (`node.ts`, imported by nearly every frontend API route, where a
+   * hardcoded `import()` here was observed breaking Next.js's production
+   * build — "Collecting page data" failing with ENOENT for
+   * `walrus_wasm_bg.wasm` — for every route reachable from `node.ts`, not
+   * just ones that use mainnet). Only Node-only callers that actually need
+   * mainnet Walrus (the CLI, MCP server, specific frontend routes) should
+   * import `@agentos-sui/sdk/walrus-mainnet` (its own isolated tsup entry)
+   * and pass this loader through.
+   */
+  walrusMainnetUploaderFactory?: () => Promise<
+    typeof import("./walrus-mainnet.js").createMainnetWalrusUploader
+  >;
 }
 
 export interface UploadManifestOptions {
   /** Seal policy ID for encrypting the manifest before upload (private skills). */
   sealPolicyId?: string;
+  /**
+   * Signer to pay for the upload on mainnet (routes through the Upload
+   * Relay there — see `AgentOSClientOptions.network`). Ignored on
+   * testnet/devnet. Falls back to `walrusSigner` from the client's
+   * constructor options when omitted.
+   */
+  signer?: Signer;
 }
 
 export interface DownloadManifestOptions {
@@ -232,6 +279,11 @@ export class AgentOSClient {
   #storageBackend: "walrus" | "harbor";
   #walrusPublisherUrl?: string;
   #walrusAggregatorUrl?: string;
+  #network: "mainnet" | "testnet" | "devnet";
+  #walrusSigner?: Signer;
+  #mainnetWalrusLoader?: () => Promise<
+    typeof import("./walrus-mainnet.js").createMainnetWalrusUploader
+  >;
 
   constructor({
     client,
@@ -242,6 +294,9 @@ export class AgentOSClient {
     storageBackend,
     walrusPublisherUrl,
     walrusAggregatorUrl,
+    network,
+    walrusSigner,
+    walrusMainnetUploaderFactory,
   }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
@@ -254,10 +309,62 @@ export class AgentOSClient {
       storageBackend ?? (harborApiKey ? "harbor" : "walrus");
     this.#walrusPublisherUrl = walrusPublisherUrl;
     this.#walrusAggregatorUrl = walrusAggregatorUrl;
+    this.#network = network ?? "testnet";
+    this.#walrusSigner = walrusSigner;
+    this.#mainnetWalrusLoader = walrusMainnetUploaderFactory;
   }
 
   get registry(): LocalRegistry | null {
     return this.#registry;
+  }
+
+  /**
+   * Resolve the right Walrus uploader for `#network`: the plain HTTP
+   * publisher/aggregator on testnet/devnet (no signer needed), or the
+   * mainnet Upload Relay path on mainnet (a signer is only required if the
+   * returned uploader's `uploadBlob` is actually called — `downloadBlob`
+   * works without one).
+   *
+   * Deliberately does NOT `import("./walrus-mainnet.js")` directly: this
+   * class is reachable from BOTH the browser entry (`index.ts`) and the Node
+   * entry (`node.ts`), and a dynamic `import()` here still gets lowered to a
+   * static top-level `require()` in tsup's CJS output — which pulls in
+   * `@mysten/walrus`'s WASM binary for every consumer of this module
+   * regardless of network, breaking bundlers that can't locate the .wasm
+   * file at runtime (observed breaking the frontend's Next.js production
+   * build for every route, even ones that never touch mainnet). Instead,
+   * `#mainnetWalrusLoader` must be INJECTED by the caller (see
+   * `walrusMainnetUploaderFactory` in `AgentOSClientOptions`) — Node-only
+   * callers (the CLI, MCP server, frontend API routes) import
+   * `@agentos-sui/sdk/walrus-mainnet`'s isolated build (its own tsup entry,
+   * with no other exports depending on it) and pass it in, so only code
+   * paths that actually need mainnet Walrus pull in `@mysten/walrus` at all.
+   */
+  async #getWalrusUploader(signer?: Signer): Promise<{
+    uploadBlob(
+      content: Uint8Array,
+      options?: { epochs?: number; permanent?: boolean },
+    ): Promise<{ blobId: string; endEpoch?: number }>;
+    downloadBlob(blobId: string): Promise<Uint8Array>;
+  }> {
+    if (this.#network === "mainnet") {
+      if (!this.#mainnetWalrusLoader) {
+        throw new Error(
+          "AgentOSClient: network is \"mainnet\" but no `walrusMainnetUploaderFactory` " +
+            "was provided in AgentOSClientOptions. Import `createMainnetWalrusUploader` " +
+            "from \"@agentos-sui/sdk/walrus-mainnet\" and pass it through.",
+        );
+      }
+      const createMainnetWalrusUploader = await this.#mainnetWalrusLoader();
+      const effectiveSigner = signer ?? this.#walrusSigner;
+      return createMainnetWalrusUploader(
+        effectiveSigner ? { signer: effectiveSigner } : {},
+      );
+    }
+    return new WalrusClient({
+      publisherUrl: this.#walrusPublisherUrl,
+      aggregatorUrl: this.#walrusAggregatorUrl,
+    });
   }
 
   get client(): ClientWithCoreApi {
@@ -459,10 +566,7 @@ export class AgentOSClient {
       const harbor = new HarborClient({ apiKey });
       content = await harbor.downloadBlob(blobId);
     } else {
-      const walrus = new WalrusClient({
-        publisherUrl: this.#walrusPublisherUrl,
-        aggregatorUrl: this.#walrusAggregatorUrl,
-      });
+      const walrus = await this.#getWalrusUploader();
       content = await walrus.downloadBlob(blobId);
     }
 
@@ -614,6 +718,7 @@ export class AgentOSClient {
     } else {
       const uploadResult = await this.uploadManifest(bucketId, manifest, {
         sealPolicyId,
+        signer,
       });
       blobId = uploadResult.blobId;
       manifestHash = uploadResult.manifestHash;
@@ -1443,11 +1548,10 @@ export class AgentOSClient {
       );
       blobId = uploaded.blobId;
     } else {
-      // Walrus public publisher (default) — no API key / bucket / Seal needed.
-      const walrus = new WalrusClient({
-        publisherUrl: this.#walrusPublisherUrl,
-        aggregatorUrl: this.#walrusAggregatorUrl,
-      });
+      // Walrus (default): the plain HTTP publisher on testnet/devnet, or the
+      // mainnet Upload Relay path (requires a signer) on mainnet — see
+      // `#getWalrusUploader`.
+      const walrus = await this.#getWalrusUploader(options?.signer);
       const uploaded = await walrus.uploadBlob(content, { epochs: DEFAULT_WALRUS_EPOCHS });
       blobId = uploaded.blobId;
       endEpoch = uploaded.endEpoch;

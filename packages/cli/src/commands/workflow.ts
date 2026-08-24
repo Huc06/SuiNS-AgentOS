@@ -401,12 +401,16 @@ async function publishDraft(
   }
 
   try {
-    const { WalrusClient, DEFAULT_WALRUS_EPOCHS } = await import(
-      "@agentos-sui/sdk/node"
+    const { DEFAULT_WALRUS_EPOCHS } = await import("@agentos-sui/sdk/node");
+    const { getWalrusUploader } = await import(
+      "@agentos-sui/sdk/walrus-mainnet"
     );
     const serialized = serializeWorkflowManifest(manifest as never);
     const manifestHash = computeWorkflowManifestHash(serialized);
-    const walrus = new WalrusClient();
+    const walrus = getWalrusUploader({
+      network: ctx.network,
+      signer: ctx.getSigner() ?? undefined,
+    });
     const { blobId, endEpoch } = await walrus.uploadBlob(serialized, {
       epochs: DEFAULT_WALRUS_EPOCHS,
     });
@@ -535,7 +539,6 @@ workflowCommand
 
       try {
         const {
-          WalrusClient,
           computeWorkflowManifestHash,
           validateWorkflowManifest,
           runWorkflow,
@@ -543,11 +546,13 @@ workflowCommand
           resolveAgentAddress,
           contracts,
         } = await import("@agentos-sui/sdk/node");
+        const { getWalrusUploader, createMainnetWalrusUploader } =
+          await import("@agentos-sui/sdk/walrus-mainnet");
         const { Transaction } = await import("@mysten/sui/transactions");
         const { executeTransaction } = await import("../lib/execute-move.js");
 
         // 1. Download + verify the published manifest.
-        const walrus = new WalrusClient();
+        const walrus = getWalrusUploader({ network: ctx.network });
         const bytes = await walrus.downloadBlob(workflow.walrusManifestBlob);
         if (workflow.manifestHash) {
           const actual = computeWorkflowManifestHash(bytes);

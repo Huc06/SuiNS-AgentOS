@@ -19,6 +19,18 @@ if (existsSync(rootEnv)) {
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@agentos-sui/sdk"],
+  // `@mysten/walrus` (pulled in dynamically by the SDK's mainnet Walrus
+  // uploader, see packages/sdk/src/walrus-mainnet.ts) ships a WASM erasure-
+  // coding binary via `@mysten/walrus-wasm`. Without this, webpack tries to
+  // bundle it into `.next/server/chunks/` and drops the `.wasm` asset,
+  // breaking every route whose dependency graph reaches it at build time with
+  // "ENOENT: walrus_wasm_bg.wasm" during "Collecting page data". This is the
+  // exact fix from the official docs (sdk.mystenlabs.com/walrus, "Loading the
+  // WASM module... In Next.js, when using Walrus in API routes") — declaring
+  // both packages external keeps Node's normal `require()` resolution (and
+  // the `.wasm` file alongside it in node_modules) intact instead of being
+  // bundled. Applies to both webpack and Turbopack.
+  serverExternalPackages: ["@mysten/walrus", "@mysten/walrus-wasm"],
   // Include the seed registry + demo runs files in serverless function bundles
   // so a cold/ephemeral filesystem still seeds the registry and Analytics data.
   outputFileTracingIncludes: {

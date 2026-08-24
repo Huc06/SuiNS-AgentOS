@@ -14,7 +14,7 @@ export function createCliContext(cwd = process.cwd()) {
   const grpcNetwork = network === 'mainnet' ? 'mainnet' : 'testnet';
   const rpcUrl = config.rpcUrl ?? `https://fullnode.${grpcNetwork}.sui.io:443`;
   const suiClient = new SuiGrpcClient({ network: grpcNetwork, baseUrl: rpcUrl });
-  const agentos = agentOS({ packageId: resolvePackageId(config) }).register(
+  const agentos = agentOS({ packageId: resolvePackageId(config), network }).register(
     suiClient as unknown as ClientWithCoreApi,
   );
 

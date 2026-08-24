@@ -1,6 +1,5 @@
 import {
   DEFAULT_WALRUS_EPOCHS,
-  WalrusClient,
   computeWorkflowManifestHash,
   serializeWorkflowManifest,
   validateWorkflowManifest,
@@ -10,6 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { registryWorkflowToCard } from "../../../../../lib/registry-mappers";
 import { getRegistryStore } from "../../../../../lib/registry-server";
+import { getSuiNetwork } from "../../../../../lib/enoki-config";
+import { getRuntimeKeypair } from "../../../../../lib/sponsored-execute";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const serialized = serializeWorkflowManifest(manifest);
     manifestHash = computeWorkflowManifestHash(serialized);
-    const walrus = new WalrusClient();
+    const network = getSuiNetwork();
+    const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
+    const walrus = getWalrusUploader({
+      network,
+      // Only mainnet needs a signer (Upload Relay); testnet's plain HTTP
+      // publisher needs none, so avoid decoding SUI_PRIVATE_KEY there.
+      ...(network === "mainnet" ? { signer: getRuntimeKeypair() } : {}),
+    });
     ({ blobId, endEpoch } = await walrus.uploadBlob(serialized, { epochs: DEFAULT_WALRUS_EPOCHS }));
   } catch (e) {
     return NextResponse.json(
