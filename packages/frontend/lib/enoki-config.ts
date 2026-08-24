@@ -201,7 +201,20 @@ export function isEnokiConfigured(): boolean {
   return Boolean(getPublicEnokiApiKey());
 }
 
-/** Client flag: attempt Enoki sponsor flow (server still needs ENOKI_SECRET_KEY). */
+/**
+ * Client flag: attempt Enoki sponsor flow (server still needs
+ * `ENOKI_SECRET_KEY`). Also false on mainnet unless the deployment has opted
+ * in via `NEXT_PUBLIC_ENOKI_ALLOW_MAINNET=true` (mirrors the server-side
+ * `ENOKI_ALLOW_MAINNET` guard in `sponsoredExecuteServer`) — this deployment
+ * has no mainnet Enoki billing configured, so the UI should not advertise
+ * gasless execution as available there.
+ */
 export function isEnokiSponsorEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ENOKI_SPONSOR === 'true' && isEnokiConfigured();
+  if (!(process.env.NEXT_PUBLIC_ENOKI_SPONSOR === 'true' && isEnokiConfigured())) {
+    return false;
+  }
+  if (getSuiNetwork() === 'mainnet') {
+    return process.env.NEXT_PUBLIC_ENOKI_ALLOW_MAINNET?.trim().toLowerCase() === 'true';
+  }
+  return true;
 }

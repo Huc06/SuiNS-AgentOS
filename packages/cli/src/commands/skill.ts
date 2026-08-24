@@ -132,7 +132,9 @@ skillCommand
         if (harborApiKey) {
           // Show Walrus upload parameters and serialized PTB bytes
           const walrusParams = {
-            harborBaseUrl: "https://api.testnet.harbor.walrus.xyz",
+            harborBaseUrl:
+              process.env.HARBOR_BASE_URL?.trim() ||
+              "https://api.testnet.harbor.walrus.xyz",
             spaceId: process.env.HARBOR_SPACE_ID ?? "(from config)",
             bucketId: "(skill bucket)",
             filename: `${manifest.name}-${manifest.version}.json`,
