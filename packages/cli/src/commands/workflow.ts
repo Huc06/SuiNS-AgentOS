@@ -635,6 +635,7 @@ workflowCommand
           },
           buildAttestTx: (options: {
             subjectPassportId: string;
+            attesterPassportId: string;
             kind: string;
             score: number;
             uri: string;
@@ -645,6 +646,7 @@ workflowCommand
             tx.add(
               contracts.attestation.attest({
                 subjectPassport: tx.object(options.subjectPassportId),
+                attesterPassport: tx.object(options.attesterPassportId),
                 kind: options.kind,
                 score: options.score,
                 uri: options.uri,

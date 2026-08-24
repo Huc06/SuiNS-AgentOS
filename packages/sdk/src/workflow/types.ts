@@ -186,6 +186,13 @@ export interface BuildDelegateOptions {
 /** Options for the injected attestation PTB builder. */
 export interface BuildAttestOptions {
   subjectPassportId: string;
+  /**
+   * The attester's OWN AgentPassport id, proving they're a registered agent.
+   * The on-chain contract requires the transaction sender to be this
+   * passport's owner or runtime_wallet, and rejects it being the same
+   * passport as `subjectPassportId` (self-attestation).
+   */
+  attesterPassportId: string;
   kind: string;
   score: number;
   uri: string;

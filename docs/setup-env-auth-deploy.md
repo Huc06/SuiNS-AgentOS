@@ -116,7 +116,7 @@ Vercel project for `packages/frontend` in this pnpm + turbo monorepo.
 
 | Variable                         | Secret? | Notes                                                                |
 | -------------------------------- | ------- | -------------------------------------------------------------------- |
-| `NEXT_PUBLIC_AGENTOS_PACKAGE_ID` | No      | `0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71` |
+| `NEXT_PUBLIC_AGENTOS_PACKAGE_ID` | No      | `0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699` |
 | `NEXT_PUBLIC_SUI_NETWORK`        | No      | `testnet`                                                            |
 | `NEXT_PUBLIC_ENOKI_API_KEY`      | No      | Enoki public key                                                     |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID`   | No      | Google OAuth client ID                                               |

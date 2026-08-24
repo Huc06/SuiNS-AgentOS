@@ -237,3 +237,44 @@ fun test_record_execution_unauthorized_aborts() {
     destroy(passport);
     scenario.end();
 }
+
+#[test]
+fun test_attestation_fields_default_to_zero() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    {
+        let passport = agent_passport::create(
+            b"alpha-agent",
+            @0xB,
+            scenario.ctx(),
+        );
+        assert!(agent_passport::attestation_count(&passport) == 0, 0);
+        assert!(agent_passport::reputation_score_sum(&passport) == 0, 1);
+        destroy(passport);
+    };
+    scenario.end();
+}
+
+#[test]
+fun test_record_attestation_internal_aggregates() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    {
+        let mut passport = agent_passport::create(
+            b"alpha-agent",
+            @0xB,
+            scenario.ctx(),
+        );
+
+        agent_passport::record_attestation_internal(&mut passport, 80);
+        assert!(agent_passport::attestation_count(&passport) == 1, 0);
+        assert!(agent_passport::reputation_score_sum(&passport) == 80, 1);
+
+        agent_passport::record_attestation_internal(&mut passport, 20);
+        assert!(agent_passport::attestation_count(&passport) == 2, 2);
+        assert!(agent_passport::reputation_score_sum(&passport) == 100, 3);
+
+        destroy(passport);
+    };
+    scenario.end();
+}

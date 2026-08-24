@@ -26,7 +26,7 @@ Your AI assistant can:
 {
   "network": "testnet",
   "rpcUrl": "https://sui-testnet-rpc.publicnode.com",
-  "packageId": "0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71",
+  "packageId": "0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699",
   "dashboardUrl": "https://sui-ns-agent-os-frontend.vercel.app"
 }
 ```
@@ -48,7 +48,7 @@ Create or edit `.cursor/mcp.json`:
       "command": "npx",
       "args": ["-y", "@agentos-sui/mcp"],
       "env": {
-        "AGENTOS_PACKAGE_ID": "0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71",
+        "AGENTOS_PACKAGE_ID": "0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699",
         "SUI_RPC_URL": "https://sui-testnet-rpc.publicnode.com",
         "SUI_PRIVATE_KEY": "YOUR_SUI_PRIVATE_KEY"
       }
@@ -65,7 +65,7 @@ Restart Cursor → the `agentos_*` tools appear in the MCP panel.
 
 ```bash
 claude mcp add agentos \
-  -e AGENTOS_PACKAGE_ID=0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71 \
+  -e AGENTOS_PACKAGE_ID=0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699 \
   -e SUI_RPC_URL=https://sui-testnet-rpc.publicnode.com \
   -e SUI_PRIVATE_KEY=YOUR_SUI_PRIVATE_KEY \
   -- npx -y @agentos-sui/mcp
@@ -80,7 +80,7 @@ Or add manually to `~/.claude/claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "@agentos-sui/mcp"],
       "env": {
-        "AGENTOS_PACKAGE_ID": "0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71",
+        "AGENTOS_PACKAGE_ID": "0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699",
         "SUI_RPC_URL": "https://sui-testnet-rpc.publicnode.com",
         "SUI_PRIVATE_KEY": "YOUR_SUI_PRIVATE_KEY"
       }
@@ -102,7 +102,7 @@ Create or edit `.kiro/settings/mcp.json`:
       "command": "npx",
       "args": ["-y", "@agentos-sui/mcp"],
       "env": {
-        "AGENTOS_PACKAGE_ID": "0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71",
+        "AGENTOS_PACKAGE_ID": "0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699",
         "SUI_RPC_URL": "https://sui-testnet-rpc.publicnode.com",
         "SUI_PRIVATE_KEY": "YOUR_SUI_PRIVATE_KEY"
       }
@@ -124,7 +124,7 @@ Replace `npx -y @agentos-sui/mcp` with the built binary:
       "command": "node",
       "args": ["/absolute/path/to/AgentOS/packages/mcp/dist/index.js"],
       "env": {
-        "AGENTOS_PACKAGE_ID": "0x6cc3fb480fd82972f4996b4b18240b0fe56407e26070690ad538862ef26e1e71",
+        "AGENTOS_PACKAGE_ID": "0xde2423929ae03dd7620744bd23e059fc77f8198941a5d9a5be595559c6eba699",
         "SUI_RPC_URL": "https://sui-testnet-rpc.publicnode.com",
         "SUI_PRIVATE_KEY": "YOUR_SUI_PRIVATE_KEY"
       }
