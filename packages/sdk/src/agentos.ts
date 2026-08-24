@@ -10,6 +10,10 @@ export interface AgentOSOptions<Name extends string = 'agentOS'> {
   packageId?: string;
   /** Forwarded to `AgentOSClient` — selects the Walrus upload path. Defaults to `"testnet"`. */
   network?: 'mainnet' | 'testnet' | 'devnet';
+  /** Forwarded to `AgentOSClient` — see its docs. Required for mainnet Walrus uploads. */
+  walrusMainnetUploaderFactory?: () => Promise<
+    typeof import('./walrus-mainnet.js').createMainnetWalrusUploader
+  >;
 }
 
 export function agentOS<const Name extends string = 'agentOS'>({
@@ -17,11 +21,18 @@ export function agentOS<const Name extends string = 'agentOS'>({
   harborApiKey,
   packageId,
   network,
+  walrusMainnetUploaderFactory,
 }: AgentOSOptions<Name> = {}) {
   return {
     name,
     register: (client: ClientWithCoreApi) => {
-      return new AgentOSClient({ client, harborApiKey, packageId, network });
+      return new AgentOSClient({
+        client,
+        harborApiKey,
+        packageId,
+        network,
+        walrusMainnetUploaderFactory,
+      });
     },
   };
 }

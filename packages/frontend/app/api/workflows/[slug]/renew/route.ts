@@ -1,4 +1,3 @@
-import { getWalrusUploader } from "@agentos-sui/sdk/node";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getRegistryStore } from "../../../../../lib/registry-server";
@@ -65,6 +64,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const network = getSuiNetwork();
+  const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
   const walrus = getWalrusUploader({
     network,
     ...(network === "mainnet" ? { signer: getRuntimeKeypair() } : {}),

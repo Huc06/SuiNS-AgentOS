@@ -15,7 +15,6 @@ import {
   sealEncryptReal,
   serializeManifest,
   validateManifest,
-  getWalrusUploader,
   type RunBuildBundle,
   type RunResolveBundle,
   type SkillManifest,
@@ -202,6 +201,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     payload?: unknown,
   ): Promise<{ blobId: string }> => {
     const network = getSuiNetwork();
+    const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
     const walrus = getWalrusUploader({
       network,
       ...(network === "mainnet" ? { signer: getRuntimeKeypair() } : {}),
@@ -383,7 +383,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ...(packageId ? { packageId } : {}),
     network: getSuiNetwork(),
     ...(getSuiNetwork() === "mainnet"
-      ? { walrusSigner: getRuntimeKeypair() }
+      ? {
+          walrusSigner: getRuntimeKeypair(),
+          walrusMainnetUploaderFactory: () =>
+            import("@agentos-sui/sdk/walrus-mainnet").then(
+              (m) => m.createMainnetWalrusUploader,
+            ),
+        }
       : {}),
   });
 

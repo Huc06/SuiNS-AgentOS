@@ -72,6 +72,29 @@ export interface AgentOSClientOptions {
    * passed to `publishSkill` when this is omitted.
    */
   walrusSigner?: Signer;
+  /**
+   * Required when `network: "mainnet"` and any Walrus upload
+   * (`uploadManifest`, `publishSkill`) is used. A loader that resolves to the
+   * `createMainnetWalrusUploader` function — pass
+   * `() => import("@agentos-sui/sdk/walrus-mainnet").then(m => m.createMainnetWalrusUploader)`.
+   *
+   * This is a caller-supplied loader (rather than this class importing
+   * `@agentos-sui/sdk/walrus-mainnet` itself) so that bundlers never see a
+   * static reference to `@mysten/walrus` (which ships a WASM binary) from
+   * this module — `AgentOSClient` is reachable from both the browser entry
+   * (`index.ts`, where `@mysten/walrus` has no place at all) and the Node
+   * entry (`node.ts`, imported by nearly every frontend API route, where a
+   * hardcoded `import()` here was observed breaking Next.js's production
+   * build — "Collecting page data" failing with ENOENT for
+   * `walrus_wasm_bg.wasm` — for every route reachable from `node.ts`, not
+   * just ones that use mainnet). Only Node-only callers that actually need
+   * mainnet Walrus (the CLI, MCP server, specific frontend routes) should
+   * import `@agentos-sui/sdk/walrus-mainnet` (its own isolated tsup entry)
+   * and pass this loader through.
+   */
+  walrusMainnetUploaderFactory?: () => Promise<
+    typeof import("./walrus-mainnet.js").createMainnetWalrusUploader
+  >;
 }
 
 export interface UploadManifestOptions {
@@ -258,6 +281,9 @@ export class AgentOSClient {
   #walrusAggregatorUrl?: string;
   #network: "mainnet" | "testnet" | "devnet";
   #walrusSigner?: Signer;
+  #mainnetWalrusLoader?: () => Promise<
+    typeof import("./walrus-mainnet.js").createMainnetWalrusUploader
+  >;
 
   constructor({
     client,
@@ -270,6 +296,7 @@ export class AgentOSClient {
     walrusAggregatorUrl,
     network,
     walrusSigner,
+    walrusMainnetUploaderFactory,
   }: AgentOSClientOptions) {
     this.#client = client;
     this.#harborApiKey = harborApiKey;
@@ -284,6 +311,7 @@ export class AgentOSClient {
     this.#walrusAggregatorUrl = walrusAggregatorUrl;
     this.#network = network ?? "testnet";
     this.#walrusSigner = walrusSigner;
+    this.#mainnetWalrusLoader = walrusMainnetUploaderFactory;
   }
 
   get registry(): LocalRegistry | null {
@@ -297,14 +325,20 @@ export class AgentOSClient {
    * returned uploader's `uploadBlob` is actually called — `downloadBlob`
    * works without one).
    *
-   * Dynamically imports `./walrus-mainnet.js` — a Node-only module (pulls
-   * `@mysten/walrus`'s WASM encoder) — ONLY when `#network === "mainnet"`, so
-   * this class stays safe to bundle for the browser (`index.ts`) on every
-   * other network, matching how `sealEncrypt` is dynamically imported above.
-   *
-   * @param signer Overrides `#walrusSigner` for this call (e.g. the signer a
-   *   caller passed to `publishSkill`, reused for the upload without the
-   *   caller having to also set `walrusSigner` on the client).
+   * Deliberately does NOT `import("./walrus-mainnet.js")` directly: this
+   * class is reachable from BOTH the browser entry (`index.ts`) and the Node
+   * entry (`node.ts`), and a dynamic `import()` here still gets lowered to a
+   * static top-level `require()` in tsup's CJS output — which pulls in
+   * `@mysten/walrus`'s WASM binary for every consumer of this module
+   * regardless of network, breaking bundlers that can't locate the .wasm
+   * file at runtime (observed breaking the frontend's Next.js production
+   * build for every route, even ones that never touch mainnet). Instead,
+   * `#mainnetWalrusLoader` must be INJECTED by the caller (see
+   * `walrusMainnetUploaderFactory` in `AgentOSClientOptions`) — Node-only
+   * callers (the CLI, MCP server, frontend API routes) import
+   * `@agentos-sui/sdk/walrus-mainnet`'s isolated build (its own tsup entry,
+   * with no other exports depending on it) and pass it in, so only code
+   * paths that actually need mainnet Walrus pull in `@mysten/walrus` at all.
    */
   async #getWalrusUploader(signer?: Signer): Promise<{
     uploadBlob(
@@ -314,9 +348,14 @@ export class AgentOSClient {
     downloadBlob(blobId: string): Promise<Uint8Array>;
   }> {
     if (this.#network === "mainnet") {
-      const { createMainnetWalrusUploader } = await import(
-        "./walrus-mainnet.js"
-      );
+      if (!this.#mainnetWalrusLoader) {
+        throw new Error(
+          "AgentOSClient: network is \"mainnet\" but no `walrusMainnetUploaderFactory` " +
+            "was provided in AgentOSClientOptions. Import `createMainnetWalrusUploader` " +
+            "from \"@agentos-sui/sdk/walrus-mainnet\" and pass it through.",
+        );
+      }
+      const createMainnetWalrusUploader = await this.#mainnetWalrusLoader();
       const effectiveSigner = signer ?? this.#walrusSigner;
       return createMainnetWalrusUploader(
         effectiveSigner ? { signer: effectiveSigner } : {},

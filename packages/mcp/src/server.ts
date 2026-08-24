@@ -16,8 +16,11 @@ import {
   LocalRegistry,
   resolveRegistryPath,
   scanSkillsDirectory,
-  getWalrusUploader,
 } from "@agentos-sui/sdk/node";
+import {
+  getWalrusUploader,
+  createMainnetWalrusUploader,
+} from "@agentos-sui/sdk/walrus-mainnet";
 import {
   AgentOSClient,
   convertToAgentOSManifest,
@@ -76,6 +79,9 @@ function createAgentOSClient(registryPath: string): AgentOSClient | null {
       spaceId,
       storageBackend,
       network,
+      ...(network === "mainnet"
+        ? { walrusMainnetUploaderFactory: async () => createMainnetWalrusUploader }
+        : {}),
     });
   } catch {
     return null;

@@ -1,6 +1,5 @@
 import {
   DEFAULT_WALRUS_EPOCHS,
-  getWalrusUploader,
   computeWorkflowManifestHash,
   serializeWorkflowManifest,
   validateWorkflowManifest,
@@ -80,6 +79,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const serialized = serializeWorkflowManifest(manifest);
     manifestHash = computeWorkflowManifestHash(serialized);
     const network = getSuiNetwork();
+    const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
     const walrus = getWalrusUploader({
       network,
       // Only mainnet needs a signer (Upload Relay); testnet's plain HTTP

@@ -401,8 +401,9 @@ async function publishDraft(
   }
 
   try {
-    const { getWalrusUploader, DEFAULT_WALRUS_EPOCHS } = await import(
-      "@agentos-sui/sdk/node"
+    const { DEFAULT_WALRUS_EPOCHS } = await import("@agentos-sui/sdk/node");
+    const { getWalrusUploader } = await import(
+      "@agentos-sui/sdk/walrus-mainnet"
     );
     const serialized = serializeWorkflowManifest(manifest as never);
     const manifestHash = computeWorkflowManifestHash(serialized);
@@ -538,7 +539,6 @@ workflowCommand
 
       try {
         const {
-          getWalrusUploader,
           computeWorkflowManifestHash,
           validateWorkflowManifest,
           runWorkflow,
@@ -546,6 +546,8 @@ workflowCommand
           resolveAgentAddress,
           contracts,
         } = await import("@agentos-sui/sdk/node");
+        const { getWalrusUploader, createMainnetWalrusUploader } =
+          await import("@agentos-sui/sdk/walrus-mainnet");
         const { Transaction } = await import("@mysten/sui/transactions");
         const { executeTransaction } = await import("../lib/execute-move.js");
 

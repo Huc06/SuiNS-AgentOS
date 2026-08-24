@@ -52,6 +52,52 @@ export interface CreateMainnetWalrusUploaderOptions {
 const DEFAULT_MAX_TIP_MIST = 50_000;
 
 /**
+ * Resolve the real on-disk path to `@mysten/walrus-wasm`'s Node WASM binary,
+ * to pass as `wasmUrl` to the `walrus()` extension below.
+ *
+ * Why this is necessary: per the official docs
+ * (sdk.mystenlabs.com/walrus, "Loading the WASM module... In Next.js, when
+ * using Walrus in API routes"), bundlers can fail to locate this binary at
+ * runtime even with `serverExternalPackages: ["@mysten/walrus",
+ * "@mysten/walrus-wasm"]` set (the docs' own suggested fix) — confirmed
+ * against this repo's actual Next.js build, which still rewrites the path
+ * webpack expects it at to `.next/server/chunks/walrus_wasm_bg.wasm` (which
+ * does not exist), failing "Collecting page data" with ENOENT for every
+ * route reaching this module. The docs' documented fallback is to resolve
+ * and pass `wasmUrl` explicitly, sidestepping the bundler's resolution.
+ *
+ * `@mysten/walrus-wasm` is only a transitive dependency of `@mysten/walrus`
+ * (not a direct one of this package), so a plain `require.resolve()` can't
+ * find it — `createRequire` + the `paths` option walks node_modules
+ * resolution starting from `@mysten/walrus`'s own location instead, which
+ * works regardless of the package manager's node_modules layout (pnpm's
+ * nested/symlinked structure included).
+ */
+function resolveWalrusWasmUrl(): string | undefined {
+  try {
+    const { createRequire } = require("node:module") as typeof import("node:module");
+    const req = createRequire(import.meta.url);
+    const walrusEntry = req.resolve("@mysten/walrus");
+    const wasmPackageEntry = req.resolve("@mysten/walrus-wasm", {
+      paths: [walrusEntry],
+    });
+    // wasmPackageEntry is .../@mysten/walrus-wasm/index.js — the Node WASM
+    // binary lives alongside it at nodejs/walrus_wasm_bg.wasm.
+    const wasmPath = wasmPackageEntry.replace(
+      /index\.(m?js)$/,
+      "nodejs/walrus_wasm_bg.wasm",
+    );
+    return new URL(`file://${wasmPath}`).href;
+  } catch {
+    // Resolution is best-effort: if it fails, omit wasmUrl and let @mysten/
+    // walrus fall back to its own default loading behavior.
+    return undefined;
+  }
+}
+
+const WASM_URL = resolveWalrusWasmUrl();
+
+/**
  * Build a {@link WalrusUploader} backed by `@mysten/walrus` + the mainnet
  * Upload Relay. Uploading (unlike the testnet {@link WalrusClient}) requires
  * a signer — the relay does not sponsor gas or storage rent, so the
@@ -82,6 +128,7 @@ export function createMainnetWalrusUploader(
       : DEFAULT_MAX_TIP_MIST);
   const client = new SuiGrpcClient({ network: "mainnet", baseUrl: rpcUrl }).$extend(
     walrus({
+      ...(WASM_URL ? { wasmUrl: WASM_URL } : {}),
       uploadRelay: {
         host: uploadRelayHost,
         sendTip: { max: maxTipMist },

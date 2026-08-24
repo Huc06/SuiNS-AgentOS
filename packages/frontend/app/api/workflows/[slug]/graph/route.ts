@@ -1,5 +1,4 @@
 import {
-  getWalrusUploader,
   computeWorkflowManifestHash,
   validateWorkflowManifest,
   type WorkflowManifest,
@@ -56,6 +55,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   }
 
   try {
+    const { getWalrusUploader } = await import("@agentos-sui/sdk/walrus-mainnet");
     const walrus = getWalrusUploader({ network: getSuiNetwork() });
     const bytes = await walrus.downloadBlob(workflow.walrusManifestBlob);
 

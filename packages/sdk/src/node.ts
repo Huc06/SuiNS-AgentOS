@@ -60,11 +60,20 @@ export type {
   WalrusUploader,
   WalrusUploaderOptions,
 } from "./walrus.js";
-export { createMainnetWalrusUploader, getWalrusUploader } from "./walrus-mainnet.js";
-export type {
-  CreateMainnetWalrusUploaderOptions,
-  GetWalrusUploaderOptions,
-} from "./walrus-mainnet.js";
+// NOTE: createMainnetWalrusUploader / getWalrusUploader are intentionally NOT
+// re-exported here. This module (`@agentos-sui/sdk/node`) is imported by
+// nearly every frontend API route; @mysten/walrus (which those two functions
+// pull in) ships a WASM binary that breaks Next.js's production build
+// ("Collecting page data" fails with ENOENT for walrus_wasm_bg.wasm) for
+// EVERY route that transitively imports this module, even routes that never
+// call those functions and even with serverExternalPackages set — because
+// this package is in `transpilePackages`, Next.js still walks and bundles the
+// whole module graph reachable from here. Import them from the isolated
+// `@agentos-sui/sdk/walrus-mainnet` entry point instead (see
+// src/walrus-mainnet.ts), which has its own tsup build with no other exports
+// depending on it, so only the routes that actually need mainnet Walrus
+// uploads (and explicitly import that subpath) pull in @mysten/walrus.
+export type { CreateMainnetWalrusUploaderOptions, GetWalrusUploaderOptions } from "./walrus-mainnet.js";
 export {
   MemwalClient,
   memwalFromEnv,

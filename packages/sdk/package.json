@@ -36,6 +36,11 @@
       "types": "./dist/node.d.ts",
       "import": "./dist/node.js",
       "require": "./dist/node.cjs"
+    },
+    "./walrus-mainnet": {
+      "types": "./dist/walrus-mainnet.d.ts",
+      "import": "./dist/walrus-mainnet.js",
+      "require": "./dist/walrus-mainnet.cjs"
     }
   },
   "files": [
